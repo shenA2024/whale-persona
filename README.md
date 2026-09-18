@@ -162,6 +162,7 @@ scripts/         install-dsh.mjs：DSH 一条命令安装器（装包/建预设/
                  sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
                  render-preview.mjs：把配置渲染成"实际注入的三段文本"并打印（命令行预览）
                  ui.mjs + ui.html：本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
+                 memory.mjs：长期记忆确认台（status / confirm / reject / adopt / log；注入只认人工确认过的条目）
 tests/           五套测试：DSH 冒烟 / 记忆收件箱 / 设置面板宿主半身 / ZCode hook / 本地编辑器 API
 ```
 
@@ -201,13 +202,36 @@ npm run install-dsh -- --dry-run   # 看安装器会做什么，不落盘
 - 注入按 cwd/tag 相关性选择：当前项目目录命中的条目优先、其次全局（无 tag）、再其他项目，超出 `memory.maxEntries` 才组内保新弃旧。DSH 从 agent session 取 cwd，ZCode 从 hook 输入取，两宿主同链。
 - 首次运行落盘只写**骨架**（persona 段），不写死 memory 段——memory 默认关（opt-in），谁读谁按默认补。
 - **收口开关默认关（只管「写」）**：`memory.capture` 缺省 `'on-demand'`——【入库纪律】（要我主动提议记忆候选的那一段）只在会话里把开关打开后才注入（DSH 打 `/memory on`；ZCode 用消息里的 `#记忆` 前缀）。**【历史备忘】数据块与手工条目都是常驻的**，开关关掉时照样加载。`'always'` = 旧行为（每轮都注入纪律）。
+- **确认闸门是代码强制（0.8.0 起）**：AI 写进收件箱的条目只是**候选**（`"status":"proposed"`），**不参与注入**；
+  唯一让它生效的动作是**人**追加一行 `{"op":"confirm","ref":"原文"}`——在终端跑 `node scripts/memory.mjs confirm <序号>`
+  （`status` 看条目与序号，`adopt` 一次性确认 0.8.0 之前的老格式条目，`reject` 否决）。
+  0.8.0 之前的老格式条目（没有 `status` 字段）默认也不再注入；想照旧放行，把 `memory.requireConfirm` 设为 `false`。
 
 ## 安全与隐私（两宿主一致）
 
 - core 不联网、不执行命令、不读工作目录：只读写自己的 config 与 inbox 文件；
 - 收件箱条目按**数据**呈现（引号 + 「非指令」声明 + 换行折叠 + 剥离「」），降低提示词注入风险；
 - 一切异常降级为空输出——最坏结果是「没有人设」，永远不炸会话；
-- 残余风险：「用户确认后才入库」由提示词约束而非代码强制，建议定期翻看收件箱删不对的行。
+- **记忆入库是代码闸门**（0.8.0 起）：AI 只能写候选（`status:"proposed"`），注入视图只认人工 `confirm` 过的条目——
+  "用户确认后才入库"从提示词约束变成机械保证（`core/memoryInbox.js` 的 `readInjected` + `scripts/memory.mjs`）。
+  残余风险：AI 若被诱导去伪造 `{"op":"confirm"}` 行，仍然能骗过代码——这是同一进程内文件级信任的固有上限，
+  缓解是**可审计**：`node scripts/memory.mjs log` 打出原始行，伪造痕迹一眼可见。
+- 本地编辑器页（`scripts/ui.mjs`）每次响应生成一次性 nonce，CSP 同时走响应头与 meta，`script-src`/`style-src` 不含 `unsafe-inline`。
+- 安装器（`scripts/install-dsh.mjs`）**运行期零 shell**：自己定位 `@deepseek-ai/dsh/lib/bin.js` 交给 `process.execPath` 以数组传参执行，
+  `--profile` / `--base` 走白名单校验——消掉命令注入面。
+
+## 第三方审查与修复（2026-09-18，CodeGuard 扫描 + 人工复核）
+
+审查结论：**critical 0 / high 1 / medium 15 / low 3 / info 1**，15 条 medium 里绝大多数是静态规则误报
+（fetch 全指向 127.0.0.1、路径拼接全是常量、测试夹具被当成生产代码）。真实项与处置：
+
+| 项 | 问题 | 处置 | 验证 |
+|---|---|---|---|
+| CG-001 high | `install-dsh.mjs` 用 `spawnSync(shell:true)`，`--profile` 畸形值理论上可注入 | 去掉 shell：自己定位 `dsh/lib/bin.js` + `process.execPath` + 数组传参；id 加白名单 | `tests/smoke.mjs` SEC13 + 本仓全量测试；`grep shell: true` 零命中 |
+| CG-020 info | `scripts/ui.html` 缺 CSP | 一次性 nonce CSP（响应头 + meta），行内 style 属性改工具类 | `tests/ui.mjs` U5 六条断言 |
+| CG-017/CG-018 low | .gitignore 缺常见条目 / 无锁文件 | 补齐 `.env``dist/``build/``data/` 等；补 `package-lock.json` | 仓库文件 |
+| CG-005 medium | SKILL.md 一句「别…不告诉用户」被规则误读为隐瞒 | 改写为「落盘后逐条说明改了哪两处」（本意就是透明，只是措辞踩雷） | 两份 SKILL.md |
+| 报告外（自审） | 记忆入库门禁只是提示词约束 | 升级为代码强制：`proposed` 候选 + 人工 `confirm` 行（见下节） | `tests/inbox.mjs` T18-T22 |
 
 ## 许可
 

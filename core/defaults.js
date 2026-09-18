@@ -53,6 +53,13 @@ export const DEFAULTS = {
     maxEntries: 30,
     /** 收件箱文件路径；空 = 配置目录下的 memory-inbox.jsonl（见 store.js 的 configDir()） */
     inboxPath: '',
+    /**
+     * 候选确认闸门（0.8.0 起默认 **true**，代码强制而非提示词约束）：
+     * 开启时注入只认 status:"confirmed"（人工用 memory.mjs / 面板确认过的）条目；
+     * AI 写的 status:"proposed" 候选永不注入，老格式（无 status）条目也不注入（避免"AI 直接追加即生效"）。
+     * 设为 false = 放行老格式条目（0.8.0 之前的文件照旧注入），但 proposed 候选仍然不注入。
+     */
+    requireConfirm: true,
   },
 }
 
@@ -86,6 +93,7 @@ export function mergeConfig(user) {
       maxEntries: Number(m.maxEntries) > 0 ? Number(m.maxEntries) : d.memory.maxEntries,
       inboxPath: typeof m.inboxPath === 'string' ? m.inboxPath : '',
       entries: Array.isArray(m.entries) ? m.entries : d.memory.entries,
+      requireConfirm: m.requireConfirm !== undefined ? !!m.requireConfirm : d.memory.requireConfirm,
     },
   }
 }

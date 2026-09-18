@@ -35,7 +35,7 @@ writeFileSync(cfgFile, JSON.stringify({
     contracts: [{ id: 'terse', text: '结论先行。', on: true }],
     suffix: '工作目录在 {{cwd}}。',
   },
-  memory: { enabled: true, capture: 'always', entries: [], inbox: true, inboxPath: inboxFile },
+  memory: { enabled: true, capture: 'always', entries: [], inbox: true, inboxPath: inboxFile, requireConfirm: false },
 }), 'utf8')
 
 // Z1 完整渲染：additionalContext 含 stance/character/契约/思维链语言/收件箱数据块/suffix(cwd 替换)
@@ -106,7 +106,7 @@ writeFileSync(cfgFile, JSON.stringify({
   writeFileSync(cfgFile, JSON.stringify({
     enabled: true,
     persona: { enabled: true, selfNameFlash: '小助手', character: '你是{selfName}。' },
-    memory: { enabled: true, capture: 'always', maxEntries: 1, inbox: true, inboxPath: inboxFile },
+    memory: { enabled: true, capture: 'always', maxEntries: 1, inbox: true, inboxPath: inboxFile, requireConfirm: false },
   }), 'utf8')
   writeFileSync(inboxFile, [
     JSON.stringify({ text: '全局旧偏好', at: 't1' }),
@@ -123,7 +123,7 @@ writeFileSync(cfgFile, JSON.stringify({
   writeFileSync(cfgFile, JSON.stringify({
     enabled: true,
     persona: { enabled: true, selfNameFlash: '小助手', character: '你是{selfName}。' },
-    memory: { enabled: true, inbox: true, inboxPath: inboxFile },
+    memory: { enabled: true, inbox: true, inboxPath: inboxFile, requireConfirm: false },
   }), 'utf8')
   writeFileSync(inboxFile, JSON.stringify({ text: '常驻记忆条目', at: 't1' }) + '\n', 'utf8')
   const onR = runHook(JSON.stringify({ prompt: '总结一下 #记忆', cwd: 'D:/work' }))

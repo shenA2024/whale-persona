@@ -21,7 +21,7 @@ const t = (name, ok) => {
 const base = () => ({
   enabled: true,
   persona: { enabled: true, selfNameFlash: '小助手', selfNamePro: '首席助手', userName: '小林', character: '你是{selfName}。', contracts: [{ id: 'tone', text: '不寒暄。', on: true }] },
-  memory: { enabled: true, entries: [{ text: '手工条目：交付用简体', on: true }] },
+  memory: { enabled: true, requireConfirm: false, entries: [{ text: '手工条目：交付用简体', on: true }] },
 })
 
 const { apply } = await import('../adapters/dsh/index.js')
@@ -47,12 +47,12 @@ t('T1 manual(准则块):', out.includes('长期记忆') && out.includes('手工�
 t('T1 discipline:', out.includes('入库纪律') && out.includes('memory-inbox.jsonl') && out.includes('## 记忆候选'))
 
 // T2 inbox=false：收件箱与纪律块都消失，手工条目保留
-write({ ...base(), memory: { enabled: true, inbox: false, entries: base().memory.entries } })
+write({ ...base(), memory: { enabled: true, requireConfirm: false, inbox: false, entries: base().memory.entries } })
 out = text()
 t('T2 inbox off:', !out.includes('游戏存档目录') && !out.includes('入库纪律') && out.includes('手工条目'))
 
 // T3 上限只作用于收件箱（保新弃旧）；手工条目永不被裁
-write({ ...base(), memory: { enabled: true, maxEntries: 1, entries: base().memory.entries } })
+write({ ...base(), memory: { enabled: true, requireConfirm: false, maxEntries: 1, entries: base().memory.entries } })
 out = text()
 t('T3 cap:', out.includes('手工条目') && out.includes('「偏好：结论先行」') && !out.includes('游戏存档目录永远不碰'))
 
@@ -97,7 +97,7 @@ writeFileSync(inboxFile, [
   JSON.stringify({ text: '项目事实', at: 't2', tag: 'demo-project' }),
   JSON.stringify({ text: '全局新偏好', at: 't3' }),
 ].join('\n'), 'utf8')
-write({ ...base(), memory: { enabled: true, maxEntries: 2, entries: base().memory.entries } })
+write({ ...base(), memory: { enabled: true, requireConfirm: false, maxEntries: 2, entries: base().memory.entries } })
 const ctx = { agent: { options: { model: 'deepseek-chat' }, session: { header: { id: 'test-inbox', cwd: 'D:/work/demo-project' } } } }
 out = box['deployment:persona-prefix'].text(ctx)
 t('T9 相关性注入:', out.includes('「项目事实（demo-project）」') && out.includes('「全局新偏好」') && !out.includes('全局旧偏好'))
@@ -116,7 +116,7 @@ out = text()
 t('T13 默认关(读常驻/写不注入):', out.includes('「常驻记忆条目」') && !out.includes('入库纪律') && out.includes('手工条目：交付用简体'))
 
 // T14 capture:'always' = 旧行为：不开开关也注入
-write({ ...base(), memory: { enabled: true, capture: 'always', entries: base().memory.entries } })
+write({ ...base(), memory: { enabled: true, requireConfirm: false, capture: 'always', entries: base().memory.entries } })
 out = text()
 t('T14 always 模式:', out.includes('「常驻记忆条目」') && out.includes('入库纪律') && !isOn(session))
 
@@ -136,6 +136,64 @@ t('T15 非法参数报错:', rBad.kind === 'error')
 // T16 配置里记忆被关时，命令拒绝开启
 const rDenied = runMemoryCommand({ agent: session, rawInput: 'on' }, { get: () => ({ enabled: true, memory: { enabled: false } }) })
 t('T16 配置关时拒绝:', rDenied.kind === 'error' && !isOn(session))
+
+// T18 确认闸门（0.8.0 默认严格）：老格式条目（无 status）不注入，proposed 候选也不注入
+write({ ...base(), memory: { enabled: true, requireConfirm: true, entries: base().memory.entries } })
+writeFileSync(inboxFile, [
+  JSON.stringify({ text: '老格式条目', at: 't1' }),
+  JSON.stringify({ text: 'AI候选', at: 't2', status: 'proposed' }),
+].join('\n'), 'utf8')
+out = text()
+t('T18 默认只认已确认(两者都不注入):', !out.includes('老格式条目') && !out.includes('AI候选') && out.includes('手工条目'))
+
+// T19 人工确认 = 追加一行 confirm 操作行：候选转正进注入；单独一个 proposed 永远不注入
+writeFileSync(inboxFile, [
+  JSON.stringify({ text: 'AI候选', at: 't1', status: 'proposed' }),
+  JSON.stringify({ op: 'confirm', ref: 'AI候选', at: 't2' }),
+].join('\n'), 'utf8')
+t('T19 confirm 后注入:', text().includes('「AI候选」'))
+writeFileSync(inboxFile, JSON.stringify({ text: '还是候选', at: 't1', status: 'proposed' }) + '\n', 'utf8')
+t('T19 proposed 单独存在时不注入:', !text().includes('还是候选'))
+
+// T20 reject 移出视图 / 未知 status 一律当未确认 / supersede 的确认状态继承
+writeFileSync(inboxFile, [
+  JSON.stringify({ text: '被否决的候选', at: 't1', status: 'proposed' }),
+  JSON.stringify({ op: 'reject', ref: '被否决的候选', at: 't2' }),
+  JSON.stringify({ text: '状态乱写', at: 't3', status: 'whatever' }),
+].join('\n'), 'utf8')
+out = text()
+t('T20 reject/未知status:', !out.includes('被否决的候选') && !out.includes('状态乱写'))
+writeFileSync(inboxFile, [
+  JSON.stringify({ text: '确认过的旧文', at: 't1', status: 'confirmed' }),
+  JSON.stringify({ op: 'supersede', ref: '确认过的旧文', text: '确认过的新文', at: 't2' }),
+].join('\n'), 'utf8')
+t('T20b supersede 继承确认状态:', text().includes('「确认过的新文」'))
+writeFileSync(inboxFile, [
+  JSON.stringify({ text: '候选A', at: 't1', status: 'proposed' }),
+  JSON.stringify({ op: 'supersede', ref: '候选A', text: '候选B', at: 't2', status: 'proposed' }),
+].join('\n'), 'utf8')
+t('T20c proposed 的 supersede 洗不白:', !text().includes('候选B'))
+
+// T21 纪律块把新闸门口径写清：候选必须带 status:"proposed"，确认权不在 AI 手上
+setOn(session, true) // 【入库纪律】只在收口开关打开时注入
+write(base())
+out = text()
+t('T21 纪律写明 proposed 与确认权:', out.includes('"status":"proposed"') && out.includes('确认权不在你手上') && out.includes('memory.mjs'))
+
+// T22 配置告警点名待确认条目（不点名的话用户只看到"记忆凭空少了"）
+{
+  const { configWarnings } = await import('../core/edit.js')
+  writeFileSync(inboxFile, [
+    JSON.stringify({ text: '候选X', at: 't1', status: 'proposed' }),
+    JSON.stringify({ text: '老格式Y', at: 't2' }),
+  ].join('\n'), 'utf8')
+  const cfgStrict = { enabled: true, persona: {}, memory: { enabled: true, requireConfirm: true } }
+  const w1 = configWarnings(cfgStrict, 'flash')
+  t('T22 待确认被点名:', w1.some((x) => x.includes('待确认')) && w1.some((x) => x.includes('老格式')))
+  const w2 = configWarnings(cfgStrict, 'flash').concat(configWarnings({ enabled: true, persona: {}, memory: { enabled: true, requireConfirm: false } }, 'flash'))
+  t('T22b 放行后不再报老格式:', !configWarnings({ enabled: true, persona: {}, memory: { enabled: true, requireConfirm: false } }, 'flash').some((x) => x.includes('老格式')))
+  void w2
+}
 
 // T11/T12 配置目录定位：旧布局（whale-suite）存在则沿用，否则用新布局（whale-persona）
 {

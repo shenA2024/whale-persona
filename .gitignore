@@ -1,2 +1,14 @@
 node_modules/
 *.log
+
+# 审查补齐（2026-09-18 CodeGuard REPO-GITIGNORE-001）：常见敏感/产物条目
+.env
+.env.*
+dist/
+build/
+out/
+data/
+.tmp/
+.inbox/
+.eval/
+*.local.json

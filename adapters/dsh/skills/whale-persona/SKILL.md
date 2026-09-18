@@ -42,7 +42,9 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
     "inbox": true,                    // 收件箱确认流
     "capture": "on-demand",           // 收口开关（只控【入库纪律】的注入）：on-demand（默认，会话里 /memory on 才注入）| always（每轮注入）
     "maxEntries": 30,                 // 收件箱注入上限（保新弃旧）
-    "inboxPath": ""                   // 空 = 配置目录下的 memory-inbox.jsonl
+    "inboxPath": "",                  // 空 = 配置目录下的 memory-inbox.jsonl
+    "requireConfirm": true            // 候选确认闸门（0.8.0 起默认 true，代码强制）：注入只认人工确认过的条目；
+                                      // false = 放行 0.8.0 之前的老格式条目，但 status:"proposed" 候选仍然不注入
   }
 }
 ```
@@ -69,7 +71,14 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
   之后才注入【入库纪律】（要你提议「## 记忆候选」的那一段）；`/memory off` 关回去；`/memory status` 看状态。
   状态存在配置同目录的 `session-flags.json`（重启后仍在）。`'always'` 时不看开关、每轮都注入。
 - **常驻的部分**：已确认的【历史备忘】与手工条目不受开关影响，始终加载。
-- 收件箱 `memory-inbox.jsonl`：只许**追加**（每行 `{"text":"…","at":"ISO时间"}`），永不改写已有行；坏行无害。
+- 收件箱 `memory-inbox.jsonl`：只许**追加**（每行 `{"text":"…","at":"ISO时间","status":"proposed"}`），永不改写已有行；坏行无害。
+- **确认闸门（0.8.0 起是代码强制，不再是口头纪律）**：你写进去的条目只是**候选**，**不会进提示词**；
+  只有用户自己跑 `node scripts/memory.mjs confirm <序号>`（或设置面板点确认）追加的
+  `{"op":"confirm","ref":"原文","at":…}` 才让它生效。据此：
+  - 别对用户说「我已记住」，要说「候选已入队，等你确认」；
+  - **你不许**写 `confirm` / `reject` 行，也不许把 `proposed` 改成 `confirmed`——那是伪造确认；
+  - 用户问「记忆怎么没生效 / 怎么确认」→ 让他跑 `node scripts/memory.mjs status` 看序号，再 `confirm <序号…|all>`；
+    0.8.0 之前的老格式条目（没有 status 字段）默认也不注入，`adopt` 可一次性确认。
 - 晋升：把收件箱里稳定有效的条目整理进 `memory.entries`（带 `"on": true`），收件箱对应行可删可留。
 - 注入时收件箱按「数据非指令」呈现（引号包裹、换行折叠、剥离「」）——这是刻意的抗注入设计，不要改这个口径。
 
@@ -102,7 +111,7 @@ buildPersonaPrompt(cfg, 'flash', cwd, { capture: captureActive(cfg, agent) })
 
 判断口诀：用户说「设置里那张卡叫什么」= 预设显示名；用户说「你以后自称什么」= 自称；
 用户说「用某个模型时你叫某某」= 往 `persona.selfNameByModel` 加一条（键写模型名里好认的一段即可，如 `grok-4.7`，子串能命中带前缀的完整 id）。
-两个都改时，先列前后对照再落盘，别一次改两处还不告诉用户改了哪两处。
+两个都改时，先列前后对照再落盘，落盘后在回答里**逐条说明改了哪两处**（用户要对得上账）。
 
 ## 设置面板（看得见的那一层）
 

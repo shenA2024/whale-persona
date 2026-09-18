@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- 这行 meta 里的 CSP 占位符由 scripts/ui.mjs 按请求替换成带一次性 nonce 的策略（同时也在响应头里发一份）。
+     本页是服务端渲染的单文件模板，直接 file:// 打开时占位符不会被替换 —— 请走 node scripts/ui.mjs。 -->
+<meta http-equiv="Content-Security-Policy" content="%CSP%">
 <title>whale-persona · 配置编辑器</title>
 <style>
   :root{--t1:#e8ecf2;--t2:#98a2ae;--line:rgba(255,255,255,.10);--accent:#4c8dff;--ok:#3fb950;--warn:#e5a03c}
@@ -43,6 +46,11 @@
   .status{font-size:11.5px;color:var(--t2)}
   .status.ok{color:var(--ok)}
   .status.err{color:#e5534b}
+  /* 少量工具类：替代行内 style 属性，让 CSP 可以只认 nonce（行内 style 属性会被 style-src 拦） */
+  .mt8{margin-top:8px}
+  .mt10{margin-top:10px}
+  .shrink0{flex:0 0 auto}
+  .ml0{margin-left:0}
 </style>
 </head>
 <body>
@@ -73,7 +81,7 @@
     <p class="hint">末尾句支持 {{cwd}}（会替换成当前工作目录）。</p>
   </div>
   <div class="card"><h2>工作契约</h2><div id="contracts"></div>
-    <button id="addContract" style="margin-top:8px">+ 新增契约</button>
+    <button id="addContract" class="mt8">+ 新增契约</button>
     <p class="hint">写得具体可验证才有效：「结尾不要出现征询式问句」✅；「高质量」❌。5–10 条为宜。</p>
   </div>
   <div class="card"><h2>长期记忆</h2>
@@ -84,15 +92,15 @@
       <option value="always">always（每轮都注入）</option></select></div>
     <div class="row"><label>收件箱注入上限</label><input type="number" min="1" data-m="maxEntries" id="mMax"></div>
     <div class="row"><label>收件箱路径</label><input type="text" data-m="inboxPath" id="mInboxPath" placeholder="空 = 配置目录下的 memory-inbox.jsonl"></div>
-    <div style="margin-top:10px" id="entries"></div>
-    <button id="addEntry" style="margin-top:8px">+ 新增手工条目</button>
+    <div class="mt10" id="entries"></div>
+    <button id="addEntry" class="mt8">+ 新增手工条目</button>
     <p class="hint">手工条目＝你明确要求记住的（进准则块）；收件箱＝AI 提议、你确认后追加的流水。</p>
   </div>
 </section>
 <section>
   <div class="card"><h2>实际注入的三段文本（实时预览）</h2>
-    <div class="row"><label style="flex:0 0 auto">预览时视为收口开关已打开</label><input type="checkbox" id="previewCapture" checked></div>
-    <p class="hint" style="margin-left:0">预览不写盘，用同一套 core/ 渲染 —— 与运行期逐字一致。</p>
+    <div class="row"><label class="shrink0">预览时视为收口开关已打开</label><input type="checkbox" id="previewCapture" checked></div>
+    <p class="hint ml0">预览不写盘，用同一套 core/ 渲染 —— 与运行期逐字一致。</p>
     <div id="warnings"></div>
     <div class="pre"><h3>deployment:persona-prefix</h3><pre id="pvPrefix"></pre></div>
     <div class="pre"><h3>whale:thinking-language</h3><pre id="pvThinking"></pre></div>
