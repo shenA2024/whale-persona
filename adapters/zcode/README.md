@@ -12,7 +12,7 @@ whale-persona 的 ZCode 插件形态：**UserPromptSubmit hook 每轮动态注�
 ### 方式 A：Marketplace 安装（推荐）
 
 1. ZCode → **Settings → Plugin Management → Discover** → 点 **+** 添加 marketplace，
-   来源填本仓库：`https://github.com/shenA2024/dsh-whale-persona`
+   来源填本仓库：`https://github.com/shenA2024/whale-persona`
 2. 在 Discover 里找到 **whale-persona**，安装并启用。
 
 > 本仓库根的 `marketplace.json` 就是市场清单（条目 `source` 指向 `adapters/zcode`）——
@@ -24,13 +24,13 @@ whale-persona 的 ZCode 插件形态：**UserPromptSubmit hook 每轮动态注�
 
 对 AI 说：
 
-> 帮我安装 whale-persona 的 ZCode 插件：克隆 https://github.com/shenA2024/dsh-whale-persona，
+> 帮我安装 whale-persona 的 ZCode 插件：克隆 https://github.com/shenA2024/whale-persona，
 > 读 adapters/zcode/README.md 的安装说明并执行（本地目录方式），装完验证 hook 是否注入。
 
 ### 方式 C：手动（本地目录作为 marketplace）
 
 ```bash
-git clone https://github.com/shenA2024/dsh-whale-persona
+git clone https://github.com/shenA2024/whale-persona
 ```
 
 Settings → Plugin Management → Discover → **+** → 添加**本地目录**

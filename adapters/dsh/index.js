@@ -20,7 +20,7 @@
 import { createStore } from '../../core/store.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../core/prompt.js'
 
-export const name = '@dsh-external/dsh-whale-persona'
+export const name = '@shenA2024/whale-persona'
 
 /** 依赖 dsh-system-prompt 提供的 systemPrompt 服务 */
 export const inject = ['systemPrompt']
