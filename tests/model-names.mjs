@@ -13,7 +13,7 @@ const { selfNameOf } = await import('../core/render.js')
 const { mergeConfig, DEFAULTS } = await import('../core/defaults.js')
 const { buildPersonaPrompt } = await import('../core/prompt.js')
 
-const base = { enabled: true, persona: { selfNameFlash: '我', selfNamePro: '我', userName: 'shenA2024', character: '你是{selfName}。' } }
+const base = { enabled: true, persona: { selfNameFlash: '我', selfNamePro: '我', userName: '小林', character: '你是{selfName}。' } }
 const cfg = (patch) => mergeConfig(Object.assign({}, base, { persona: Object.assign({}, base.persona, patch) }))
 
 // ① 两档回落（老行为不能坏）
