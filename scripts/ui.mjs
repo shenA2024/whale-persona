@@ -15,9 +15,12 @@
  *   · 只监听 127.0.0.1，不对外；
  *   · Host 头必须匹配 127.0.0.1/localhost:<port>（防 DNS rebinding）；
  *   · 只读写**定位链解析出的那一个** config.json，不碰别的路径；
- *   · POST 必须是 application/json；没有 CORS 头，浏览器跨域拿不到结果。
+ *   · POST 必须是 application/json；没有 CORS 头，浏览器跨域拿不到结果；
+ *   · 每次请求生成一次性 nonce，CSP 同时走**响应头 + meta**（script-src/style-src 只认这个 nonce，
+ *     没有 unsafe-inline）——配置里可能出现任意文本，XSS 的纵深防御不能省。
  */
 import { createServer } from 'node:http'
+import { randomBytes } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -41,8 +44,26 @@ const writeMerged = (patch) => writeMergedConfig(patch, FILE)
 const render = (cfgRaw, capture, model, cwd) => renderSections(cfgRaw, { capture, model, cwd })
 
 function json(res, code, payload) {
-  res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' })
+  res.writeHead(code, {
+    'content-type': 'application/json; charset=utf-8',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+  })
   res.end(JSON.stringify(payload))
+}
+
+/** 一次性 nonce 的 CSP：本页只用内联 script/style，所以把权限精确收到这一次响应的 nonce 上 */
+function cspFor(nonce) {
+  return [
+    "default-src 'none'",
+    "script-src 'nonce-" + nonce + "'",
+    "style-src 'nonce-" + nonce + "'",
+    "img-src 'self' data:",
+    "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join('; ')
 }
 
 function readBody(req) {
@@ -65,8 +86,20 @@ const server = createServer(async (req, res) => {
     const p = u.pathname
 
     if (p === '/' && req.method === 'GET') {
-      const html = readFileSync(PAGE, 'utf8').replace('%PORT%', String(PORT))
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
+      const nonce = randomBytes(16).toString('base64')
+      const csp = cspFor(nonce)
+      const html = readFileSync(PAGE, 'utf8')
+        .replace('%PORT%', String(PORT))
+        .replace(/%CSP%/g, csp) // 全局替换：占位符出现两次也只换一次是不够的
+        .replace(/<style>/g, '<style nonce="' + nonce + '">')
+        .replace(/<script>/g, '<script nonce="' + nonce + '">')
+      res.writeHead(200, {
+        'content-type': 'text/html; charset=utf-8',
+        'content-security-policy': csp,
+        'x-content-type-options': 'nosniff',
+        'referrer-policy': 'no-referrer',
+        'cache-control': 'no-store',
+      })
       return res.end(html)
     }
     if (p === '/api/state' && req.method === 'GET') {

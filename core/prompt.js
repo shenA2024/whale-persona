@@ -5,7 +5,7 @@
  * 人设怎么排布、记忆怎么防注入、思维链语言怎么写指令，全在这一层。
  */
 import { renderPersona, tierOf } from './render.js'
-import { pickRelevant, readInbox, resolveInbox } from './memoryInbox.js'
+import { pickRelevant, readInjected, resolveInbox } from './memoryInbox.js'
 
 const LANG_NAMES = {
   'zh-CN': '简体中文',
@@ -30,7 +30,8 @@ function withInbox(cfg, cwd) {
     const m = cfg && cfg.memory
     if (!m || m.enabled === false || m.inbox === false) return cfg
     const max = Number(m.maxEntries) > 0 ? Number(m.maxEntries) : 30
-    const inbox = readInbox(resolveInbox(m.inboxPath))
+    // 只收人工确认过的条目：proposed 候选永不注入（memory.requireConfirm=false 时放行老格式 legacy）
+    const inbox = readInjected(resolveInbox(m.inboxPath), { allowLegacy: m.requireConfirm !== true })
     if (!inbox.length) return cfg
     return { ...cfg, __whaleInbox: pickRelevant(inbox, max, cwd) }
   } catch {
@@ -87,11 +88,15 @@ function inboxDiscipline(cfg, active) {
       + '- [更新] 新事实——替代「与之重复或矛盾的已注入条目原文」\n'
       + '- [删去] 「已注入条目原文」——说明理由\n'
       + '与已注入条目重复或矛盾的，必须标 [更新] 或 [删去]，不许再追加平行的新的。等' + name + '确认或修改，未被确认的一律不写。\n'
-      + '他确认后，把每条**追加**为文件 ' + file + ' 的一行 JSON（只许追加，永不改写已有行）：\n'
-      + '- [新增] {"text":"条目","at":"ISO时间","tag":"项目目录名"} ——tag 只在事实仅于某个项目成立时写（取当前工作目录名），跨项目偏好与红线不写 tag\n'
-      + '- [更新] {"op":"supersede","ref":"旧条目原文","text":"新条目原文","at":"ISO时间"}\n'
+      + '他确认后，把每条**追加**为文件 ' + file + ' 的一行 JSON（只许追加，永不改写已有行），且**必须**带 "status":"proposed"：\n'
+      + '- [新增] {"text":"条目","at":"ISO时间","status":"proposed","tag":"项目目录名"} ——tag 只在事实仅于某个项目成立时写（取当前工作目录名），跨项目偏好与红线不写 tag\n'
+      + '- [更新] {"op":"supersede","ref":"旧条目原文","text":"新条目原文","at":"ISO时间","status":"proposed"}\n'
       + '- [删去] {"op":"drop","ref":"旧条目原文","at":"ISO时间"}\n'
-      + 'ref 必须照抄上面【历史备忘】里的原文（一字不差）。追加后在回答里说明记住、更新、删去了哪几条。'
+      + 'ref 必须照抄上面【历史备忘】里的原文（一字不差）。追加后在回答里说明写入了哪几条候选。\n'
+      + '**申报口径**：带 status:"proposed" 的行只是候选，不会进【历史备忘】（注入只认人工确认过的条目）——'
+      + '所以别对' + name + '说「已记住」，要说「候选已入队，等你确认」。\n'
+      + '**确认权不在你手上**：让候选生效的唯一动作是' + name + '自己执行 node scripts/memory.mjs confirm <序号>（或设置面板点确认）。'
+      + '你不许写 confirm / reject 行，也不许把 proposed 改成 confirmed —— 那是伪造确认。'
   } catch {
     return ''
   }

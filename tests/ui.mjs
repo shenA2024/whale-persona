@@ -68,6 +68,18 @@ try {
     req.end()
   })
   t('U4 Host 防线:', status === 403)
+  // U5 CSP（2026-09-18 审查修复）：响应头 + meta 双份、只认一次性 nonce、没有 unsafe-inline
+  const pageRes = await fetch('http://127.0.0.1:' + PORT + '/')
+  const html = await pageRes.text()
+  const csp = pageRes.headers.get('content-security-policy') || ''
+  const nonce = (/nonce-([A-Za-z0-9+/=]+)/.exec(csp) || [])[1] || ''
+  t('U5 CSP 响应头带 nonce:', !!nonce && csp.includes("default-src 'none'") && csp.includes("script-src 'nonce-" + nonce + "'"))
+  t('U5 CSP 无 unsafe-inline/eval:', !csp.includes('unsafe-inline') && !csp.includes('unsafe-eval'))
+  t('U5 nonce 落到 script/style 标签:', html.includes('<script nonce="' + nonce + '">') && html.includes('<style nonce="' + nonce + '">'))
+  t('U5 meta CSP 已替换:', html.includes('http-equiv="Content-Security-Policy"') && !html.includes('%CSP%'))
+  t('U5 页面无行内 style 属性:', !/ style="/.test(html))
+  const csp2 = (await fetch('http://127.0.0.1:' + PORT + '/')).headers.get('content-security-policy') || ''
+  t('U5 nonce 每次请求都换:', csp2 !== csp && csp2.length > 0)
 } finally {
   child.kill()
 }

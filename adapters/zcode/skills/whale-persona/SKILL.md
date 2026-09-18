@@ -42,7 +42,8 @@ description: 人设引擎 whale-persona 的配置管理工作流。当用户想�
     "inbox": true,                    // 收件箱确认流
     "capture": "on-demand",           // 收口开关（只控【入库纪律】的注入）：on-demand（默认，消息带 #记忆 前缀那轮才注入）| always（每轮注入）；【历史备忘】常驻
     "maxEntries": 30,                 // 收件箱注入上限（保新弃旧）
-    "inboxPath": ""                   // 空 = 配置目录下的 memory-inbox.jsonl；纯 ZCode 用户建议显式指定
+    "inboxPath": "",                  // 空 = 配置目录下的 memory-inbox.jsonl；纯 ZCode 用户建议显式指定
+    "requireConfirm": true            // 候选确认闸门（0.8.0 起默认 true，代码强制）：注入只认人工确认过的条目
   }
 }
 ```
@@ -70,6 +71,9 @@ description: 人设引擎 whale-persona 的配置管理工作流。当用户想�
 
 ## 长期记忆维护
 
-- 收件箱 `memory-inbox.jsonl`：AI 只追加（每行 `{"text":"…","at":"ISO时间"}`），不改写已有行；坏行无害可随时手删。
+- 收件箱 `memory-inbox.jsonl`：AI 只追加（每行 `{"text":"…","at":"ISO时间","status":"proposed"}`），不改写已有行；坏行无害可随时手删。
+- **确认闸门（0.8.0 起代码强制）**：`status:"proposed"` 的候选**不会注入**；只有用户跑
+  `node scripts/memory.mjs confirm <序号>`（或设置面板确认）追加的 `{"op":"confirm",…}` 才让它生效。
+  AI 不许写 confirm/reject 行、不许把 proposed 改成 confirmed（伪造确认）。老格式条目用 `adopt` 一次性确认。
 - 晋升：把收件箱里稳定有效的条目，整理进 `memory.entries`（带 `"on": true`），收件箱对应行可删可留。
 - 注入时收件箱按「数据非指令」呈现（引号包裹、换行折叠）——这是刻意的抗注入设计，不要改这个口径。

@@ -15,6 +15,7 @@ import path from 'node:path'
 import { DEFAULTS, mergeConfig } from './defaults.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from './prompt.js'
 import { captureMode } from './capture.js'
+import { STATUS, readPending, resolveInbox } from './memoryInbox.js'
 import { configPath } from './store.js'
 
 /** 写回时允许整体替换的已知段（其余键一律原样保留） */
@@ -68,6 +69,16 @@ export function configWarnings(cfg, model) {
   const entries = (m.entries || []).filter((x) => x && x.on !== false && x.text)
   if (entries.length && m.enabled !== true) {
     out.push('有 ' + entries.length + ' 条手工条目，但「长期记忆」总开关是关的 —— 它们不会被注入。')
+  }
+  if (m.enabled === true && m.inbox !== false) {
+    // 确认闸门（0.8.0）：待确认候选与老格式条目都不注入 —— 不点名的话，用户只会看到"记忆凭空少了"
+    try {
+      const pending = readPending(resolveInbox(m.inboxPath))
+      const proposed = pending.filter((e) => e.status === STATUS.proposed).length
+      const legacy = pending.filter((e) => e.status === STATUS.legacy).length
+      if (proposed) out.push('收件箱里有 ' + proposed + ' 条待确认候选：不注入。确认后才生效 —— node scripts/memory.mjs status 看序号，再 confirm <序号>。')
+      if (legacy && m.requireConfirm !== false) out.push('收件箱里有 ' + legacy + ' 条老格式条目（没有 status）：0.8.0 起默认不注入。用 node scripts/memory.mjs adopt 一次性确认，或把 memory.requireConfirm 设为 false 放行。')
+    } catch { /* 收件箱读不动就不提示 */ }
   }
   if (m.enabled === true && m.capture === 'always' && m.inbox !== false) {
     out.push('收口模式是 always：每一轮都会注入【入库纪律】（旧行为）。想按需用，改成 on-demand 并在会话里 /memory on。')

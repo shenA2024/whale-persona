@@ -18,6 +18,13 @@
  *   node scripts/install-dsh.mjs --dry-run       # 只打印将要做的事
  *
  * 幂等：重复运行只补缺的部分，不覆盖用户既有设置。
+ *
+ * 安全纪律（2026-09-18 审查修复，别再退回去）：
+ *   · **不许出现 shell:true / 命令字符串拼接**。Windows 上 dsh 是 .cmd 垫片，Node 18.20+ 要求 .cmd
+ *     必须走 shell——本脚本的解法是自己定位 @deepseek-ai/dsh/lib/bin.js 交给 process.execPath 跑，
+ *     全程数组传参、shell:false。找得到就用，找不到就报错退出（绝不用 shell 兜底）。
+ *   · --profile / --base 走白名单校验（字母数字与 . _ -），路径参数一律 path.resolve，
+ *     杜绝「畸形 id = 路径穿越 / 命令注入」。
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
@@ -32,6 +39,8 @@ const UI_PKG = '@shenA2024/whale-persona-ui'
 const PRESET_ID = 'whale-persona'
 const PRESET_NAME = '自定义人设'
 const SELF = 'whale-persona:'
+/** profile / preset id 白名单：字母数字开头，其余 . _ -，最长 64 —— 结果只可能是一个目录名 */
+const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 const argv = process.argv.slice(2)
 const opts = { profile: 'web', link: false, home: '', source: SOURCE, setDefault: true, base: 'auto', dry: false, help: false }
@@ -48,25 +57,60 @@ for (let i = 0; i < argv.length; i++) {
   else { console.error(SELF + ' unknown argument: ' + a); process.exit(2) }
 }
 
-const HOME = opts.home || process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
+if (!ID_RE.test(opts.profile)) { console.error(SELF + ' 非法 --profile（只允许字母数字与 . _ -，最长 64）：' + JSON.stringify(opts.profile)); process.exit(2) }
+if (opts.base !== 'auto' && !ID_RE.test(opts.base)) { console.error(SELF + ' 非法 --base：' + JSON.stringify(opts.base)); process.exit(2) }
+
+const HOME = path.resolve(opts.home || process.env.DSH_HOME || path.join(os.homedir(), '.dsh'))
 const PROFILE_DIR = path.join(HOME, 'profiles', opts.profile)
 const TARGET = opts.link ? opts.source : path.join(HOME, 'plugins', PRESET_ID)
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', '.tmp', 'research', '.github'])
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', '.tmp', 'research', '.github', '.inbox'])
 
 const log = (m) => console.log(SELF + ' ' + m)
 const warn = (m) => console.warn(SELF + ' ! ' + m)
 const fail = (m) => { console.error(SELF + ' ' + m); process.exitCode = 1 }
 
+/**
+ * 可能的 npm 安装根（dsh 与 preset 模板都在这下面找）。
+ * 为什么不用 `npm root -g` 子进程：那是一次 shell 调用（Windows 下 npm 也是 .cmd），
+ * 本脚本运行期零 shell 是硬纪律；这几个候选覆盖官方安装器 / nvm-windows / 便携 node / 本地开发。
+ */
+function candidateRoots() {
+  const roots = []
+  if (process.env.DSH_AGENT_PRESETS_ROOT) roots.push(path.resolve(process.env.DSH_AGENT_PRESETS_ROOT))
+  if (process.env.APPDATA) roots.push(path.join(process.env.APPDATA, 'npm', 'node_modules'))
+  if (process.env.npm_config_prefix) roots.push(path.join(process.env.npm_config_prefix, 'node_modules'))
+  roots.push(path.join(path.dirname(process.execPath), 'node_modules'))
+  roots.push(path.resolve(HERE, '..', 'node_modules'))
+  const bin = process.env.DSH_BIN ? path.resolve(process.env.DSH_BIN) : ''
+  if (bin) roots.push(path.resolve(path.dirname(bin), '..', '..', '..')) // <root>/@deepseek-ai/dsh/lib/bin.js
+  return [...new Set(roots.map((r) => path.resolve(r)))]
+}
+
+/** dsh 的 JS 入口（bin.js）；找不到返回空串 —— 调用方必须报错退出，不许用 shell 兜底 */
+function dshEntry() {
+  const env = String(process.env.DSH_BIN || '').trim()
+  if (env) {
+    const p = path.resolve(env)
+    if (existsSync(p)) return p
+    warn('DSH_BIN 指向的文件不存在：' + p)
+  }
+  for (const root of candidateRoots()) {
+    const p = path.join(root, '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+    if (existsSync(p)) return p
+  }
+  return ''
+}
+const DSH_BIN_JS = dshEntry()
+
+/** 跑 dsh 子命令：数组传参 + shell:false（见文件头「安全纪律」） */
 function run(args, quiet) {
   const env = Object.assign({}, process.env)
   env.DSH_HOME = HOME
   const stdio = quiet ? 'pipe' : 'inherit'
-  if (process.platform !== 'win32') {
-    return spawnSync('dsh', args, { stdio, env, encoding: 'utf8' })
+  if (!DSH_BIN_JS) {
+    return { status: 1, stdout: '', stderr: '找不到 dsh 入口（@deepseek-ai/dsh/lib/bin.js）。设环境变量 DSH_BIN 指向它后重试。' }
   }
-  // Windows：dsh 是 .cmd 垫片，只能走 shell；参数拼成一条字符串（数组 + shell 会触发 DEP0190）
-  const line = 'dsh ' + args.map((a) => (/[\s"]/.test(a) ? '"' + a.replace(/"/g, '\\"') + '"' : a)).join(' ')
-  return spawnSync(line, { stdio, env, encoding: 'utf8', shell: true })
+  return spawnSync(process.execPath, [DSH_BIN_JS].concat(args), { stdio, env, encoding: 'utf8', shell: false })
 }
 
 function main() {
@@ -74,9 +118,19 @@ function main() {
   log('DSH_HOME   = ' + HOME)
   log('profile    = ' + opts.profile)
   log('source     = ' + opts.source)
+  log('dsh 入口   = ' + (DSH_BIN_JS || '（找不到，下面会报错）'))
   log('install to = ' + TARGET + (opts.link ? '   (link: 直接用当前仓库)' : '   (copy)'))
   if (!existsSync(path.join(opts.source, 'adapters', 'dsh', 'index.js'))) {
     return fail('这个目录不像 whale-persona 仓库：' + opts.source)
+  }
+  if (!DSH_BIN_JS) {
+    warn('没找到 dsh 的 bin.js —— 候选根：')
+    for (const r of candidateRoots()) warn('  ' + r)
+    warn('装了 dsh 的话，把它的 bin.js 路径写进环境变量 DSH_BIN 再跑一次。')
+    return
+  }
+  if (!opts.link && path.resolve(TARGET).toLowerCase().indexOf(path.resolve(opts.source).toLowerCase() + path.sep) === 0) {
+    return fail('安装目标在源仓库内部（' + TARGET + '）：复制等于"自己复制自己"。把 DSH_HOME 放到仓库外，或加 --link 直接用当前仓库（开发用）。')
   }
   ensureProfile()
   if (!opts.dry) copyTree()
@@ -95,12 +149,26 @@ function printHelp() {
   console.log(head.replace(/^\/\*\*?/, '').replace(/^ \* ?/gm, ''))
 }
 
+/**
+ * 物化 profile（干净 DSH_HOME 上实测踩出来的两条）：
+ *   ① profile 名与宿主**自带模板**同名（web / headless …）时，绝对不能带 --from-default-profile——
+ *      宿主明确拒绝：profile "web" is shipped and cannot be a custom profile target: omit --from-default-profile to use it；
+ *      直接 --profile web --dump-config 就会把 <home>/profiles/web 物化出来。
+ *   ② 自定义名字才需要从 web 模板派生。
+ */
 function ensureProfile() {
   if (existsSync(path.join(PROFILE_DIR, 'package.json'))) { log('profile 已存在：' + PROFILE_DIR); return }
-  log('profile 不存在，用宿主自带的 web 模版创建：' + PROFILE_DIR)
-  if (opts.dry) return
-  const r = run(['--profile', opts.profile, '--from-default-profile', 'web', '--dump-config'], true)
-  if (r.status !== 0) fail('创建 profile 失败：' + String(r.stderr || '').trim().split('\n').slice(0, 2).join(' | '))
+  log('profile 不存在，交给宿主物化：' + PROFILE_DIR)
+  if (opts.dry) { log('DRY: 物化 profile'); return }
+  let r = run(['--profile', opts.profile, '--dump-config'], true)
+  if (r.status === 0 && existsSync(path.join(PROFILE_DIR, 'package.json'))) {
+    log('profile 已用宿主自带模板物化（同名自带模板不需要 --from-default-profile）')
+    return
+  }
+  r = run(['--profile', opts.profile, '--from-default-profile', 'web', '--dump-config'], true)
+  if (r.status !== 0 || !existsSync(path.join(PROFILE_DIR, 'package.json'))) {
+    fail('创建 profile 失败：' + String(r.stderr || '').trim().split('\n').slice(0, 2).join(' | '))
+  }
 }
 
 function copyTree() {
@@ -159,13 +227,7 @@ function findShippedPreset(name) {
 
 function findShippedPresetsRoot() {
   const rel = path.join('@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-agent-presets', 'presets')
-  const roots = []
-  if (process.env.DSH_AGENT_PRESETS_ROOT) roots.push(process.env.DSH_AGENT_PRESETS_ROOT)
-  if (process.env.APPDATA) roots.push(path.join(process.env.APPDATA, 'npm', 'node_modules'))
-  if (process.env.npm_config_prefix) roots.push(path.join(process.env.npm_config_prefix, 'node_modules'))
-  const r = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['root', '-g'], { encoding: 'utf8', shell: process.platform === 'win32' })
-  if (r.status === 0 && r.stdout) roots.push(r.stdout.trim())
-  for (const root of roots) {
+  for (const root of candidateRoots()) {
     const p = path.join(root, rel)
     if (existsSync(p)) return p
   }
@@ -189,6 +251,7 @@ function defaultPresetId() {
 
 /** 基座目录：用户 preset 优先，其次宿主自带；找不到返回空串 */
 function basePresetDir(id) {
+  if (!ID_RE.test(String(id || ''))) return '' // 防「default preset 名被改成 ../.. 」这类路径穿越
   const user = path.join(HOME, '.agent-presets', id)
   if (existsSync(path.join(user, 'agent.cordis.yml'))) return user
   const shippedRoot = findShippedPresetsRoot()
@@ -344,6 +407,15 @@ function verify() {
   const okPreset = existsSync(path.join(HOME, '.agent-presets', PRESET_ID, 'agent.cordis.yml'))
   log('自检：UI 行在 profile 树里 = ' + (okUi ? 'OK' : '缺失'))
   log('自检：preset 文件 = ' + (okPreset ? 'OK' : '缺失') + '（人设行在 preset 层，dump-config 看不到它是正常的）')
+  const inbox = path.join(HOME, configDirName(), 'memory-inbox.jsonl')
+  if (existsSync(inbox)) {
+    log('提示：检测到记忆收件箱 ' + inbox.replace(/\\/g, '/') + ' —— 0.8.0 起「未确认候选」不注入，用 node scripts/memory.mjs status 看待确认条目。')
+  }
+}
+
+/** 配置目录名（与 core/store.js 的定位链一致：旧布局 whale-suite 里有 config.json 就沿用） */
+function configDirName() {
+  return existsSync(path.join(HOME, 'whale-suite', 'config.json')) ? 'whale-suite' : 'whale-persona'
 }
 
 function printNext() {
@@ -354,6 +426,7 @@ function printNext() {
   log('     （它就是人设的挂载点：只有绑定这份预设的会话才有你的人设）')
   log('  3) 设置 → 人设：左边直接改（自称/称呼/立场/正文/工作契约/长期记忆），右边实时看"实际注入的三段"')
   log('  4) 想手改就手改：面板里改完点保存即可（与本地编辑器同一套读写纪律）；也可以对 AI 说「加条契约：…」')
+  log('  5) 长期记忆候选要**你自己确认**才生效：node scripts/memory.mjs status | confirm <序号>（AI 只能写「候选」）')
 }
 
 main()

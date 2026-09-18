@@ -1,6 +1,6 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Persona engine for AI coding harnesses: switchable, editable, memorable persona (self-name / user address / stance / character / per-item work contracts / thinking language / confirmation-gated long-term memory). Ships a DeepSeek Harness adapter (system-prompt sections + settings panel) and a ZCode adapter, sharing one config.",
   "type": "module",
   "main": "./adapters/dsh/index.js",
@@ -16,6 +16,7 @@
     "install-dsh": "node scripts/install-dsh.mjs",
     "render": "node scripts/render-preview.mjs",
     "ui": "node scripts/ui.mjs",
+    "memory": "node scripts/memory.mjs",
     "sync-core": "node scripts/sync-core.mjs"
   },
   "files": ["core", "adapters", "scripts", "examples", "README.md", "LICENSE"],
