@@ -18,7 +18,7 @@
 - **ZCode**（含其他兼容 ZCode 插件体系的环境）：客户端是 ZCode，有 Settings → Plugin
   Management、skills、hooks → 用 [`adapters/zcode/`](adapters/zcode/README.md)。
 - **两者都在用**：两个适配器都装。它们共享同一份配置与收件箱（DSH 默认位置
-  `$DSH_HOME/whale-suite/`），人设改一次、两边同步生效。
+  `$DSH_HOME/whale-persona/`），人设改一次、两边同步生效。
 
 ## 仓库结构
 
@@ -26,6 +26,7 @@
 core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱读写
 adapters/dsh/    DeepSeek Harness 插件：注册 persona-prefix/suffix（官方具名槽位，getSectionOrder 动态解析）+ whale:thinking-language（自有槽位）三段
 adapters/zcode/  ZCode 插件：UserPromptSubmit hook 每轮注入 + whale-persona 管理技能
+marketplace.json ZCode 市场清单（Discover 添加本仓库时读它，条目指向 adapters/zcode）
 scripts/         sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
 tests/           三套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook
 ```

@@ -15,6 +15,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { mergeConfig } from '../vendor/core/defaults.js'
+import { configDir } from '../vendor/core/store.js'
 import { tierOf } from '../vendor/core/render.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../vendor/core/prompt.js'
 
@@ -22,7 +23,7 @@ import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../vendo
  * config 定位链（优先级从高到低）：
  *   ① WHALE_PERSONA_CONFIG（ZCode 用户显式指定）
  *   ② DSH_WHALE_CONFIG（DSH 用户显式指定 —— 双宿主共用一份配置）
- *   ③ $DSH_HOME/whale-suite/config.json（DSH 默认位置，存在即用 —— 一份人设两个宿主）
+ *   ③ $DSH_HOME/whale-persona/config.json（默认位置；旧布局 whale-suite 存在时自动沿用）
  *   ④ ~/.whale-persona/config.json（纯 ZCode 用户的默认位置）
  *   ⑤ 都没有：纯默认值（渲染为空 = 装上不改行为）
  */
@@ -30,8 +31,7 @@ function locateConfig() {
   const cands = []
   if (process.env.WHALE_PERSONA_CONFIG) cands.push(process.env.WHALE_PERSONA_CONFIG)
   if (process.env.DSH_WHALE_CONFIG) cands.push(process.env.DSH_WHALE_CONFIG)
-  const dshHome = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
-  cands.push(path.join(dshHome, 'whale-suite', 'config.json'))
+  cands.push(path.join(configDir(), 'config.json'))
   cands.push(path.join(os.homedir(), '.whale-persona', 'config.json'))
   for (const f of cands) {
     try { if (existsSync(f)) return f } catch { /* 读不了就跳过 */ }

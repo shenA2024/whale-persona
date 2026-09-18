@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-whale-persona",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DSH adapter of whale-persona: persona engine — switchable, editable, memorable persona (self-name / user address / stance / character / contracts / long-term memory). Rendering core is shared at repo root core/ (also used by the ZCode adapter).",
   "type": "module",
   "main": "index.js",

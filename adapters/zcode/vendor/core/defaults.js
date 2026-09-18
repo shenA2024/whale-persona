@@ -1,9 +1,9 @@
 /**
  * 默认配置（开源独立版：纯引擎、零观点，装上不改变任何行为——记忆流也默认关）。
  *
- * 用户自己在设置里填：自称、称呼、立场正文、工作契约、长期记忆（opt-in）。
- * shenA2024的个人人设（小助手/shenA2024/20 条契约）在他的私有 config.json 与预设文件里，
- * 与本默认值无关——这就是「通用默认 + 个人覆盖」两层配置。
+ * 用户自己在配置里填：自称、称呼、立场正文、工作契约、长期记忆（opt-in）。
+ * 个人人设属于用户自己的 config.json（以及他的预设文件），与本默认值无关 ——
+ * 这就是「通用默认 + 个人覆盖」两层配置。
  */
 
 export const DEFAULTS = {
@@ -16,7 +16,7 @@ export const DEFAULTS = {
   thinkingLanguage: 'off',
   persona: {
     enabled: true,
-    /** 当前应用的人设预设 id（套件 whale-ui 用；纯引擎用户留空即可） */
+    /** 当前应用的人设预设 id（供外部配置界面写入；纯引擎用户留空即可） */
     preset: '',
     /** 自称（按模型分档：flash 档 / pro 档；只填一个时另一档回落它） */
     selfNameFlash: '我',
@@ -41,7 +41,7 @@ export const DEFAULTS = {
     inbox: true,
     /** 注入上限（收件箱；当前项目 tag 命中优先，其次全局，超出保新弃旧） */
     maxEntries: 30,
-    /** 收件箱文件路径；空 = $DSH_HOME/whale-suite/memory-inbox.jsonl */
+    /** 收件箱文件路径；空 = 配置目录下的 memory-inbox.jsonl（见 store.js 的 configDir()） */
     inboxPath: '',
   },
 }

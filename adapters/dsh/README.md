@@ -37,8 +37,9 @@ dsh plugin --profile web add link:/path/to/whale-persona/repo/adapters/dsh
 
 ## 配置
 
-`$DSH_HOME/whale-suite/config.json`（也可用环境变量 `DSH_WHALE_CONFIG` 指定别的文件；
-ZCode 适配器默认也读这里——一份人设两个宿主）：
+`$DSH_HOME/whale-persona/config.json`（也可用环境变量 `DSH_WHALE_CONFIG` 指定别的文件；
+ZCode 适配器默认也读这里——一份人设两个宿主。早期版本的 `$DSH_HOME/whale-suite/` 里
+已有 config.json 时继续沿用，不需要迁移）：
 
 ```jsonc
 {
@@ -61,7 +62,7 @@ ZCode 适配器默认也读这里——一份人设两个宿主）：
     "entries": [],                     // 手工条目（权威层）
     "inbox": true,                     // 收件箱（AI 确认流）
     "maxEntries": 30,                  // 收件箱注入上限（保新弃旧）
-    "inboxPath": ""                    // 空 = $DSH_HOME/whale-suite/memory-inbox.jsonl
+    "inboxPath": ""                    // 空 = 配置目录下的 memory-inbox.jsonl
   }
 }
 ```
@@ -95,9 +96,9 @@ ZCode 适配器默认也读这里——一份人设两个宿主）：
 配置只是普通 JSON，DSH 里的 AI 有文件读写工具——你不必手写。口述想法，或给它一个
 本地思想纲领文件让它提炼，确认后由它落盘。指令模板：
 
-> 我想调整你的人设：……（你的想法，或：读取 `D:\我的思想纲领.md` 从中提炼）。
+> 我想调整你的人设：……（你的想法，或：读取我给你的思想纲领文件 `~/notes/principles.md` 从中提炼）。
 > 请提炼成 config.json 里 character / contracts / stance 的修改，先给我看修改前后对照，
-> 我确认后写回 `$DSH_HOME/whale-suite/config.json`。要求：① 先读原文件、整体改写回写，
+> 我确认后写回 `$DSH_HOME/whale-persona/config.json`。要求：① 先读原文件、整体改写回写，
 > 保留 thinkingLanguage 和 memory 段不动；② 写完重读一遍验证 JSON 合法。
 
 要点：

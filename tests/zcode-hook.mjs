@@ -1,6 +1,6 @@
 // ZCode 适配器测试：hook 脚本（stdin→additionalContext）、preview 模式、降级纪律、vendor 一致性
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
@@ -30,7 +30,7 @@ writeFileSync(cfgFile, JSON.stringify({
   enabled: true,
   thinkingLanguage: 'zh-CN',
   persona: {
-    enabled: true, selfNameFlash: '小助手', selfNamePro: '首席助手', userName: 'shenA2024',
+    enabled: true, selfNameFlash: '小助手', selfNamePro: '首席助手', userName: '小林',
     stance: '{userName}的编程搭档。', character: '你是{selfName}。',
     contracts: [{ id: 'terse', text: '结论先行。', on: true }],
     suffix: '工作目录在 {{cwd}}。',
@@ -45,7 +45,7 @@ writeFileSync(cfgFile, JSON.stringify({
   const ctx = out && out.hookSpecificOutput && out.hookSpecificOutput.additionalContext
   t('Z1 exit0:', r.status === 0)
   t('Z1 事件名:', out.hookSpecificOutput.hookEventName === 'UserPromptSubmit')
-  t('Z1 persona:', ctx.includes('shenA2024的编程搭档。') && ctx.includes('你是小助手。') && ctx.includes('结论先行。'))
+  t('Z1 persona:', ctx.includes('小林的编程搭档。') && ctx.includes('你是小助手。') && ctx.includes('结论先行。'))
   t('Z1 思维链语言:', ctx.includes('内部思考语言') && ctx.includes('简体中文'))
   t('Z1 收件箱数据块:', ctx.includes('历史备忘') && ctx.includes('「红线：游戏存档目录永远不碰」'))
   t('Z1 suffix(cwd替换):', ctx.includes('工作目录在 D:/work。'))
@@ -116,4 +116,20 @@ writeFileSync(cfgFile, JSON.stringify({
   const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext
   t('Z8 相关性注入:', ctx.includes('「项目事实（work）」') && ctx.includes('「全局旧偏好」') === false)
   t('Z8 纪律三类候选:', ctx.includes('[新增]') && ctx.includes('[更新]') && ctx.includes('[删去]'))
+}
+
+// Z9 旧布局兼容：只给 DSH_HOME，配置放在 whale-suite/ 里，hook 也能定位到并注入
+{
+  const legacyHome = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-zcode-legacy-'))
+  mkdirSync(path.join(legacyHome, 'whale-suite'), { recursive: true })
+  writeFileSync(path.join(legacyHome, 'whale-suite', 'config.json'), JSON.stringify({
+    enabled: true, persona: { enabled: true, selfNameFlash: '小助手', character: '你是{selfName}。' },
+  }), 'utf8')
+  const r = spawnSync(process.execPath, [HOOK], {
+    input: JSON.stringify({ prompt: 'hi' }), encoding: 'utf8',
+    env: { ...process.env, DSH_HOME: legacyHome, WHALE_PERSONA_CONFIG: '', DSH_WHALE_CONFIG: '' },
+  })
+  let ok = false
+  try { ok = JSON.parse(r.stdout).hookSpecificOutput.additionalContext.includes('你是小助手。') } catch { /* 解析失败即失败 */ }
+  t('Z9 旧布局兼容:', ok)
 }

@@ -21,7 +21,7 @@ https://github.com/shenA2024/dsh-whale-persona/security/advisories/new
 
 ## 这个插件是什么、安全边界在哪
 
-本插件是**纯本地**的系统提示词渲染器，不联网、不派生进程、不 eval。它写盘只有两处：`$DSH_HOME/whale-suite/config.json`（配置）与记忆收件箱文件（只读；写入由宿主 AI 通过普通文件工具完成）。
+本插件是**纯本地**的系统提示词渲染器，不联网、不派生进程、不 eval。它写盘只有两处：配置目录下的 `config.json`（默认 `$DSH_HOME/whale-persona/`）与同目录的记忆收件箱文件（只读；写入由宿主 AI 通过普通文件工具完成）。
 
 所以这里不存在「远程代码执行」式的漏洞。真实的可利用面是：
 
