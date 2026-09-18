@@ -40,7 +40,7 @@ const dispose = apply(ctx)
 console.log('SEC1 sections:', reg.map((s) => s.name + '@' + s.order).join(' | '))
 const prefix = reg.find((s) => s.name === 'deployment:persona-prefix')
 const suffix = reg.find((s) => s.name === 'deployment:persona-suffix')
-const think = reg.find((s) => s.name === 'deployment:thinking-language')
+const think = reg.find((s) => s.name === 'whale:thinking-language')
 t('SEC1 三段注册齐:', !!(prefix && suffix && think))
 
 const flash = prefix.text({ agent: { options: { model: 'deepseek-v4.1-flash' } } })
