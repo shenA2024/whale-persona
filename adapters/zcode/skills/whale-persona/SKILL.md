@@ -39,6 +39,7 @@ description: 人设引擎 whale-persona 的配置管理工作流。当用户想�
     "enabled": false,                 // 默认关（opt-in）
     "entries": [],                    // 手工条目（权威层，渲染为行为准则）
     "inbox": true,                    // 收件箱确认流
+    "capture": "on-demand",           // 收口开关（只控【入库纪律】的注入）：on-demand（默认，消息带 #记忆 前缀那轮才注入）| always（每轮注入）；【历史备忘】常驻
     "maxEntries": 30,                 // 收件箱注入上限（保新弃旧）
     "inboxPath": ""                   // 空 = 配置目录下的 memory-inbox.jsonl；纯 ZCode 用户建议显式指定
   }

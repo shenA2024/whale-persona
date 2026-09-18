@@ -55,15 +55,32 @@ function inboxDataBlock(items, name) {
  * 候选分 [新增]/[更新]/[删去] 三类——与已注入条目重复或矛盾的，必须提「更新/删去」
  * 而不是再追加一条新的；确认后落成事实行或 supersede/drop 操作行（物理仍然只追加）。
  */
-function inboxDiscipline(cfg) {
+/**
+ * 【历史备忘】数据块：**常驻**（只受 memory.enabled / memory.inbox 控制，不受收口开关控制）——
+ * 已确认的记忆是行为一致性的负载，开关关掉时仍然加载。
+ */
+function inboxData(cfg) {
   try {
     const m = cfg && cfg.memory
     if (!cfg || cfg.enabled === false || !m || m.enabled === false || m.inbox === false) return ''
     const name = (cfg.persona && cfg.persona.userName) || '用户'
-    const file = resolveInbox(m.inboxPath).replace(/\\/g, '/')
     return inboxDataBlock(cfg.__whaleInbox || [], name)
-      + (cfg.__whaleInbox && cfg.__whaleInbox.length ? '\n\n' : '')
-      + '【长期记忆 · 入库纪律】\n'
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 【入库纪律】（写入门控）：只在收口开关打开时注入——不需要总结记忆的会话就不背这段噪音。
+ */
+function inboxDiscipline(cfg, active) {
+  try {
+    if (!active) return ''
+    const m = cfg && cfg.memory
+    if (!cfg || cfg.enabled === false || !m || m.enabled === false || m.inbox === false) return ''
+    const name = (cfg.persona && cfg.persona.userName) || '用户'
+    const file = resolveInbox(m.inboxPath).replace(/\\/g, '/')
+    return '\n\n【长期记忆 · 入库纪律】\n'
       + '阶段收口（任务书验收通过／一轮交付完成）或会话收尾时，把值得长期记住的事实——' + name + '的偏好、红线、长期决策；'
       + '项目结构细节走项目记忆，不进这里——整理成「## 记忆候选」小节，每条一行并标注类别：\n'
       + '- [新增] 新事实\n'
@@ -80,12 +97,17 @@ function inboxDiscipline(cfg) {
   }
 }
 
-/** 人设前缀段全文（stance/character/契约/手工记忆 + 收件箱数据块 + 入库纪律） */
-export function buildPersonaPrompt(cfg, model, cwd) {
+/**
+ * 人设前缀段全文（stance/character/契约/手工记忆 + 收件箱数据块 + 入库纪律）。
+ * 【历史备忘】数据块常驻（已确认的记忆照常加载）；只有【入库纪律】受 opts.capture 门控——
+ * 是否注入由宿主的**会话开关**决定（见 capture.js）。手工条目属于权威层，不受它控制。
+ */
+export function buildPersonaPrompt(cfg, model, cwd, opts) {
   try {
+    const active = !!(opts && opts.capture === true)
     const tier = tierOf(model)
     const merged = withInbox(cfg, cwd)
-    return renderPersona(merged, tier) + inboxDiscipline(merged)
+    return renderPersona(merged, tier) + inboxData(merged) + inboxDiscipline(merged, active)
   } catch {
     return ''
   }

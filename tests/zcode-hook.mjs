@@ -35,7 +35,7 @@ writeFileSync(cfgFile, JSON.stringify({
     contracts: [{ id: 'terse', text: '结论先行。', on: true }],
     suffix: '工作目录在 {{cwd}}。',
   },
-  memory: { enabled: true, entries: [], inbox: true, inboxPath: inboxFile },
+  memory: { enabled: true, capture: 'always', entries: [], inbox: true, inboxPath: inboxFile },
 }), 'utf8')
 
 // Z1 完整渲染：additionalContext 含 stance/character/契约/思维链语言/收件箱数据块/suffix(cwd 替换)
@@ -106,7 +106,7 @@ writeFileSync(cfgFile, JSON.stringify({
   writeFileSync(cfgFile, JSON.stringify({
     enabled: true,
     persona: { enabled: true, selfNameFlash: '小助手', character: '你是{selfName}。' },
-    memory: { enabled: true, maxEntries: 1, inbox: true, inboxPath: inboxFile },
+    memory: { enabled: true, capture: 'always', maxEntries: 1, inbox: true, inboxPath: inboxFile },
   }), 'utf8')
   writeFileSync(inboxFile, [
     JSON.stringify({ text: '全局旧偏好', at: 't1' }),
@@ -116,6 +116,22 @@ writeFileSync(cfgFile, JSON.stringify({
   const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext
   t('Z8 相关性注入:', ctx.includes('「项目事实（work）」') && ctx.includes('「全局旧偏好」') === false)
   t('Z8 纪律三类候选:', ctx.includes('[新增]') && ctx.includes('[更新]') && ctx.includes('[删去]'))
+}
+
+// Z10 收口开关（ZCode 版 = 消息前缀）：【历史备忘】常驻；【入库纪律】只在带 #记忆 的那一轮
+{
+  writeFileSync(cfgFile, JSON.stringify({
+    enabled: true,
+    persona: { enabled: true, selfNameFlash: '小助手', character: '你是{selfName}。' },
+    memory: { enabled: true, inbox: true, inboxPath: inboxFile },
+  }), 'utf8')
+  writeFileSync(inboxFile, JSON.stringify({ text: '常驻记忆条目', at: 't1' }) + '\n', 'utf8')
+  const onR = runHook(JSON.stringify({ prompt: '总结一下 #记忆', cwd: 'D:/work' }))
+  const offR = runHook(JSON.stringify({ prompt: '普通一句', cwd: 'D:/work' }))
+  const onCtx = JSON.parse(onR.stdout).hookSpecificOutput.additionalContext
+  const offCtx = JSON.parse(offR.stdout).hookSpecificOutput.additionalContext
+  t('Z10 前缀触发:', onCtx.includes('入库纪律') && !offCtx.includes('入库纪律')
+    && onCtx.includes('「常驻记忆条目」') && offCtx.includes('「常驻记忆条目」'))
 }
 
 // Z9 旧布局兼容：只给 DSH_HOME，配置放在 whale-suite/ 里，hook 也能定位到并注入

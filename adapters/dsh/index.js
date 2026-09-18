@@ -18,6 +18,7 @@
  * 生效时机：段是装配期注册、text 是每步求值 —— 改配置下一步生效，改挂载要新会话。
  */
 import { createStore } from '../../core/store.js'
+import { captureActive, runMemoryCommand } from '../../core/capture.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../core/prompt.js'
 
 export const name = '@shenA2024/whale-persona'
@@ -66,7 +67,9 @@ export function apply(ctx) {
         const cwd = (agent && agent.session && agent.session.header && agent.session.header.cwd)
           || (agent && agent.session && agent.session.cwd)
           || (agent && agent.options && agent.options.cwd)
-        return buildPersonaPrompt(store.get(), model, cwd)
+        const cfg = store.get()
+        // 【历史备忘】与【入库纪律】只在会话开关打开（或配置 capture:'always'）时注入
+        return buildPersonaPrompt(cfg, model, cwd, { capture: captureActive(cfg, agent) })
       } catch {
         return ''
       }
@@ -105,7 +108,42 @@ export function apply(ctx) {
     },
   })
 
+  /**
+   * 会话内的「长期记忆收口」开关：/memory [on|off|status]
+   * 命令跑在 UI 命令平面 —— 不产生模型消息、不占 token（dsh-commands 的约定）。
+   * 用动态注入（ctx.inject）而不是静态 inject：拿不到 commands 服务时命令静默缺席，
+   * 人设照常工作（静态 inject 不满足会让整个插件挂不上，人设直接消失）。
+   */
+  let registered = false
+  let disposeFiber = null
+  let disposeCommand = null
+  const registerMemoryCommand = (commands) => {
+    if (registered || !commands || typeof commands.register !== 'function') return
+    registered = true
+    disposeCommand = commands.register({
+      name: 'memory',
+      description: '长期记忆收口：开/关本会话的【入库纪律】注入（/memory on|off|status）',
+      input: { hint: 'on | off | status' },
+      handler: (invocation) => runMemoryCommand(invocation, store),
+    })
+  }
+  try {
+    // 先试同步取服务（命令当次挂载即可用）；取不到再退到动态注入
+    if (typeof ctx.get === 'function') registerMemoryCommand(ctx.get('commands'))
+  } catch { /* 服务还没就位 */ }
+  if (!registered && typeof ctx.inject === 'function') {
+    try {
+      disposeFiber = ctx.inject(['commands'], (c) => {
+        try { registerMemoryCommand(c.commands) } catch { disposeCommand = null }
+      })
+    } catch {
+      disposeFiber = null
+    }
+  }
+
   return () => {
+    try { if (typeof disposeCommand === 'function') disposeCommand() } catch { /* 已随 fiber 释放 */ }
+    try { if (disposeFiber && typeof disposeFiber.dispose === 'function') disposeFiber.dispose() } catch { /* 无视 */ }
     disposePrefix()
     disposeSuffix()
     disposeThinkingLang()

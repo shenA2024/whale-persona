@@ -9,6 +9,9 @@
  *   hook 模式（ZCode 自动）：stdin 收事件 JSON {prompt, cwd, session_id, ...}，字段缺了也能跑
  *   预览模式（人工/skill 用）：node render.mjs --preview —— 不读 stdin，直接打印渲染全文
  *
+ * 收口开关（ZCode 版没有命令平面）：配置 memory.capture='always' 时每轮都注入
+ * 【历史备忘】与【入库纪律】；默认 'on-demand' 时只有本轮消息带 `#记忆` / `#memory` 前缀才注入。
+ *
  * 纪律（与 DSH 版一致）：任何异常输出空并 exit 0 —— hook 永远不让会话炸。
  */
 import { readFileSync, existsSync } from 'node:fs'
@@ -49,11 +52,27 @@ function readConfig() {
   }
 }
 
+/** ZCode 的收口开关触发器：消息里的 `#记忆` / `#memory` 前缀 */
+const CAPTURE_PREFIX = /(?:^|\s)#(?:记忆|memory)(?:\s|$)/iu
+
+/** 本轮是否该注入收件箱与入库纪律（ZCode 版；DSH 版走 /memory 命令，见 core/capture.js） */
+function captureFor(cfg, input) {
+  try {
+    const m = cfg && cfg.memory
+    if (!cfg || cfg.enabled === false || !m || m.enabled === false || m.inbox === false) return false
+    if (String(m.capture || '').toLowerCase() === 'always') return true
+    const prompt = input && typeof input.prompt === 'string' ? input.prompt : ''
+    return CAPTURE_PREFIX.test(prompt)
+  } catch {
+    return false
+  }
+}
+
 function render(cfg, input) {
   const model = input && typeof input.model === 'string' ? input.model : null
   const cwd = input && typeof input.cwd === 'string' ? input.cwd : ''
   const parts = [
-    buildPersonaPrompt(cfg, model, cwd),
+    buildPersonaPrompt(cfg, model, cwd, { capture: captureFor(cfg, input) }),
     buildThinkingLanguage(cfg),
     buildSuffix(cfg, cwd),
   ].filter(Boolean)
