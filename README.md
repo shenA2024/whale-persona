@@ -21,7 +21,8 @@
      它只替换基座里的那行人设，不会把你的标准模式悄悄换成 PTC（或反过来）。
      装完重启 DSH，你会看到两处新东西：**设置 → Agent 预设** 里多出一张
      「**自定义人设**」卡片（已标「新任务默认」，名字就存在它的 `preset.yml` 里，随你改）、
-     **设置 → 人设** 是一张只读面板，显示此刻**实际会注入系统提示词的那几段正文**。
+     **设置 → 人设** 是一张**可以直接改**的面板：左边填（自称/称呼/立场/正文/工作契约/长期记忆），
+     右边实时显示此刻**实际会注入系统提示词的那几段正文**，保存即落盘（下一步生效）。
      手工装法与两个平面的规则见 [`adapters/dsh/README.md`](adapters/dsh/README.md)。
 
      **为什么会多出一个 Agent 预设？** 因为人设**没有别的地方可挂**：
@@ -108,12 +109,19 @@ DSH_WHALE_CONFIG=<路径> node scripts/ui.mjs   # 编辑指定配置文件
 安全边界（这页能读写你的配置文件，所以写清楚）：只监听 `127.0.0.1`；校验 Host 头（防 DNS rebinding）；
 只读写定位链解析出的那一个 config.json；POST 必须是 `application/json` 且不发 CORS 头。
 
-### DSH 里的只读面板（2026-09-18 新增）
+### DSH 里的设置面板（2026-09-18 新增，同日按用户反馈改成可编辑）
 
-装 UI 包 `@shenA2024/whale-persona-ui` 后，DSH「设置 → 人设」是一张**只读卡片**：
-状态、自称/称呼、配置文件路径、**此刻实际注入的三段正文**（可按 flash/pro 档切换）、
-逐条契约与开关态、长期记忆条数与最近几条。它解决的是「看得见」——
-用户不必再问 AI「我现在的人设到底是什么」。文本与运行期注入**同一套 `core/`**，不是另算的近似值。
+装 UI 包 `@shenA2024/whale-persona-ui` 后，DSH「设置 → 人设」是一个**完整的编辑界面**：
+
+- **改**：总开关、思维链语言、自称（flash / pro 两档）、称呼、立场、立场正文、后缀；
+  逐条增删改「工作契约」（每条可单独开关）；长期记忆开关、收口模式、手工条目增删。
+- **看**：右边一栏实时显示此刻**实际注入的三段正文**（可按 flash/pro 档切换），
+  以及**配了却不生效**的告警（例如自称没用 `{selfName}` 占位符、有条目但总开关是关的）。
+- **存**：`POST /whale-persona/api/config` —— 与本地编辑页**同一套读写纪律**（`core/edit.js`）：
+  只替换 `enabled`/`thinkingLanguage`/`persona`/`memory` 四个已知段，**未知键原样保留**
+  （配置里其他工具的段不会被裁）；磁盘上现有文件不是合法 JSON 时**拒绝写入**（409），绝不覆盖。
+
+三段文本与运行期注入**同一套 `core/`**，不是面板自己拼的近似值。
 
 挂载规矩（装错会让整个 DSH 起不来，实测报错：`prompt section "deployment:persona-prefix" is already registered`）：
 
@@ -122,9 +130,11 @@ DSH_WHALE_CONFIG=<路径> node scripts/ui.mjs   # 编辑指定配置文件
 | 人设段（`@shenA2024/whale-persona`） | **agent preset** | 与官方 persona 占同一架构位，跨层才是「遮蔽」 |
 | 设置面板（`@shenA2024/whale-persona-ui`） | **profile patch 栈** | UI 插件进不了 preset 平面 |
 
-**为什么编辑仍然不做成宿主插件**：表单编辑继续留在独立本地页 —— 两个宿主通吃，且与本仓引擎解耦。
-DSH 侧只加了一层**只读**薄卡片，碎裂面控制在一个不写盘的组件里；真正改配置仍然只有两条路：
-本地页 `node scripts/ui.mjs`，或者对 AI 说一句（技能代写）。
+**两个编辑入口，一套纪律**（2026-09-18 用户反馈后改的口径）：
+原先宿主面板只读、把编辑推给本地页，实测用户会直接**在设置里点输入框**——点不动就是坏体验。
+现在宿主面板可直接编辑保存；本地页 `node scripts/ui.mjs` 继续保留，服务两个宿主的用户，
+两者都走 `core/edit.js` 的同一套读写与告警逻辑（改一处两处一致）。
+风险控制：所有写入都在本机 loopback 护栏之后、只认一个 config.json、坏 JSON 拒写、未知键不裁。
 
 ## 你在哪个宿主里？（给 AI 的安装引导）
 
@@ -144,7 +154,7 @@ DSH 侧只加了一层**只读**薄卡片，碎裂面控制在一个不写盘的
 core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱读写 / 收口开关
 examples/        可直接跑的示例：demo-config.json（三契约 + 记忆）、demo-inbox.jsonl、empty-config.json
 adapters/dsh/    DeepSeek Harness 宿主半身：注册 persona-prefix/suffix（官方具名槽位，getSectionOrder 动态解析）+ whale:thinking-language（自有槽位）三段
-adapters/dsh-ui/ DSH 设置面板（宿主路由 + 浏览器半身）：只读展示"此刻会注入什么"，profile 平面挂载
+adapters/dsh-ui/ DSH 设置面板（宿主路由 + 浏览器半身）：编辑配置 + 实时预览"此刻会注入什么"，profile 平面挂载
 adapters/zcode/  ZCode 插件：UserPromptSubmit hook 每轮注入 + whale-persona 管理技能
 marketplace.json ZCode 市场清单（Discover 添加本仓库时读它，条目指向 adapters/zcode）
 package.json     仓库根包：让 `dsh plugin add <本仓 URL>` 也能装（main 指向 adapters/dsh）
@@ -166,7 +176,7 @@ tests/           五套测试：DSH 冒烟 / 记忆收件箱 / 设置面板宿�
 | 记忆确认流 | ✅（收件箱按数据注入） | ✅（同一套收件箱与纪律文案） |
 | 无 hook 兜底 | —（挂载即用） | `--preview` 导出静态文本贴 AGENTS.md，新会话生效 |
 | 关闭方式 | config `enabled:false` = 无人设；卸载挂载行回官方 persona | 禁用插件即停；纯默认配置渲染为空（装上不改行为） |
-| 设置页可见性 | ✅ 只读面板（三段正文/契约/记忆一屏可见） | ➖ 用本仓自带的本地编辑器页 |
+| 设置页可见性 | ✅ 宿主设置页内直接编辑 + 三段正文实时预览 | ➖ 用本仓自带的本地编辑器页（与面板同一套读写纪律） |
 
 共享：同一份 config schema、同一套渲染文案、同一个收件箱文件——两个宿主看到的是
 同一个「人」。差异只在注入通道。

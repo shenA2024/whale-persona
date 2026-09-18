@@ -1,19 +1,26 @@
 /**
- * @shenA2024/whale-persona-ui —— 设置面板（浏览器半身）
+ * @shenA2024/whale-persona-ui —— 设置面板（浏览器半身 · 可编辑版）
  *
  * 手写懒 CJS bundle，零依赖零构建：宿主只认「已构建的 __ModuleLoader__ bundle」这个契约，
  * require 只能命中基座模块（react 在里面），所以用 createElement 手写组件——
  * 改一行保存、刷新页面就生效，没有编译步骤，不联网，不引任何第三方。
  *
  * 挂载位：settings.section（官方给仓库外插件预留的整页设置位）。
- * 本面板**只读**：写配置只有两条路——本地编辑器（scripts/ui.mjs）或让 AI 改。
+ * 面板**可编辑**：改动先落在本地 state，只有点「保存」才发一次 POST。
  *
- * 数据来源：同源 GET /whale-persona/api/summary（宿主半身 adapters/dsh-ui/index.js）。
- *   档位参数**两个都发**：?tier=flash|pro（当前宿主实现读这个）＋ ?model=deepseek-v4-*（跨宿主契约口径）；
- *   多出来的那个参数服务端会忽略——面板不必猜面对的是哪一版宿主。
- *   字段兜底读：exists ← exists | configState.exists；memory.entries ← entries | manualEntries；
- *   memory.recent 兼容 ["原文"] 与 [{text,tag}]；editor.port ← port | 从 url 里解析。
- *   失败路径（网络异常 / 非 2xx / 非 JSON）一律不崩：显示一行可读错误 + 保留重试按钮。
+ * 数据来源（宿主半身 adapters/dsh-ui/index.js，两条路由）：
+ *   GET  /whale-persona/api/summary?tier=flash|pro
+ *        → raw（磁盘原始对象，含未知键）/ defaults / configValid / warnings
+ *          / sections（三段预览）/ contracts / memory / editor …
+ *   POST /whale-persona/api/config   body { config: patch }
+ *        → 服务端**整体读改写**：patch 里出现的段整体替换，未知键原样保留。
+ *          所以发出去的 persona / memory 必须**基于 summary.raw 展开**再覆盖改动字段，
+ *          只发改掉的字段会把用户其它设置抹掉（这是本面板最容易犯的错）。
+ *          200 → { ok, preview:{prefix,thinking,suffix,warnings}, savedAt, … }
+ *          409 → 磁盘上是坏 JSON，拒绝覆盖；415/400 → 请求格式不对。
+ *
+ * 兜底：老版本宿主没有 raw 时用 defaults 铺表单、禁用保存（提示改用本地编辑器）。
+ * 失败路径（网络异常 / 非 2xx / 非 JSON）一律降级成一行可读错误，绝不崩掉设置页。
  *
  * 生效时机：改配置下一步生效，改挂载行要新会话。
  */
@@ -25,17 +32,23 @@ window.__ModuleLoader__.load({
     var React = require('react');
     var h = React.createElement;
 
-    var API = '/whale-persona/api/summary';
+    var SUMMARY_API = '/whale-persona/api/summary';
+    var CONFIG_API = '/whale-persona/api/config';
     /** 面板看到的三段是按模型档渲染的：切换档位即带参数重新 fetch */
     var TIERS = [
       { id: 'flash', model: 'deepseek-v4-flash', label: 'flash 档' },
       { id: 'pro', model: 'deepseek-v4-pro', label: 'pro 档' },
     ];
     var EMPTY_SEG = '（空 —— 这一段不会出现在系统提示词里）';
+    var THINKING_PRESETS = ['off', 'zh-CN', 'en'];
+    /** 保存策略提示：宿主不认识 raw 时用 defaults 铺表单、禁用保存 */
+    var NO_RAW_HINT = '宿主版本不支持在设置页保存，请用本地编辑器';
 
     /** hooks 兜底：宿主基座 shim 不完整时降级成「静态渲染」，不连累设置页 */
     var useState = typeof React.useState === 'function' ? React.useState : function (v) { return [v, function () {}]; };
     var useEffect = typeof React.useEffect === 'function' ? React.useEffect : function () {};
+    var useRef = typeof React.useRef === 'function' ? React.useRef : function (v) { return { current: v }; };
+    var useCallback = typeof React.useCallback === 'function' ? React.useCallback : function (f) { return f; };
     /** 请求序号：档位连点时丢弃过期响应（不依赖 effect 清理函数，stub 环境也成立） */
     var reqSeq = 0;
 
@@ -55,6 +68,9 @@ window.__ModuleLoader__.load({
       '.wpr-btn[disabled]{opacity:.42;cursor:default}',
       '.wpr-btn.wpr-primary{border-color:rgba(76,141,255,.5);background:rgba(76,141,255,.14);color:#eaf2ff}',
       '.wpr-btn.wpr-primary:hover:not([disabled]){background:rgba(76,141,255,.22)}',
+      '.wpr-btn.wpr-dirty{border-color:rgba(76,141,255,.85);background:rgba(76,141,255,.30);color:#fff;font-weight:600}',
+      '.wpr-btn.wpr-primary.wpr-dirty:hover:not([disabled]){background:rgba(76,141,255,.42)}',
+      '.wpr-btn.wpr-icon{padding:1px 7px;line-height:16px}',
       '.wpr-card{border:1px solid var(--dsw-alias-border-1,rgba(127,127,127,.28));border-radius:8px;',
       'background:var(--dsw-alias-bg-2,rgba(127,127,127,.07));padding:12px 14px;margin:12px 0}',
       '.wpr-cardhead{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}',
@@ -67,34 +83,43 @@ window.__ModuleLoader__.load({
       'font-size:11px;line-height:18px;color:var(--dsw-alias-text-2,#9aa0a6);white-space:nowrap}',
       '.wpr-badge.wpr-on{color:#8fe3ad;border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.12)}',
       '.wpr-badge.wpr-off{color:#e8b071;border-color:rgba(229,160,75,.45);background:rgba(229,160,75,.12)}',
-      '.wpr-alert{border:1px solid rgba(229,160,75,.45);background:rgba(229,160,75,.12);color:#e8b071;',
-      'border-radius:6px;padding:6px 10px;margin:8px 0}',
+      '.wpr-alert{border:1px solid rgba(229,160,75,.45);background:rgba(229,160,75,.12);color:#e8b071;border-radius:6px;padding:6px 10px;margin:8px 0}',
       '.wpr-alert.wpr-bad{border-color:rgba(229,83,75,.5);background:rgba(229,83,75,.12);color:#f08a84}',
-      '.wpr-tier{display:inline-flex;border:1px solid rgba(127,127,127,.3);border-radius:999px;overflow:hidden;',
-      'margin:0 0 8px;background:rgba(127,127,127,.06)}',
-      '.wpr-tier button{background:transparent;border:0;color:inherit;font:inherit;font-size:12px;',
-      'padding:2px 12px;cursor:pointer}',
+      '.wpr-alert.wpr-ok{border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.12);color:#8fe3ad}',
+      '.wpr-tier{display:inline-flex;border:1px solid rgba(127,127,127,.3);border-radius:999px;overflow:hidden;background:rgba(127,127,127,.06)}',
+      '.wpr-tier button{background:transparent;border:0;color:inherit;font:inherit;font-size:12px;padding:2px 12px;cursor:pointer}',
       '.wpr-tier button.wpr-active{background:rgba(76,141,255,.22);color:#eaf2ff}',
-      '.wpr-seg{border:1px solid rgba(127,127,127,.25);border-radius:6px;margin:8px 0;overflow:hidden;',
-      'background:rgba(127,127,127,.05)}',
-      '.wpr-seghead{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;',
-      'background:transparent;color:inherit;font:inherit;cursor:pointer;text-align:left}',
+      '.wpr-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:2;',
+      'padding:8px 0;background:var(--dsw-alias-bg-1,rgba(20,20,22,.92));border-bottom:1px solid rgba(127,127,127,.2)}',
+      '.wpr-field{display:flex;gap:10px;align-items:flex-start;margin:8px 0}',
+      '.wpr-flabel{flex:0 0 132px;color:var(--dsw-alias-text-2,#9aa0a6);font-size:12px;padding-top:4px}',
+      '.wpr-fbody{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}',
+      '.wpr-in,.wpr-ta,.wpr-sel{width:100%;box-sizing:border-box;background:rgba(127,127,127,.10);color:inherit;font:inherit;',
+      'font-size:12px;border:1px solid rgba(127,127,127,.34);border-radius:6px;padding:4px 8px;outline:none}',
+      '.wpr-in:focus,.wpr-ta:focus,.wpr-sel:focus{border-color:rgba(76,141,255,.7)}',
+      '.wpr-ta{min-height:96px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.6}',
+      '.wpr-in:disabled,.wpr-ta:disabled,.wpr-sel:disabled{opacity:.5;cursor:not-allowed}',
+      '.wpr-hint{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px}',
+      '.wpr-warn{color:#e8b071;font-size:11px}',
+      '.wpr-chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}',
+      '.wpr-contract{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(127,127,127,.22)}',
+      '.wpr-contract:first-of-type{border-top:0}',
+      '.wpr-ctext{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}',
+      '.wpr-strike{opacity:.62}',
+      '.wpr-dimnote{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px;white-space:nowrap}',
+      '.wpr-note{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px;margin:6px 0 2px}',
+      '.wpr-quote{border-left:2px solid rgba(127,127,127,.38);padding:2px 0 2px 8px;margin:4px 0;',
+      'color:var(--dsw-alias-text-2,#9aa0a6);white-space:pre-wrap;word-break:break-word}',
+      '.wpr-cmd{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:4px 10px;border:1px dashed rgba(127,127,127,.42);border-radius:6px}',
+      '.wpr-seg{border:1px solid rgba(127,127,127,.25);border-radius:6px;margin:8px 0;overflow:hidden;background:rgba(127,127,127,.05)}',
+      '.wpr-seghead{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;text-align:left}',
       '.wpr-seghead:hover{background:rgba(127,127,127,.10)}',
       '.wpr-caret{font-size:9px;opacity:.7;width:10px;flex:none}',
       '.wpr-pre{margin:0;padding:8px 10px;border-top:1px solid rgba(127,127,127,.25);max-height:280px;overflow:auto;',
       'white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;',
       'font-size:12px;line-height:1.6;user-select:text;-webkit-user-select:text}',
       '.wpr-empty{color:var(--dsw-alias-text-2,#9aa0a6);font-style:italic}',
-      '.wpr-contract{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(127,127,127,.22)}',
-      '.wpr-contract:first-of-type{border-top:0}',
-      '.wpr-ctext{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}',
-      '.wpr-strike{text-decoration:line-through;color:var(--dsw-alias-text-2,#9aa0a6);opacity:.8}',
-      '.wpr-dimnote{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px;white-space:nowrap}',
-      '.wpr-note{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px;margin:6px 0 2px}',
-      '.wpr-quote{border-left:2px solid rgba(127,127,127,.38);padding:2px 0 2px 8px;margin:4px 0;',
-      'color:var(--dsw-alias-text-2,#9aa0a6);white-space:pre-wrap;word-break:break-word}',
-      '.wpr-cmd{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:4px 10px;',
-      'border:1px dashed rgba(127,127,127,.42);border-radius:6px}',
+      '.wpr-off{opacity:.62}',
       '.wpr-footline{margin-top:14px;color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px}',
     ].join('');
 
@@ -107,7 +132,7 @@ window.__ModuleLoader__.load({
 
     function loadSummary(tier) {
       var t = tierOf(tier);
-      var url = API + '?tier=' + encodeURIComponent(t.id) + '&model=' + encodeURIComponent(t.model);
+      var url = SUMMARY_API + '?tier=' + encodeURIComponent(t.id) + '&model=' + encodeURIComponent(t.model);
       if (typeof fetch !== 'function') return Promise.reject(new Error('环境里没有 fetch'));
       var p;
       try {
@@ -124,6 +149,33 @@ window.__ModuleLoader__.load({
         if (!data || typeof data !== 'object') throw new Error('返回内容不是 JSON');
         if (data.ok === false) throw new Error(String(data.error || '接口返回 ok=false'));
         return normalize(data, t.id);
+      }, function (e) {
+        throw new Error(messageOf(e));
+      });
+    }
+
+    /** 保存：唯一写入口。patch 已由 buildPatch 基于 raw 展开，这里只负责发与解读响应 */
+    function saveConfig(patch) {
+      if (typeof fetch !== 'function') return Promise.reject(new Error('环境里没有 fetch'));
+      var p;
+      try {
+        p = Promise.resolve(fetch(CONFIG_API, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify({ config: patch }),
+        }));
+      } catch (e) {
+        return Promise.reject(new Error(messageOf(e)));
+      }
+      return p.then(readBody).then(function (res) {
+        var data = res && res.data;
+        if (res && typeof res.status === 'number' && (res.status < 200 || res.status >= 300)) {
+          // 服务端 error 原文优先（409 坏 JSON / 415 类型不对 / 400 体不合法）
+          throw new Error('HTTP ' + res.status + (data && data.error ? '：' + data.error : ''));
+        }
+        if (!data || typeof data !== 'object') throw new Error('返回内容不是 JSON');
+        if (data.ok === false) throw new Error(String(data.error || '保存失败：接口返回 ok=false'));
+        return data;
       }, function (e) {
         throw new Error(messageOf(e));
       });
@@ -155,13 +207,28 @@ window.__ModuleLoader__.load({
 
     function numOf(v) { var n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; }
 
+    function objOf(v) {
+      return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+    }
+
+    function arrOf(v) { return Array.isArray(v) ? v : []; }
+
+    /** 三段 + 告警：读接口（sections/warnings）与写接口（preview）两种来源收敛成一种形状 */
+    function segmentsOf(src, warnings) {
+      var s = objOf(src);
+      return {
+        sections: { prefix: strOf(s.prefix), thinking: strOf(s.thinking), suffix: strOf(s.suffix) },
+        warnings: arrOf(warnings).map(strOf).filter(function (t) { return !!t; }),
+      };
+    }
+
     /** 把两种口径的响应收敛成一种形状：面板渲染只认这里 */
     function normalize(d, tierId) {
-      var mem = (d && d.memory) || {};
-      var cs = (d && d.configState) || {};
-      var ed = (d && d.editor) || {};
-      var sec = (d && d.sections) || {};
-      var recentRaw = Array.isArray(mem.recent) ? mem.recent : [];
+      var mem = objOf(d && d.memory);
+      var cs = objOf(d && d.configState);
+      var ed = objOf(d && d.editor);
+      var seg = segmentsOf(d && d.sections, d && d.warnings);
+      var recentRaw = arrOf(mem.recent);
       var recent = [];
       for (var i = 0; i < recentRaw.length; i++) {
         var x = recentRaw[i];
@@ -169,33 +236,50 @@ window.__ModuleLoader__.load({
         if (s) recent.push(s);
       }
       var contracts = [];
-      var list = Array.isArray(d && d.contracts) ? d.contracts : [];
+      var list = arrOf(d && d.contracts);
       for (var j = 0; j < list.length; j++) {
-        var c = list[j] || {};
+        var c = objOf(list[j]);
         contracts.push({
           id: strOf(c.id) || ('contract-' + (j + 1)),
           text: strOf(c.text),
           on: c.on !== false,
         });
       }
+      var raw = objOf(d && d.raw);
+      // 有 raw（哪怕空对象）＝ 新宿主：能整体回写；raw 不是对象（老宿主没这字段 / 坏 JSON 时为 null）＝ 不能写
+      var hasRaw = !!(d && d.raw !== undefined && d.raw !== null && typeof d.raw === 'object' && !Array.isArray(d.raw));
       var url = strOf(ed.url) || 'http://127.0.0.1:' + portOf(ed.url);
       return {
         tier: strOf(d && d.tier) || tierId,
         enabled: !(d && d.enabled === false),
         exists: d && d.exists !== undefined ? !!d.exists : !!cs.exists,
         thinkingLanguage: strOf(d && d.thinkingLanguage) || 'off',
-        selfName: (d && d.selfName) || {},
+        selfName: objOf(d && d.selfName),
         userName: strOf(d && d.userName),
+        stance: strOf(d && d.stance),
+        character: strOf(d && d.character),
+        suffix: strOf(d && d.suffix),
         contracts: contracts,
         memory: {
           enabled: mem.enabled === true,
-          capture: strOf(mem.capture) || 'off',
+          inbox: mem.inbox !== false,
+          capture: strOf(mem.capture) || 'on-demand',
+          captureNow: mem.captureNow === true,
           entries: numOf(mem.entries !== undefined ? mem.entries : mem.manualEntries),
+          maxEntries: numOf(mem.maxEntries),
           inboxLines: numOf(mem.inboxLines),
           recent: recent,
         },
-        sections: { prefix: strOf(sec.prefix), thinking: strOf(sec.thinking), suffix: strOf(sec.suffix) },
+        warnings: seg.warnings,
+        sections: seg.sections,
         configPath: strOf(d && d.configPath),
+        configState: { exists: !!cs.exists, bytes: numOf(cs.bytes), mtimeMs: numOf(cs.mtimeMs) },
+        defaults: objOf(d && d.defaults),
+        raw: raw,
+        hasRaw: hasRaw,
+        // 注意：raw:null 与 configValid:false 是两件事 —— 老宿主（没这个字段）＝ raw 缺失、
+        // configValid 缺省 true；磁盘坏 JSON ＝ configValid 显式 false。两者都禁用保存。
+        configValid: d && d.configValid !== undefined ? d.configValid !== false : true,
         editor: { url: url, port: numOf(ed.port) || portOf(url), running: ed.running === true },
       };
     }
@@ -204,6 +288,152 @@ window.__ModuleLoader__.load({
     function portOf(url) {
       var m = /:(\d{2,5})(?:\/|$)/.exec(strOf(url));
       return m ? Number(m[1]) : 8787;
+    }
+
+    /* ── 表单数据 ───────────────────────────────────────────────────────── */
+
+    /**
+     * 表单形状（扁平 + 数组）——渲染层只认这里，raw / defaults 的差异全部在这一层抹平。
+     * 保存时再摊回 persona / memory：以 raw 展开（未知键原样带上）后覆盖改动字段。
+     */
+    function formFrom(n, hasRawOverride) {
+      var raw = n.raw;
+      var def = n.defaults;
+      var hasRaw = hasRawOverride !== undefined ? !!hasRawOverride : !!(n.hasRaw || (n.raw && typeof n.raw === 'object'));
+      var rp = objOf(raw.persona);
+      var rm = objOf(raw.memory);
+      var dp = objOf(def.persona);
+      var dm = objOf(def.memory);
+      var contractsRaw = Array.isArray(rp.contracts) ? rp.contracts : arrOf(dp.contracts);
+      var contracts = [];
+      for (var i = 0; i < contractsRaw.length; i++) {
+        var c = objOf(contractsRaw[i]);
+        // 保留条目上的未知键（id 等），只把 text / on 提成可编辑字段
+        var keep = {};
+        for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k) && k !== 'text' && k !== 'on') keep[k] = c[k];
+        contracts.push({ keep: keep, text: strOf(c.text), on: c.on !== false });
+      }
+      var entriesRaw = Array.isArray(rm.entries) ? rm.entries : arrOf(dm.entries);
+      var entries = [];
+      for (var j = 0; j < entriesRaw.length; j++) {
+        var e = objOf(entriesRaw[j]);
+        var keep2 = {};
+        for (var k2 in e) if (Object.prototype.hasOwnProperty.call(e, k2) && k2 !== 'text' && k2 !== 'on') keep2[k2] = e[k2];
+        entries.push({ keep: keep2, text: strOf(e.text), on: e.on !== false });
+      }
+      // 老宿主没有 raw 时：先拿 summary 顶层的**当前生效值**补位（面板显示的仍是真状态），
+      // 最末才回落出厂默认。注意这条路径保存是禁用的（没有 raw 就不能整体回写）。
+      var selfName = objOf(n.selfName);
+      var curFlash = strOf(selfName.flash);
+      var curPro = strOf(selfName.pro);
+      var curUser = strOf(n.userName);
+      var curContracts = arrOf(n.contracts).map(function (c) {
+        return { keep: { id: strOf(objOf(c).id) }, text: strOf(objOf(c).text), on: objOf(c).on !== false };
+      });
+      if (!hasRaw) {
+        if (!contracts.length && curContracts.length) contracts = curContracts;
+      }
+      return {
+        enabled: raw.enabled !== undefined ? raw.enabled !== false : (n.enabled !== undefined ? n.enabled !== false : (def.enabled !== false)),
+        thinkingLanguage: strOf(raw.thinkingLanguage !== undefined ? raw.thinkingLanguage : (n.thinkingLanguage !== undefined ? n.thinkingLanguage : def.thinkingLanguage)) || 'off',
+        selfNameFlash: strOf(rp.selfNameFlash !== undefined ? rp.selfNameFlash : (curFlash || dp.selfNameFlash)),
+        selfNamePro: strOf(rp.selfNamePro !== undefined ? rp.selfNamePro : (curPro || dp.selfNamePro)),
+        userName: strOf(rp.userName !== undefined ? rp.userName : (curUser || dp.userName)),
+        stance: strOf(rp.stance !== undefined ? rp.stance : (hasRaw ? dp.stance : strOf(n.stance) || dp.stance)),
+        character: strOf(rp.character !== undefined ? rp.character : (hasRaw ? dp.character : strOf(n.character) || dp.character)),
+        suffix: strOf(rp.suffix !== undefined ? rp.suffix : (hasRaw ? dp.suffix : strOf(n.suffix) || dp.suffix)),
+        contracts: contracts,
+        memoryEnabled: rm.enabled !== undefined ? rm.enabled === true : dm.enabled === true,
+        memoryCapture: strOf(rm.capture !== undefined ? rm.capture : dm.capture) || 'on-demand',
+        entries: entries,
+      };
+    }
+
+    /** 摊回 { id?, text, on }：id 与其它未知键原样带回 */
+    function contractOut(items) {
+      var out = [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i] || {};
+        var o = {};
+        for (var k in objOf(it.keep)) if (Object.prototype.hasOwnProperty.call(it.keep, k)) o[k] = it.keep[k];
+        o.text = strOf(it.text);
+        o.on = it.on !== false;
+        out.push(o);
+      }
+      return out;
+    }
+
+    function entryOut(items) {
+      var out = [];
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i] || {};
+        var o = {};
+        for (var k in objOf(it.keep)) if (Object.prototype.hasOwnProperty.call(it.keep, k)) o[k] = it.keep[k];
+        o.text = strOf(it.text);
+        o.on = it.on !== false;
+        out.push(o);
+      }
+      return out;
+    }
+
+    /**
+     * POST body 的 config：四个已知段。
+     * 关键：persona / memory **基于 raw 展开**再覆盖 —— 服务端整段替换，
+     * 只发改掉的字段会把用户的 preset / inbox / maxEntries / inboxPath 等其它设置抹掉。
+     */
+    function buildPatch(form, n) {
+      var persona = {};
+      var rawP = objOf(n.raw.persona);
+      for (var k in rawP) if (Object.prototype.hasOwnProperty.call(rawP, k)) persona[k] = rawP[k];
+      persona.selfNameFlash = form.selfNameFlash;
+      persona.selfNamePro = form.selfNamePro;
+      persona.userName = form.userName;
+      persona.stance = form.stance;
+      persona.character = form.character;
+      persona.suffix = form.suffix;
+      persona.contracts = contractOut(form.contracts);
+
+      var memory = {};
+      var rawM = objOf(n.raw.memory);
+      for (var k2 in rawM) if (Object.prototype.hasOwnProperty.call(rawM, k2)) memory[k2] = rawM[k2];
+      memory.enabled = form.memoryEnabled === true;
+      memory.capture = form.memoryCapture;
+      memory.entries = entryOut(form.entries);
+
+      return {
+        enabled: form.enabled === true,
+        thinkingLanguage: form.thinkingLanguage,
+        persona: persona,
+        memory: memory,
+      };
+    }
+
+    function makeContract() { return { keep: {}, text: '', on: true }; }
+
+    /**
+     * 保存成功后的表单重派生：拿服务端返回的**实际落盘 config** 重新展开一遍表单。
+     * 为什么不直接把 patch 当新表单：服务端会补齐/回落默认值（自称为空回落「我」等），
+     * 面板要显示的是磁盘上真实生效的值，否则「N 条」这类派生数字会跟落盘结果对不上。
+     * config 缺失时退回 patch 本身（形状一致，只是少了服务端回落）。
+     */
+    function rebaseForm(n, saved, patch) {
+      var cfg = (saved && typeof saved === 'object' && !Array.isArray(saved)) ? saved : patch;
+      return formFrom({
+        raw: cfg,
+        defaults: n.defaults,
+      });
+    }
+
+    /** 未保存判定：与「上一次服务端确认过的表单」逐字节比 */
+    function sameForm(a, b) {
+      if (!a || !b) return false;
+      try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return false; }
+    }
+
+    function nowLabel() {
+      var d = new Date();
+      function p(x) { return (x < 10 ? '0' : '') + x; }
+      return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
     }
 
     function copyText(text) {
@@ -232,13 +462,13 @@ window.__ModuleLoader__.load({
       } catch (e) { return false; }
     }
 
-    /* ── 小组件 ─────────────────────────────────────────────────────────── */
+    /* ── 小组件（全部 h() 挂载：条件渲染里直接调函数会改 hook 顺序） ─────── */
 
     function badge(on, textOn, textOff) {
       return h('span', { className: 'wpr-badge ' + (on ? 'wpr-on' : 'wpr-off') }, on ? textOn : textOff);
     }
 
-    /** 复制按钮：用 h() 挂成组件（自身 useState 独立作用域，不污染父组件的 hook 顺序） */
+    /** 复制按钮：useState 独立作用域，不污染父组件的 hook 顺序 */
     function CopyBtn(props) {
       var c = useState(false);
       var done = c[0];
@@ -249,7 +479,53 @@ window.__ModuleLoader__.load({
       }, done ? '已复制' : (props.label || '复制'));
     }
 
-    /** 一段（prefix / thinking / suffix）：只读折叠区 */
+    function Field(props) {
+      return h('div', { className: 'wpr-field' },
+        h('label', { className: 'wpr-flabel' }, props.label),
+        h('div', { className: 'wpr-fbody' }, props.children));
+    }
+
+    function CheckBox(props) {
+      return h('label', { className: 'wpr-chk' },
+        h('input', {
+          type: 'checkbox', checked: props.checked === true, disabled: !!props.disabled,
+          onChange: function (ev) { props.onChange(!!(ev && ev.target && ev.target.checked)); },
+        }),
+        h('span', null, props.label));
+    }
+
+    function TextInput(props) {
+      function change(ev) { props.onChange(strOf(ev && ev.target && ev.target.value)); }
+      if (props.multiline) {
+        return h('textarea', {
+          className: 'wpr-ta', value: props.value, disabled: !!props.disabled,
+          spellCheck: false, placeholder: props.placeholder || '', onChange: change,
+        });
+      }
+      return h('input', {
+        className: 'wpr-in', type: 'text', value: props.value, disabled: !!props.disabled,
+        spellCheck: false, placeholder: props.placeholder || '', onChange: change,
+      });
+    }
+
+    /**
+     * 思维链语言：下拉 + 允许自定义输入。
+     * 原生 datalist 正好是这个语义（选项可选、也能直接敲），一个受控 input 就够了。
+     * datalist 需要 id + list 关联，手写 createElement 下用 ref 补挂 setAttribute。
+     */
+    function TextInputWithList(props) {
+      var ref = useRef(null);
+      useEffect(function () {
+        var el = ref.current;
+        if (el && typeof el.setAttribute === 'function') el.setAttribute('list', props.listId);
+      }, [props.listId]);
+      function change(ev) { props.onChange(strOf(ev && ev.target && ev.target.value)); }
+      return h('input', {
+        ref: ref, className: 'wpr-in', type: 'text', value: props.value, disabled: !!props.disabled,
+        spellCheck: false, placeholder: props.placeholder || '', onChange: change,
+      });
+    }
+
     function Seg(props) {
       var o = useState(true);
       var open = o[0];
@@ -269,84 +545,147 @@ window.__ModuleLoader__.load({
 
     function StateCard(props) {
       var d = props.data;
-      var tl = d.thinkingLanguage;
+      var tl = props.thinkingLanguage;
       var tlText = tl === 'off' ? 'off（不改思维链语言）' : tl;
-      var selfName = (d.selfName && (d.selfName[d.tier] || d.selfName.flash || d.selfName.pro)) || '';
+      var st = d.configState || {};
+      var size = st.exists ? (st.bytes + ' 字节') : '文件不存在（装上零行为改变）';
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '状态'),
-          badge(d.enabled, '已启用', '已停用'),
+          badge(props.enabled, '已启用', '已停用'),
           h('span', { className: 'wpr-sub' }, d.tier + ' 档 · ' + TIER_MODEL_LABEL(d.tier))),
-        d.enabled ? null : h('div', { className: 'wpr-alert' }, '⚠ 当前无人设：enabled=false —— 这三段都不注入，系统提示词里没有人设内容。'),
-        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '思维链语言'),
-          h('span', { className: 'wpr-mono' }, tlText)),
-        selfName || d.userName ? h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '称呼'),
-          h('span', null, (selfName ? '自称「' + selfName + '」' : '自称未配置') + (d.userName ? ' · 称你「' + d.userName + '」' : ''))) : null,
+        props.enabled ? null : h('div', { className: 'wpr-alert' }, '⚠ 当前无人设：enabled=false —— 这三段都不注入，系统提示词里没有人设内容。'),
+        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '思维链语言'), h('span', { className: 'wpr-mono' }, tlText)),
         h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '配置文件'),
           h('span', { className: 'wpr-mono' }, d.configPath || '（宿主未返回 configPath）'),
           d.configPath ? h(CopyBtn, { key: 'cp', text: d.configPath, label: '复制路径' }) : null),
-        d.exists ? null : h('div', { className: 'wpr-alert' }, '还没写配置 = 装上零行为改变：不写文件就什么都不注入，不动你现有的人设。'));
+        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '文件'),
+          h('span', { className: 'wpr-sub' }, size)),
+        st.exists ? null : h('div', { className: 'wpr-alert' }, '还没写配置 = 装上零行为改变：不写文件就什么都不注入，不动你现有的人设。'));
     }
 
     function TIER_MODEL_LABEL(tier) { return tierOf(tier).model; }
 
+    function Toolbar(props) {
+      var disabled = !!props.disabled;
+      return h('div', { className: 'wpr-toolbar' },
+        h('div', { className: 'wpr-tier' }, TIERS.map(function (t) {
+          return h('button', {
+            key: t.id, type: 'button', disabled: disabled,
+            className: t.id === props.tier ? 'wpr-active' : '',
+            onClick: function () { props.onPickTier(t.id); },
+          }, t.label);
+        })),
+        h('button', {
+          className: 'wpr-btn', type: 'button', disabled: disabled || !!props.loading,
+          onClick: props.onRefresh, title: '丢弃未保存改动，重新读取 /whale-persona/api/summary',
+        }, props.loading ? '读取中…' : '刷新'),
+        h('button', {
+          className: 'wpr-btn wpr-primary' + (props.dirty ? ' wpr-dirty' : ''), type: 'button',
+          disabled: disabled || !!props.saving,
+          onClick: props.onSave,
+        }, props.saving ? '保存中…' : '保存'),
+        h('span', { className: 'wpr-spacer' }),
+        h('span', { className: 'wpr-dimnote' }, props.dirty ? '有未保存的改动' : '无未保存改动'));
+    }
+
+    function Banner(props) {
+      var st = props.status;
+      var items = [];
+      if (st.error) items.push(h('div', { className: 'wpr-alert wpr-bad', key: 'e' }, '保存失败：' + st.error));
+      if (st.saved) {
+        items.push(h('div', { className: 'wpr-alert wpr-ok', key: 's' },
+          '已保存 · 改配置下一步生效' + (st.savedAt ? '（保存时间 ' + st.savedAt + '）' : '')));
+      }
+      if (props.notes && props.notes.length) {
+        for (var i = 0; i < props.notes.length; i++) {
+          items.push(h('div', { className: 'wpr-alert', key: 'n' + i }, props.notes[i]));
+        }
+      }
+      return items.length ? h('div', null, items) : null;
+    }
+
     function SectionsCard(props) {
-      var d = props.data;
-      var tier = props.tier;
-      var onPick = props.onPickTier;
+      var sec = props.sections || {};
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '实际注入的三段'),
-          h('span', { className: 'wpr-sub' }, '按模型档渲染 —— 换档重取')),
-        h('div', { className: 'wpr-tier' }, TIERS.map(function (t) {
-          return h('button', {
-            key: t.id, type: 'button', className: t.id === tier ? 'wpr-active' : '',
-            onClick: function () { onPick(t.id); },
-          }, t.label);
-        })),
-        h(Seg, { title: 'prefix（人设前缀 · 遮蔽部署级默认）', text: d.sections.prefix }),
-        h(Seg, { title: 'thinking（思维链语言段 · whale:thinking-language）', text: d.sections.thinking }),
-        h(Seg, { title: 'suffix（人设后缀）', text: d.sections.suffix }));
+          h('span', { className: 'wpr-sub' },
+            props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '按模型档渲染 —— 换档重取')),
+        h(Seg, { title: 'prefix（人设前缀 · 遮蔽部署级默认）', text: sec.prefix }),
+        h(Seg, { title: 'thinking（思维链语言段 · whale:thinking-language）', text: sec.thinking }),
+        h(Seg, { title: 'suffix（人设后缀）', text: sec.suffix }));
     }
 
     function ContractsCard(props) {
-      var list = props.list || [];
-      var body;
-      if (!list.length) {
-        body = [h('div', { className: 'wpr-sub', key: 'none' }, '（无契约 —— persona.contracts 是空的）')];
-      } else {
-        body = list.map(function (c, i) {
-          return h('div', { className: 'wpr-contract', key: c.id || ('c' + i) },
-            badge(c.on, '开', '关'),
-            h('span', { className: 'wpr-ctext' + (c.on ? '' : ' wpr-strike') }, c.text || '（空文本）'),
-            c.on ? null : h('span', { className: 'wpr-dimnote' }, '已关，不注入'));
-        });
-      }
+      var list = arrOf(props.value);   // 兜底成数组：任何非数组都不许把整块设置页带崩
+      var rows = list.map(function (c, i) {
+        return h('div', { className: 'wpr-contract', key: 'c' + i },
+          h('label', { className: 'wpr-chk' },
+            h('input', {
+              type: 'checkbox', checked: c.on !== false, disabled: !!props.disabled,
+              onChange: function (ev) { props.onPatch(i, { on: !!(ev && ev.target && ev.target.checked) }); },
+            }),
+            h('span', { className: 'wpr-dimnote' }, c.on !== false ? '生效' : '不注入')),
+          h('input', {
+            className: 'wpr-in', type: 'text', value: c.text, disabled: !!props.disabled,
+            spellCheck: false, placeholder: '一句话、可验证的契约（支持 {selfName} / {userName}）',
+            onChange: function (ev) { props.onPatch(i, { text: strOf(ev && ev.target && ev.target.value) }); },
+          }),
+          h('button', {
+            className: 'wpr-btn wpr-icon', type: 'button', disabled: !!props.disabled, title: '删除这一条',
+            onClick: function () { props.onRemove(i); },
+          }, '删除'));
+      });
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '工作契约'),
           h('span', { className: 'wpr-sub' }, list.length + ' 条 · 关掉的不进提示词')),
-        body);
+        rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有契约 —— 点下面的按钮加一条）'),
+        h('button', {
+          className: 'wpr-btn', type: 'button', disabled: !!props.disabled,
+          style: { marginTop: 8 }, onClick: props.onAdd,
+        }, '+ 加一条契约'),
+        h('div', { className: 'wpr-note' }, '契约是逐条勾选生效的：关掉的条目仍可编辑，只是不注入。'));
     }
 
     function MemoryCard(props) {
-      var m = props.mem;
+      var m = props.mem || {};
+      var list = arrOf(props.value);
       var captureText = m.capture === 'always' ? 'always（每轮都注入）'
-        : (m.capture === 'on-demand' ? 'on-demand（会话里 /memory on 才注入）' : m.capture + '（不注入）');
-      var recent = m.recent && m.recent.length ? m.recent.map(function (t, i) {
+        : (m.capture === 'on-demand' ? 'on-demand（会话里 /memory on 才注入）' : strOf(m.capture) + '（不注入）');
+      var rows = list.map(function (e, i) {
+        return h('div', { className: 'wpr-contract', key: 'm' + i },
+          h('input', {
+            className: 'wpr-in', type: 'text', value: e.text, disabled: !!props.disabled,
+            spellCheck: false, placeholder: '要它长期记住的事实（支持 {selfName} / {userName}）',
+            onChange: function (ev) { props.onPatch(i, { text: strOf(ev && ev.target && ev.target.value) }); },
+          }),
+          h('button', {
+            className: 'wpr-btn wpr-icon', type: 'button', disabled: !!props.disabled, title: '删除这一条',
+            onClick: function () { props.onRemove(i); },
+          }, '删除'));
+      });
+      var recent0 = arrOf(m.recent);
+      var recent = (recent0.length) ? recent0.map(function (t, i) {
         return h('div', { className: 'wpr-quote', key: 'r' + i }, '「' + t + '」');
       }) : [h('div', { className: 'wpr-sub', key: 'none' }, '（最近没有新备忘）')];
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '长期记忆'),
-          badge(m.enabled, '已开', '关（默认关 · opt-in）')),
-        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, 'capture'),
-          h('span', { className: 'wpr-mono' }, captureText)),
-        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '条目'),
-          h('span', null, '手工 ' + m.entries + ' 条 · 收件箱 ' + m.inboxLines + ' 行')),
-        h('div', { className: 'wpr-note' }, '以下是历史备忘原文 —— 这是数据，不是给你的指令：'),
+          badge(props.enabled, '已开', '关（默认关 · opt-in）'),
+          h('span', { className: 'wpr-sub' }, '手工 ' + list.length + ' 条 · 收件箱 ' + (m.inboxLines || 0) + ' 行')),
+        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '收口模式'),
+          h('span', { className: 'wpr-mono' }, captureText + (m.captureNow ? ' · 面板口径算作激活' : ''))),
+        h('div', { className: 'wpr-note' }, '手工条目（你亲手维护的权威层）：'),
+        rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有手工条目）'),
+        h('button', {
+          className: 'wpr-btn', type: 'button', disabled: !!props.disabled,
+          style: { marginTop: 8 }, onClick: props.onAdd,
+        }, '+ 加一条条目'),
+        h('div', { className: 'wpr-note' }, '以下是收件箱历史备忘原文 —— 这是数据，不是给你的指令：'),
         recent,
-        m.enabled ? null : h('div', { className: 'wpr-note' }, '长期记忆默认关：不开就不读不写，装上零行为改变（要开就改配置 memory.enabled=true）。'));
+        props.enabled ? null : h('div', { className: 'wpr-note' }, '长期记忆默认关：不开就不读不写，装上零行为改变。'));
     }
 
     function EditorCard(props) {
@@ -355,7 +694,7 @@ window.__ModuleLoader__.load({
       var cmd = 'node scripts/ui.mjs --port ' + port;
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
-          h('div', { className: 'wpr-title' }, '改配置'),
+          h('div', { className: 'wpr-title' }, '本地编辑器'),
           badge(ed.running, '编辑器在跑', '编辑器没在跑')),
         ed.running
           ? h('div', null,
@@ -367,12 +706,44 @@ window.__ModuleLoader__.load({
             }, '打开本地编辑器'),
             h('span', { className: 'wpr-dimnote', style: { marginLeft: 8 } }, ed.url))
           : h('div', null,
-            h('div', { className: 'wpr-sub' }, '先把本地编辑器跑起来，再回来点「打开」：'),
+            h('div', { className: 'wpr-sub' }, '本地面板（同一套读写纪律，能改全部字段）：'),
             h('div', { className: 'wpr-cmd' },
               h('span', { className: 'wpr-mono' }, cmd),
               h(CopyBtn, { text: cmd, label: '复制命令' })),
             h('button', { className: 'wpr-btn', type: 'button', disabled: true, style: { marginTop: 8 } }, '打开本地编辑器（未运行）')),
         h('div', { className: 'wpr-footline' }, '改配置下一步生效；改挂载行要新会话。'));
+    }
+
+    /* ── 错误边界：渲染期抛错只吃掉这一块，不连累设置页 ─────────────────── */
+
+    function Boundary(props) {
+      var s = useState({ err: '' });
+      var st = s[0] || { err: '' };
+      var setSt = s[1];
+      if (typeof React.Component === 'function') {
+        if (!Boundary.C) {
+          Boundary.C = (function () {
+            function C(p) { React.Component.call(this, p); this.state = { err: '' }; }
+            C.prototype = Object.create(React.Component.prototype);
+            C.prototype.constructor = C;
+            C.prototype.componentDidCatch = function (e) { this.setState({ err: messageOf(e) }); };
+            C.prototype.render = function () {
+              if (this.state && this.state.err) {
+                return h('div', { className: 'wpr-alert wpr-bad' }, '人设面板出错了（设置页其余部分不受影响）：' + this.state.err);
+              }
+              return this.props.children;
+            };
+            return C;
+          })();
+        }
+        return h(Boundary.C, null, props.children);
+      }
+      try {
+        return props.children;
+      } catch (e) {
+        if (!st.err && typeof setSt === 'function') setSt({ err: messageOf(e) });
+        return h('div', { className: 'wpr-alert wpr-bad' }, '人设面板出错了（设置页其余部分不受影响）：' + messageOf(e));
+      }
     }
 
     /* ── 根组件 ─────────────────────────────────────────────────────────── */
@@ -387,56 +758,256 @@ window.__ModuleLoader__.load({
       var stState = useState({ loading: true, error: '', data: null });
       var st = stState[0] || { loading: true, error: '', data: null };
       var setSt = stState[1];
+      var fState = useState(null);
+      var form = fState[0];
+      var setForm = fState[1];
+      var bState = useState(null);
+      var base = bState[0];
+      var setBase = bState[1];
+      var svState = useState({ saving: false, saved: false, savedAt: '', error: '' });
+      var sv = svState[0] || { saving: false, saved: false, savedAt: '', error: '' };
+      var setSv = svState[1];
+      var pvState = useState(null);
+      var savedPreview = pvState[0];
+      var setSavedPreview = pvState[1];
 
       useEffect(function () {
         var seq = ++reqSeq;
-        try {
-          setSt(function (s) { return { loading: true, error: '', data: (s && s.data) || null }; });
-        } catch (e) { /* 极简 stub */ }
+        try { setSt(function (s) { return { loading: true, error: '', data: (s && s.data) || null }; }); } catch (e) { /* 极简 stub */ }
         loadSummary(tier).then(function (data) {
           if (seq !== reqSeq) return;      // 过期响应（连点档位/刷新）丢弃
+          var f = formFrom(data);
           setSt({ loading: false, error: '', data: data });
+          setForm(f);
+          setBase(f);
+          setSavedPreview(null);
+          setSv({ saving: false, saved: false, savedAt: '', error: '' });
         }, function (err) {
           if (seq !== reqSeq) return;
           setSt({ loading: false, error: messageOf(err), data: null });
         });
       }, [tier, tick]);
 
-      function refresh() { setTick(tick + 1); }
-      function pick(id) { if (id !== tier) setTier(id); }
-
       var d = st.data;
-      var head = h('div', { className: 'wpr-head' },
-        h('div', { className: 'wpr-h1' }, '人设 · whale-persona'),
-        h('span', { className: 'wpr-spacer' }),
-        d ? h('span', { className: 'wpr-sub' }, d.tier + ' 档') : null,
-        h('button', {
-          className: 'wpr-btn', type: 'button', disabled: !!st.loading,
-          onClick: refresh, title: '重新读取 /whale-persona/api/summary',
-        }, st.loading ? '读取中…' : '刷新'));
+      var disabled = !!(d && (!d.hasRaw || !d.configValid));
+      var dirty = !!(form && base) && !sameForm(form, base);
+
+      function refresh() {
+        if (dirty && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+          try { if (!window.confirm('有未保存的改动，刷新会丢弃它们。继续？')) return; } catch (e) { /* 不拦 */ }
+        }
+        setTick(tick + 1);
+      }
+
+      function pick(id) {
+        if (id === tier) return;
+        if (dirty && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+          try { if (!window.confirm('切换档位会重新读取配置，丢弃未保存的改动。继续？')) return; } catch (e) { /* 不拦 */ }
+        }
+        setTier(id);
+      }
+
+      function patchForm(fields) {
+        setForm(function (f) {
+          if (!f) return f;
+          var next = {};
+          for (var k in f) if (Object.prototype.hasOwnProperty.call(f, k)) next[k] = f[k];
+          for (var k2 in fields) if (Object.prototype.hasOwnProperty.call(fields, k2)) next[k2] = fields[k2];
+          return next;
+        });
+        try { setSv(function (s) { return { saving: !!(s && s.saving), saved: false, savedAt: '', error: '' }; }); } catch (e) { /* stub */ }
+      }
+
+      function patchAt(key, i, fields) {
+        setForm(function (f) {
+          if (!f) return f;
+          var list = arrOf(f[key]).slice();
+          var cur = list[i] || {};
+          var item = { keep: cur.keep || {}, text: cur.text || '', on: cur.on !== false };
+          for (var k in fields) if (Object.prototype.hasOwnProperty.call(fields, k)) item[k] = fields[k];
+          list[i] = item;
+          var next = {};
+          for (var k2 in f) if (Object.prototype.hasOwnProperty.call(f, k2)) next[k2] = f[k2];
+          next[key] = list;
+          return next;
+        });
+        try { setSv(function (s) { return { saving: !!(s && s.saving), saved: false, savedAt: '', error: '' }; }); } catch (e) { /* stub */ }
+      }
+
+      function removeAt(key, i) {
+        setForm(function (f) {
+          if (!f) return f;
+          var list = arrOf(f[key]).slice();
+          list.splice(i, 1);
+          var next = {};
+          for (var k in f) if (Object.prototype.hasOwnProperty.call(f, k)) next[k] = f[k];
+          next[key] = list;
+          return next;
+        });
+        try { setSv(function (s) { return { saving: !!(s && s.saving), saved: false, savedAt: '', error: '' }; }); } catch (e) { /* stub */ }
+      }
+
+      function addAt(key) {
+        setForm(function (f) {
+          if (!f) return f;
+          var next = {};
+          for (var k in f) if (Object.prototype.hasOwnProperty.call(f, k)) next[k] = f[k];
+          next[key] = arrOf(f[key]).concat([makeContract()]);
+          return next;
+        });
+        try { setSv(function (s) { return { saving: !!(s && s.saving), saved: false, savedAt: '', error: '' }; }); } catch (e) { /* stub */ }
+      }
+
+      var save = useCallback(function () {
+        if (!form || !d || disabled || sv.saving) return;
+        var patch;
+        try { patch = buildPatch(form, d); } catch (e) {
+          setSv({ saving: false, saved: false, savedAt: '', error: messageOf(e) });
+          return;
+        }
+        setSv({ saving: true, saved: false, savedAt: '', error: '' });
+        saveConfig(patch).then(function (res) {
+          var seg = segmentsOf(res && res.preview, res && res.preview && res.preview.warnings);
+          var f2 = rebaseForm(d, res && res.config, patch);
+          setForm(f2);
+          setBase(f2);
+          setSavedPreview(seg);
+          setSv({ saving: false, saved: true, savedAt: nowLabel(), error: '' });
+        }, function (err) {
+          setSv({ saving: false, saved: false, savedAt: '', error: messageOf(err) });
+        });
+      }, [form, d, disabled, sv.saving]);
+
+      var notes = [];
+      if (d && !d.configValid) {
+        // 坏 JSON 是**磁盘状态**，与宿主版本无关：先说这句，别被「老宿主」的提示盖过去
+        notes.push('配置文件不是合法 JSON，设置面板不会覆盖它，请先手工修好。');
+        if (!d.hasRaw) notes.push('另外：' + NO_RAW_HINT + '。');
+        // hasRaw 为真时只是文件坏了：本地编辑器仍能修（它读原文，不是读 raw）
+      } else if (d && !d.hasRaw) {
+        // 磁盘坏 JSON 时 raw 也是 null：这时两句提示都给（文件坏了 + 本版面板不能写），
+        // 优先级上「文件坏了」在前（那是磁盘状态，跟宿主版本无关）。
+        notes.push('注意：' + NO_RAW_HINT + '。');
+      }
+      if (d && d.warnings && d.warnings.length) {
+        for (var wi = 0; wi < d.warnings.length; wi++) notes.push('⚠ ' + d.warnings[wi]);
+      }
+
+      var shown = savedPreview || (d ? { sections: d.sections, warnings: [] } : null);
 
       var body = [];
       if (st.error) {
         body.push(h('div', { className: 'wpr-alert wpr-bad', key: 'err' },
           h('div', null, '读取失败：' + st.error),
           h('div', { className: 'wpr-sub', style: { marginTop: 4 } }, '面板只是看不见人设，人设本身不受影响。'),
-          h('button', { className: 'wpr-btn', type: 'button', style: { marginTop: 8 }, onClick: refresh }, '重试')));
+          h('button', { className: 'wpr-btn', type: 'button', style: { marginTop: 8 }, onClick: function () { setTick(tick + 1); } }, '重试')));
       }
       if (!d && !st.error) {
         body.push(h('div', { className: 'wpr-sub', key: 'loading' },
           st.loading ? '正在读取人设…' : '没有数据 —— 点右上角「刷新」重试。'));
       }
-      if (d) {
-        body.push(h('div', { key: 'state' }, StateCard({ data: d })));
-        body.push(h('div', { key: 'sections' }, SectionsCard({ data: d, tier: tier, onPickTier: pick })));
-        body.push(h('div', { key: 'contracts' }, ContractsCard({ list: d.contracts })));
-        body.push(h('div', { key: 'memory' }, MemoryCard({ mem: d.memory })));
-        body.push(h('div', { key: 'editor' }, EditorCard({ editor: d.editor })));
+      if (d && form) {
+        body.push(h(Banner, { key: 'banner', status: sv, notes: notes }));
+        body.push(h(StateCard, {
+          key: 'state', data: d, enabled: form.enabled, thinkingLanguage: form.thinkingLanguage,
+        }));
+        body.push(h('div', { className: 'wpr-card', key: 'basic' },
+          h('div', { className: 'wpr-cardhead' },
+            h('div', { className: 'wpr-title' }, '基本'),
+            h('span', { className: 'wpr-sub' }, '改动先落在本地，点「保存」才写入')),
+          h(Field, { label: '总开关' },
+            h(CheckBox, {
+              checked: form.enabled, disabled: disabled, label: '启用（关掉 = 三段都不注入）',
+              onChange: function (v) { patchForm({ enabled: v }); },
+            }),
+            h('div', { className: 'wpr-hint' }, '关掉后什么都不注入，等于装上零行为改变。')),
+          h(Field, { label: '思维链语言' },
+            h(TextInputWithList, {
+              listId: 'wpr-thinking-langs', value: form.thinkingLanguage, disabled: disabled,
+              placeholder: 'off / zh-CN / en，也可自填', onChange: function (v) { patchForm({ thinkingLanguage: v }); },
+            }),
+            h('datalist', { id: 'wpr-thinking-langs' }, THINKING_PRESETS.map(function (t) {
+              return h('option', { key: t, value: t });
+            })),
+            h('div', { className: 'wpr-hint' }, 'off = 不干预（跟随模型）；下拉是预设，也能直接敲别的值。')),
+          h(Field, { label: '自称（flash 档）' },
+            h(TextInput, { value: form.selfNameFlash, disabled: disabled, onChange: function (v) { patchForm({ selfNameFlash: v }); } })),
+          h(Field, { label: '自称（pro 档）' },
+            h(TextInput, { value: form.selfNamePro, disabled: disabled, onChange: function (v) { patchForm({ selfNamePro: v }); } }),
+            h('div', { className: 'wpr-hint' }, '自称只通过 {selfName} 占位符进提示词 —— 写进「立场正文」或任一条契约里才生效。')),
+          h(Field, { label: '称呼' },
+            h(TextInput, { value: form.userName, disabled: disabled, onChange: function (v) { patchForm({ userName: v }); } })),
+          h(Field, { label: '立场（一句话）' },
+            h(TextInput, { value: form.stance, disabled: disabled, onChange: function (v) { patchForm({ stance: v }); } })),
+          h(Field, { label: '立场正文' },
+            h(TextInput, {
+              multiline: true, value: form.character, disabled: disabled,
+              placeholder: '整段自定义，支持 {selfName} / {userName}',
+              onChange: function (v) { patchForm({ character: v }); },
+            })),
+          h(Field, { label: '后缀' },
+            h(TextInput, {
+              value: form.suffix, disabled: disabled, placeholder: '追加在提示词末尾的一句，支持 {{cwd}}',
+              onChange: function (v) { patchForm({ suffix: v }); },
+            }),
+            h('div', { className: 'wpr-hint' }, '支持 {{cwd}}（当前工作目录）；其余 {{变量}} 原样保留不解析。')))),
+        body.push(h(ContractsCard, {
+          key: 'contracts', value: form.contracts, disabled: disabled,
+          onPatch: function (i, f) { patchAt('contracts', i, f); },
+          onRemove: function (i) { removeAt('contracts', i); },
+          onAdd: function () { addAt('contracts'); },
+        }));
+        body.push(h(MemoryCard, {
+          key: 'memory', mem: d.memory, value: form.entries,
+          enabled: form.memoryEnabled, disabled: disabled,
+          onPatch: function (i, f) { patchAt('entries', i, f); },
+          onRemove: function (i) { removeAt('entries', i); },
+          onAdd: function () { addAt('entries'); },
+        }));
+        body.push(h('div', { className: 'wpr-card', key: 'memsw' },
+          h('div', { className: 'wpr-cardhead' }, h('div', { className: 'wpr-title' }, '长期记忆 · 开关')),
+          h(Field, { label: '总开关' },
+            h(CheckBox, {
+              checked: form.memoryEnabled, disabled: disabled, label: '启用长期记忆',
+              onChange: function (v) { patchForm({ memoryEnabled: v }); },
+            }),
+            h('div', { className: 'wpr-hint' }, '默认关（opt-in）：开着重启才读记忆，手工条目会进提示词。')),
+          h(Field, { label: '收口模式' },
+            h('select', {
+              className: 'wpr-sel', value: form.memoryCapture, disabled: disabled,
+              onChange: function (ev) { patchForm({ memoryCapture: strOf(ev && ev.target && ev.target.value) }); },
+            },
+              h('option', { value: 'on-demand' }, 'on-demand（默认：会话里 /memory on 才注入）'),
+              h('option', { value: 'always' }, 'always（每轮都注入 · 旧行为）')),
+            (form.memoryCapture === 'on-demand' || form.memoryCapture === 'always')
+              ? null
+              : h('div', { className: 'wpr-warn' }, '当前值「' + strOf(form.memoryCapture) + '」不在预设里，保存后照原样写入。'))));
+        body.push(h(SectionsCard, {
+          key: 'sections', sections: shown ? shown.sections : d.sections, warnings: shown ? shown.warnings : [],
+          tier: d.tier, fromSave: !!savedPreview,
+        }));
+        if (shown && shown.warnings && shown.warnings.length && savedPreview) {
+          for (var sj = 0; sj < shown.warnings.length; sj++) {
+            body.push(h('div', { className: 'wpr-alert', key: 'pw' + sj }, '⚠ ' + shown.warnings[sj]));
+          }
+        }
+        body.push(h(EditorCard, { key: 'editor', editor: d.editor }));
       }
 
-      return h('div', { className: 'wpr-wrap' }, head,
-        h('div', { className: 'wpr-sub', style: { marginBottom: 6 } },
-          '只读面板：这里显示的就是此刻真会注入系统提示词的那几段，跟运行期同一套渲染。'),
+      return h('div', { className: 'wpr-wrap' },
+        h('div', { className: 'wpr-head' },
+          h('div', { className: 'wpr-h1' }, '人设 · whale-persona'),
+          h('span', { className: 'wpr-spacer' }),
+          d ? h('span', { className: 'wpr-sub' }, d.tier + ' 档') : null),
+        d && form ? h(Toolbar, {
+          // 表单禁用时工具栏一起禁用（老宿主无 raw / 磁盘坏 JSON）：档位与保存都不该能点
+          disabled: disabled, loading: !!st.loading, saving: !!sv.saving, dirty: dirty, tier: tier,
+          onPickTier: pick, onRefresh: refresh, onSave: save,
+        }) : null,
+        h('div', { className: 'wpr-sub', style: { margin: '6px 0' } },
+          savedPreview
+            ? '这里就是此刻会注入系统提示词的那几段（已按刚保存的配置就地更新，跟运行期同一套渲染）。'
+            : '这里显示的就是此刻真会注入系统提示词的那几段，跟运行期同一套渲染。'),
         body);
     }
 
@@ -470,7 +1041,10 @@ window.__ModuleLoader__.load({
               id: 'whale-persona',
               order: 110,
               label: function () { return '人设'; },
-            }, WhalePersonaSettings);
+            }, function WhalePersonaSettingsWithBoundary() {
+              // 自包含错误边界（不依赖 React.Component，桩环境也能跑测试）
+              return h(Boundary, null, h(WhalePersonaSettings, null));
+            });
           });
         } catch (e) {
           return function () {};

@@ -18,6 +18,8 @@ import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../co
 import { captureMode } from '../../core/capture.js'
 import { readInbox, resolveInbox } from '../../core/memoryInbox.js'
 import { selfNameOf } from '../../core/render.js'
+// 读写纪律与本地编辑器页（scripts/ui.mjs）**同一套**：只替换已知段、未知键保留、坏 JSON 拒写
+import { DEFAULTS, mergeConfig, readRawConfig, renderSections, writeMergedConfig } from '../../core/edit.js'
 
 export const name = '@shenA2024/whale-persona-ui'
 
@@ -72,6 +74,22 @@ async function editorRunning(url) {
   }
 }
 
+/** 面板档位 → 代表模型 id（写路由与读路由共用同一套换算） */
+function modelForPanel(query) {
+  const wanted = String((query && query.get ? query.get('tier') : query) || '').toLowerCase()
+  return TIER_MODEL[wanted === 'pro' ? 'pro' : 'flash']
+}
+
+/** 收请求体（限 2MB，防呆） */
+function readBody(req, limit = 2_000_000) {
+  return new Promise((resolve, reject) => {
+    let data = ''
+    req.on('data', (c) => { data += c; if (data.length > limit) reject(new Error('body too large')) })
+    req.on('end', () => resolve(data))
+    req.on('error', reject)
+  })
+}
+
 function fileState(file) {
   try {
     const st = statSync(file)
@@ -95,10 +113,10 @@ function buildSummary(query) {
   const capture = captureMode(cfg) === 'always'
   const cwdLabel = '<当前工作目录>'
 
-  const sections = { prefix: '', thinking: '', suffix: '' }
-  try { sections.prefix = buildPersonaPrompt(cfg, model, '', { capture }) } catch { /* 降级：空段 */ }
-  try { sections.thinking = buildThinkingLanguage(cfg) } catch { /* 降级 */ }
-  try { sections.suffix = buildSuffix(cfg, cwdLabel) } catch { /* 降级 */ }
+  // 三段与告警走 core/edit.js 的唯一渲染口径（保存路由同一套），不再本地各算一份
+  const raw = readRawConfig(file)
+  const rendered = renderSections(raw === null ? {} : raw, { model, cwd: cwdLabel, capture })
+  const sections = { prefix: rendered.prefix, thinking: rendered.thinking, suffix: rendered.suffix }
 
   const persona = (cfg && cfg.persona) || {}
   const contracts = Array.isArray(persona.contracts)
@@ -118,6 +136,11 @@ function buildSummary(query) {
     ok: true,
     tier,
     model,
+    // 表单要用：磁盘上的原始对象（含未知键，保存时整体回写）、出厂默认值、静默失效告警
+    raw: raw === null ? null : raw,
+    configValid: raw !== null,
+    defaults: DEFAULTS,
+    warnings: rendered.warnings,
     configPath: file,
     configState: state,
     enabled: cfg.enabled !== false,
@@ -158,6 +181,35 @@ export function apply(ctx) {
           const editor = editorInfo()
           summary.editor = { url: editor.url, port: editor.port, running: await editorRunning(editor.url) }
           return send(200, summary)
+        }
+        // ── 保存（唯一写入口）──────────────────────────────────────────────────
+        // 用户在设置面板里自己改配置：与本地编辑页同一条纪律 —— 整体读改写、只替换已知段、
+        // 未知键原样保留；现有文件是坏 JSON 时拒绝写入（409），绝不覆盖用户的数据。
+        if (url.pathname === API_PATH + '/config' && req.method === 'POST') {
+          const ct = String((req.headers && req.headers['content-type']) || '').toLowerCase()
+          if (ct.indexOf('application/json') === -1) return send(415, { ok: false, error: 'content-type must be application/json' })
+          let body = null
+          try { body = JSON.parse(await readBody(req)) } catch (e) {
+            return send(400, { ok: false, error: 'body is not valid JSON: ' + String((e && e.message) || e) })
+          }
+          const patch = body && body.config && typeof body.config === 'object' && !Array.isArray(body.config) ? body.config : null
+          if (!patch) return send(400, { ok: false, error: 'config object required' })
+          if (readRawConfig(configPath()) === null) {
+            return send(409, { ok: false, error: '现有 config.json 不是合法 JSON，先修好它（设置面板不会覆盖坏文件）' })
+          }
+          let next = null
+          try { next = writeMergedConfig(patch, configPath()) } catch (e) {
+            return send(409, { ok: false, error: String((e && e.message) || e) })
+          }
+          const model = modelForPanel(url.searchParams)
+          return send(200, {
+            ok: true,
+            configPath: configPath(),
+            config: next,
+            effective: mergeConfig(next),
+            preview: renderSections(next, { model, cwd: '<当前工作目录>' }),
+            savedAt: new Date().toISOString(),
+          })
         }
         if (url.pathname === API_PATH + '/health' && req.method === 'GET') {
           return send(200, { ok: true, exists: existsSync(configPath()) })
