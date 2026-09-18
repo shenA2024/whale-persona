@@ -18,9 +18,13 @@
 2. **配**（二选一）
    - **让 AI 写**：装好技能后直接说「加条契约：结尾不要出现征询式问句」；
    - **自己写**：照配置段的 schema 写一份 config.json（定位链见下）。
-3. **看它到底注入什么**（不需要任何 UI）：
+3. **看 / 改配置（两种方式）**
 
 ```bash
+# ① 图形界面（推荐）：表单填、右边实时显示"实际注入的三段文本"，一键保存
+node scripts/ui.mjs            # 打开 http://127.0.0.1:8787
+
+# ② 命令行预览：不想开界面时用，输出与运行期逐字一致
 node scripts/render-preview.mjs --config examples/demo-config.json --capture
 ```
 
@@ -67,8 +71,25 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 另外两段：`thinkingLanguage: "zh-CN"` → 注入一段「内部思考语言」指令；
 `suffix` → 注入「工作目录在 <cwd>。」。完整输出跑上面那条命令即可，本文件不复制全文（避免与实现漂移）。
 
-> **本仓不含图形设置界面**：预览靠上面这条命令，改配置靠手写 JSON 或"对 AI 说"（技能）。
-> 这是刻意的：仓里只有引擎与宿主胶水，没有浏览器半身，所以不会随宿主 UI 升级碎掉。
+## 图形界面（本仓自带，不需要宿主插件）
+
+```bash
+node scripts/ui.mjs                 # http://127.0.0.1:8787
+node scripts/ui.mjs --port 9000
+DSH_WHALE_CONFIG=<路径> node scripts/ui.mjs   # 编辑指定配置文件
+```
+
+表单左边改、右边实时预览「实际注入的三段文本」，保存时**只替换已知段、保留你不认识的键**（与其他工具共存的配置不会被裁）。
+它还会主动点名**配了却不生效**的项，例如：
+
+- 设了自称但全文没用 `{selfName}` 占位符 → 自称不会出现在提示词里；
+- 有手工条目但「长期记忆」总开关是关的 → 那些条目不会被注入。
+
+安全边界（这页能读写你的配置文件，所以写清楚）：只监听 `127.0.0.1`；校验 Host 头（防 DNS rebinding）；
+只读写定位链解析出的那一个 config.json；POST 必须是 `application/json` 且不发 CORS 头。
+
+**为什么不做成宿主插件**：那要把浏览器半身挂进宿主 profile，随宿主 UI 升级会碎，而且 ZCode 用户用不上。
+独立本地页两个宿主通吃，且与本仓引擎解耦。
 
 ## 你在哪个宿主里？（给 AI 的安装引导）
 
@@ -91,8 +112,9 @@ adapters/dsh/    DeepSeek Harness 插件：注册 persona-prefix/suffix（官方
 adapters/zcode/  ZCode 插件：UserPromptSubmit hook 每轮注入 + whale-persona 管理技能
 marketplace.json ZCode 市场清单（Discover 添加本仓库时读它，条目指向 adapters/zcode）
 scripts/         sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
-                 render-preview.mjs：把配置渲染成"实际注入的三段文本"并打印（等价于设置面板的预览）
-tests/           三套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook
+                 render-preview.mjs：把配置渲染成"实际注入的三段文本"并打印（命令行预览）
+                 ui.mjs + ui.html：本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
+tests/           四套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook / 本地编辑器 API
 ```
 
 ## 两个适配器的能力对照
