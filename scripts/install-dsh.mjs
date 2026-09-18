@@ -13,6 +13,7 @@
  *   node scripts/install-dsh.mjs                 # 装进 profile web（默认）
  *   node scripts/install-dsh.mjs --profile lab   # 指定 profile
  *   node scripts/install-dsh.mjs --link          # 不复制，直接链当前仓库（开发用，改代码即时生效）
+ *   node scripts/install-dsh.mjs --base ptc      # 指定基座 preset（默认 auto = 跟随用户当前的默认 preset）
  *   node scripts/install-dsh.mjs --no-default    # 不动用户已有的默认 preset 设置
  *   node scripts/install-dsh.mjs --dry-run       # 只打印将要做的事
  *
@@ -33,13 +34,14 @@ const PRESET_NAME = '自定义人设'
 const SELF = 'whale-persona:'
 
 const argv = process.argv.slice(2)
-const opts = { profile: 'web', link: false, home: '', source: SOURCE, setDefault: true, dry: false, help: false }
+const opts = { profile: 'web', link: false, home: '', source: SOURCE, setDefault: true, base: 'auto', dry: false, help: false }
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
   if (a === '--profile') opts.profile = String(argv[++i] || 'web')
   else if (a === '--home') opts.home = String(argv[++i] || '')
   else if (a === '--source') opts.source = path.resolve(String(argv[++i] || SOURCE))
   else if (a === '--link') opts.link = true
+  else if (a === '--base') opts.base = String(argv[++i] || 'auto')
   else if (a === '--no-default') opts.setDefault = false
   else if (a === '--dry-run') opts.dry = true
   else if (a === '-h' || a === '--help') opts.help = true
@@ -151,7 +153,12 @@ function manualLink(pkgName, sub) {
 }
 
 function findShippedPreset(name) {
-  const rel = path.join('@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-agent-presets', 'presets', name)
+  const root = findShippedPresetsRoot()
+  return root ? path.join(root, name) : ''
+}
+
+function findShippedPresetsRoot() {
+  const rel = path.join('@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-agent-presets', 'presets')
   const roots = []
   if (process.env.DSH_AGENT_PRESETS_ROOT) roots.push(process.env.DSH_AGENT_PRESETS_ROOT)
   if (process.env.APPDATA) roots.push(path.join(process.env.APPDATA, 'npm', 'node_modules'))
@@ -160,32 +167,95 @@ function findShippedPreset(name) {
   if (r.status === 0 && r.stdout) roots.push(r.stdout.trim())
   for (const root of roots) {
     const p = path.join(root, rel)
-    if (existsSync(path.join(p, 'agent.cordis.yml'))) return p
+    if (existsSync(p)) return p
   }
   return ''
 }
 
+/** 用户当前的默认 preset id（读 $DSH_HOME/settings.yaml 的 agent-presets.default） */
+function defaultPresetId() {
+  const file = path.join(HOME, 'settings.yaml')
+  if (!existsSync(file)) return ''
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/)
+  const idx = lines.findIndex((l) => /^agent-presets:\s*$/.test(l))
+  if (idx < 0) return ''
+  for (let j = idx + 1; j < lines.length; j++) {
+    if (!/^\s+\S/.test(lines[j])) break
+    const m = /^\s+default:\s*(\S+)\s*$/.exec(lines[j])
+    if (m) return m[1]
+  }
+  return ''
+}
+
+/** 基座目录：用户 preset 优先，其次宿主自带；找不到返回空串 */
+function basePresetDir(id) {
+  const user = path.join(HOME, '.agent-presets', id)
+  if (existsSync(path.join(user, 'agent.cordis.yml'))) return user
+  const shippedRoot = findShippedPresetsRoot()
+  if (shippedRoot) {
+    const shipped = path.join(shippedRoot, id)
+    if (existsSync(path.join(shipped, 'agent.cordis.yml'))) return shipped
+  }
+  return ''
+}
+
+/**
+ * 基座选择：**跟随用户当前的默认 preset**，不替他选。
+ * 为什么不是写死 standard：persona 插件跟"模式"无关，它只是替换掉基座里的人设行；
+ * 写死标准模式会把 PTC 用户的能力面悄悄换掉（PTC 走 run_code SDK，标准走逐工具调用）。
+ */
+function resolveBase() {
+  if (opts.base !== 'auto') return { id: opts.base, why: '命令行指定 --base' }
+  const cur = defaultPresetId()
+  if (cur && cur !== PRESET_ID) return { id: cur, why: '跟随用户当前的默认 preset' }
+  if (cur === PRESET_ID) return { id: 'standard', why: '默认 preset 已是本插件（重装），回退宿主出厂默认' }
+  return { id: 'standard', why: '用户没设默认 preset，用宿主出厂默认' }
+}
+
 function writePreset() {
   const dest = path.join(HOME, '.agent-presets', PRESET_ID)
-  const shipped = findShippedPreset('standard')
-  if (!shipped) {
-    warn('找不到宿主自带的 standard preset，preset 没建。手工做法：')
-    warn('  1) 把 <dsh 安装目录>/node_modules/@deepseek-ai/dsh-agent-presets/presets/standard 复制到 ' + dest)
+  const exists = existsSync(path.join(dest, 'agent.cordis.yml'))
+  const alreadyOurs = exists && readFileSync(path.join(dest, 'agent.cordis.yml'), 'utf8').indexOf(PERSONA_PKG) >= 0
+  if (alreadyOurs) {
+    if (!opts.dry) refreshPresetMeta(dest)
+    log('preset 已存在，保留它的基座与内容（只补显示名/描述）：' + dest)
+    return
+  }
+  const base = resolveBase()
+  const src = basePresetDir(base.id)
+  if (!src) {
+    warn('找不到基座 preset「' + base.id + '」，preset 没建。手工做法：')
+    warn('  1) 把 <宿主 preset 目录>/' + base.id + ' 复制到 ' + dest)
     warn("  2) 把里面  - id: persona / name: '@deepseek-ai/dsh-persona'  那段换成")
-    warn("     - id: whale-persona")
+    warn('     - id: whale-persona')
     warn("       name: '" + PERSONA_PKG + "'")
     return
   }
+  log('基座 preset = ' + base.id + '（' + base.why + '）<- ' + src)
   if (opts.dry) { log('DRY: 建 preset -> ' + dest); return }
   rmSync(dest, { recursive: true, force: true })
   mkdirSync(path.dirname(dest), { recursive: true })
-  cpSync(shipped, dest, { recursive: true })
+  cpSync(src, dest, { recursive: true })
   swapPersonaRow(path.join(dest, 'agent.cordis.yml'))
   writeFileSync(path.join(dest, 'preset.yml'),
     'name: ' + PRESET_NAME + '\n'
-    + 'description: 标准模式 + whale-persona 人设引擎（装完就是新任务默认；显示名就改这一行）\n'
+    + 'description: 基于 ' + base.id + ' 模式 + whale-persona 人设引擎（装完即新任务默认；显示名改这一行）\n'
     + 'order: 9\n', 'utf8')
   log('preset 已就绪：' + dest + '   显示名「' + PRESET_NAME + '」')
+}
+
+/** 重装时只补元数据：用户改过的显示名不动 */
+function refreshPresetMeta(dest) {
+  const file = path.join(dest, 'preset.yml')
+  const cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  const hasName = /^name:\s*\S/m.test(cur)
+  const hasDesc = /^description:\s*\S/m.test(cur)
+  if (hasName && hasDesc) return
+  const lines = []
+  lines.push(hasName ? /^name:.*$/m.exec(cur)[0] : 'name: ' + PRESET_NAME)
+  if (!hasDesc) lines.push('description: whale-persona 人设引擎（装完即新任务默认；显示名改这一行）')
+  lines.push('order: 9')
+  writeFileSync(file, lines.join('\n') + '\n', 'utf8')
 }
 
 function swapPersonaRow(file) {
