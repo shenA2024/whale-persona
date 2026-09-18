@@ -1,4 +1,4 @@
-# dsh-whale-persona —— DSH 适配器
+# whale-persona —— DSH 适配器
 
 **Persona engine for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** —
 把系统提示词的人设段变成可开关、可编辑、可记忆的配置。本目录是 whale-persona 的
@@ -30,7 +30,7 @@ dsh plugin --profile web add link:/path/to/whale-persona/repo/adapters/dsh
 #    这正是官方的替换机制；挂到全局/profile 层会与注册表自身的 persona 注册同名冲突，
 #    装配当场抛错。同一 preset 里已挂官方 dsh-persona 行的，先卸掉它再挂本插件）：
 #    - id: whale-persona
-#      name: '@dsh-external/dsh-whale-persona'
+#      name: '@shenA2024/whale-persona'
 ```
 
 要求：DSH ≥ 0.1.6-alpha.1，Node ≥ 20。无运行时依赖。

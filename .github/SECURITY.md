@@ -11,7 +11,7 @@
 
 **不要用公开 Issue 报告安全问题。** 请走 GitHub 私有漏洞报告（只有你和维护者可见）：
 
-https://github.com/shenA2024/dsh-whale-persona/security/advisories/new
+https://github.com/shenA2024/whale-persona/security/advisories/new
 
 也可以在仓库页「安全与质量 → 公告 → 报告漏洞」进入同一入口。
 
