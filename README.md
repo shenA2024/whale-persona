@@ -13,8 +13,14 @@
 
 1. **装**（选你的宿主）
    - **ZCode**：Settings → Plugin Management → Discover → **+** 添加 marketplace，来源填本仓库 URL → 安装 `whale-persona`。
-   - **DSH**：`dsh plugin --profile web add link:<仓库>/adapters/dsh` + 在 agent preset 挂一行，
-     再装配套技能（见 [`adapters/dsh/README.md`](adapters/dsh/README.md)）。
+   - **DSH**：**一条命令**（装插件 + 建预设 + 设默认 + 拷技能 + 自检）：
+     ```bash
+     node scripts/install-dsh.mjs            # 从本仓克隆里跑；--dry-run 可先看要做什么
+     ```
+     装完重启 DSH，你会看到两处新东西：**设置 → Agent 预设** 里多出一张
+     「**自定义人设**」卡片（已标「新任务默认」，名字就存在它的 `preset.yml` 里，随你改）、
+     **设置 → 人设** 是一张只读面板，显示此刻**实际会注入系统提示词的那几段正文**。
+     手工装法与两个平面的规则见 [`adapters/dsh/README.md`](adapters/dsh/README.md)。
 2. **配**（二选一）
    - **让 AI 写**：装好技能后直接说「加条契约：结尾不要出现征询式问句」；
    - **自己写**：照配置段的 schema 写一份 config.json（定位链见下）。
@@ -88,8 +94,23 @@ DSH_WHALE_CONFIG=<路径> node scripts/ui.mjs   # 编辑指定配置文件
 安全边界（这页能读写你的配置文件，所以写清楚）：只监听 `127.0.0.1`；校验 Host 头（防 DNS rebinding）；
 只读写定位链解析出的那一个 config.json；POST 必须是 `application/json` 且不发 CORS 头。
 
-**为什么不做成宿主插件**：那要把浏览器半身挂进宿主 profile，随宿主 UI 升级会碎，而且 ZCode 用户用不上。
-独立本地页两个宿主通吃，且与本仓引擎解耦。
+### DSH 里的只读面板（2026-09-18 新增）
+
+装 UI 包 `@shenA2024/whale-persona-ui` 后，DSH「设置 → 人设」是一张**只读卡片**：
+状态、自称/称呼、配置文件路径、**此刻实际注入的三段正文**（可按 flash/pro 档切换）、
+逐条契约与开关态、长期记忆条数与最近几条。它解决的是「看得见」——
+用户不必再问 AI「我现在的人设到底是什么」。文本与运行期注入**同一套 `core/`**，不是另算的近似值。
+
+挂载规矩（装错会让整个 DSH 起不来，实测报错：`prompt section "deployment:persona-prefix" is already registered`）：
+
+| 件 | 平面 | 原因 |
+|---|---|---|
+| 人设段（`@shenA2024/whale-persona`） | **agent preset** | 与官方 persona 占同一架构位，跨层才是「遮蔽」 |
+| 设置面板（`@shenA2024/whale-persona-ui`） | **profile patch 栈** | UI 插件进不了 preset 平面 |
+
+**为什么编辑仍然不做成宿主插件**：表单编辑继续留在独立本地页 —— 两个宿主通吃，且与本仓引擎解耦。
+DSH 侧只加了一层**只读**薄卡片，碎裂面控制在一个不写盘的组件里；真正改配置仍然只有两条路：
+本地页 `node scripts/ui.mjs`，或者对 AI 说一句（技能代写）。
 
 ## 你在哪个宿主里？（给 AI 的安装引导）
 
@@ -108,13 +129,16 @@ DSH_WHALE_CONFIG=<路径> node scripts/ui.mjs   # 编辑指定配置文件
 ```
 core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱读写 / 收口开关
 examples/        可直接跑的示例：demo-config.json（三契约 + 记忆）、demo-inbox.jsonl、empty-config.json
-adapters/dsh/    DeepSeek Harness 插件：注册 persona-prefix/suffix（官方具名槽位，getSectionOrder 动态解析）+ whale:thinking-language（自有槽位）三段
+adapters/dsh/    DeepSeek Harness 宿主半身：注册 persona-prefix/suffix（官方具名槽位，getSectionOrder 动态解析）+ whale:thinking-language（自有槽位）三段
+adapters/dsh-ui/ DSH 设置面板（宿主路由 + 浏览器半身）：只读展示"此刻会注入什么"，profile 平面挂载
 adapters/zcode/  ZCode 插件：UserPromptSubmit hook 每轮注入 + whale-persona 管理技能
 marketplace.json ZCode 市场清单（Discover 添加本仓库时读它，条目指向 adapters/zcode）
-scripts/         sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
+package.json     仓库根包：让 `dsh plugin add <本仓 URL>` 也能装（main 指向 adapters/dsh）
+scripts/         install-dsh.mjs：DSH 一条命令安装器（装包/建预设/设默认/拷技能/自检）
+                 sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
                  render-preview.mjs：把配置渲染成"实际注入的三段文本"并打印（命令行预览）
                  ui.mjs + ui.html：本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
-tests/           四套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook / 本地编辑器 API
+tests/           五套测试：DSH 冒烟 / 记忆收件箱 / 设置面板宿主半身 / ZCode hook / 本地编辑器 API
 ```
 
 ## 两个适配器的能力对照
@@ -128,6 +152,7 @@ tests/           四套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook / 本�
 | 记忆确认流 | ✅（收件箱按数据注入） | ✅（同一套收件箱与纪律文案） |
 | 无 hook 兜底 | —（挂载即用） | `--preview` 导出静态文本贴 AGENTS.md，新会话生效 |
 | 关闭方式 | config `enabled:false` = 无人设；卸载挂载行回官方 persona | 禁用插件即停；纯默认配置渲染为空（装上不改行为） |
+| 设置页可见性 | ✅ 只读面板（三段正文/契约/记忆一屏可见） | ➖ 用本仓自带的本地编辑器页 |
 
 共享：同一份 config schema、同一套渲染文案、同一个收件箱文件——两个宿主看到的是
 同一个「人」。差异只在注入通道。
@@ -142,7 +167,8 @@ tests/           四套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook / 本�
 
 ```bash
 node scripts/sync-core.mjs     # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
-npm test                       # 在 adapters/dsh/ 下跑全部三套测试
+npm test                       # 在仓库根跑全部五套测试
+npm run install-dsh -- --dry-run   # 看安装器会做什么，不落盘
 ```
 
 ## 记忆流（2026-09-18 升级：合并式候选 + tag 相关性）
