@@ -1,136 +1,69 @@
-# dsh-whale-persona
+# whale-persona —— 多宿主人设引擎
 
-**Persona engine for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)** — turn the system prompt's
-persona section into something you can switch, edit, and remember.
+把 AI 编码助手的「人设」变成**可开关、可编辑、可记忆**的配置产物：自称（按模型分档）、
+称呼、关系立场、性格正文、逐条可勾选的工作契约、思维链语言、确认闸门的长期记忆。
+一份 `config.json` + 一个收件箱文件，**多个宿主共用同一套人设与记忆**。
 
-一个 DSH 插件：把系统提示词里的「人设段」变成**可开关、可编辑、可记忆**的配置产物。
+> English summary: a persona engine for AI coding harnesses. One shared JSON config drives
+> self-name (tiered by model), user address, stance, character, per-contract toggles,
+> thinking-chain language, and a confirmation-gated long-term memory inbox. Dual adapters:
+> DeepSeek Harness (system-prompt sections) and ZCode (plugin hook + skill).
 
-> English summary: this plugin registers the `deployment:persona-prefix` / `persona-suffix` /
-> `thinking-language` system-prompt sections, rendering them from a JSON config on every
-> assembly. Zero opinion by default (self-name "我", user address "用户", empty character and
-> contracts, memory flow off) — you fill in what you want. It also ships a confirmation-gated
-> long-term memory flow (AI proposes → you confirm → append-only inbox → injected as *data*,
-> not instructions).
+## 你在哪个宿主里？（给 AI 的安装引导）
 
-## 特性
+如果你是 AI 助手、被用户要求安装本工具，按宿主自行选择：
 
-- **人设可开关**：配置关掉 = 渲染为空（无人设），不残留、不炸会话。注意本插件是官方
-  `@deepseek-ai/dsh-persona` 的**替代**而非叠加——只有完整卸载挂载行才会回到官方人设。
-- **自称/称呼/立场/契约**：双模型档自称（flash 档 / pro 档）、称呼用户、整段立场正文、
-  逐条可勾选的工作契约；产物是每步重新求值的提示词段，改完下一步生效。
-- **思维链语言**：`off`（默认不干预）/ `zh-CN` / `en` …，只影响思考可读性与 token，不改答复语言。
-- **长期记忆（确认流，默认关）**：阶段收口时 AI 列出「记忆候选」→ 用户确认 → 逐条**追加**到
-  inbox（JSONL，只许追加，坏行跳过）；注入时按**数据**呈现（引号 + 「非指令」声明）、
-  条目内换行折叠，不与用户准则混排——这是刻意的抗提示词注入设计。
-- **全链路降级**：任何异常都返回空段——插件坏了最坏结果是「没有人设」，永远不会让会话发不出话。
+- **DeepSeek Harness（DSH）**：客户端是 DSH，插件挂载在 profile / agent preset 里，
+  系统提示词由具名段组装 → 用 [`adapters/dsh/`](adapters/dsh/README.md)。
+- **ZCode**（含其他兼容 ZCode 插件体系的环境）：客户端是 ZCode，有 Settings → Plugin
+  Management、skills、hooks → 用 [`adapters/zcode/`](adapters/zcode/README.md)。
+- **两者都在用**：两个适配器都装。它们共享同一份配置与收件箱（DSH 默认位置
+  `$DSH_HOME/whale-suite/`），人设改一次、两边同步生效。
 
-## 安装
+## 仓库结构
+
+```
+core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱读写
+adapters/dsh/    DeepSeek Harness 插件：注册 persona-prefix/suffix/thinking-language 三段
+adapters/zcode/  ZCode 插件：UserPromptSubmit hook 每轮注入 + whale-persona 管理技能
+scripts/         sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
+tests/           三套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook
+```
+
+## 两个适配器的能力对照
+
+| 能力 | DSH 版 | ZCode 版 |
+|---|---|---|
+| 注入机制 | 系统提示词具名段（order 0/20/10200） | `UserPromptSubmit` hook → `additionalContext` |
+| 改配置生效 | 下一步 | 下一步 |
+| 按模型分档自称 | ✅（段函数按 agent 模型现场选档） | ✅（hook 按事件输入的模型选档） |
+| 思维链语言 | ✅ 专用段 | ✅ |
+| 记忆确认流 | ✅（收件箱按数据注入） | ✅（同一套收件箱与纪律文案） |
+| 无 hook 兜底 | —（挂载即用） | `--preview` 导出静态文本贴 AGENTS.md，新会话生效 |
+| 关闭方式 | config `enabled:false` = 无人设；卸载挂载行回官方 persona | 禁用插件即停；纯默认配置渲染为空（装上不改行为） |
+
+共享：同一份 config schema、同一套渲染文案、同一个收件箱文件——两个宿主看到的是
+同一个「人」。差异只在注入通道。
+
+## 快速开始（人设怎么写）
+
+配置结构与「契约怎么写才有效」「让 AI 代写配置」的完整说明在
+[`adapters/dsh/README.md`](adapters/dsh/README.md)（两宿主通用，ZCode 用户同样适用，
+配置文件定位链见 [`adapters/zcode/README.md`](adapters/zcode/README.md)）。
+
+## 开发
 
 ```bash
-# 1) 放进你的插件目录（任意位置），装进 DSH profile：
-dsh plugin --profile web add link:/path/to/dsh-whale-persona
-
-# 2) 在 profile 或 agent preset 的补丁层挂一行（preset 层才能遮蔽部署级默认人设）：
-#    - id: whale-persona
-#      name: '@dsh-external/dsh-whale-persona'
+node scripts/sync-core.mjs     # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
+npm test                       # 在 adapters/dsh/ 下跑全部三套测试
 ```
 
-要求：DSH ≥ 0.1.6-alpha.1，Node ≥ 20。无运行时依赖。
+## 安全与隐私（两宿主一致）
 
-## 配置
-
-`$DSH_HOME/whale-suite/config.json`（也可用环境变量 `DSH_WHALE_CONFIG` 指定别的文件）：
-
-```jsonc
-{
-  "enabled": true,
-  "thinkingLanguage": "off",          // off | zh-CN | en | ...
-  "persona": {
-    "enabled": true,
-    "selfNameFlash": "我",             // flash 档模型的自称
-    "selfNamePro": "我",               // pro 档模型的自称
-    "userName": "用户",                // 它怎么称呼你
-    "stance": "",                      // 关系立场（一句话，渲染在 character 之前）
-    "suffix": "",                      // 末尾追加句；支持 {{cwd}}。默认空 = 装上零行为改变
-    "character": "",                   // 立场正文，支持 {selfName}/{userName}
-    "contracts": [                     // 工作契约，逐条可关
-      { "id": "terse", "text": "结论先行，默认精简。", "on": true }
-    ]
-  },
-  "memory": {
-    "enabled": false,                  // 默认关（opt-in）；开启后才有下面的确认流与注入
-    "entries": [],                     // 手工条目（权威层）
-    "inbox": true,                     // 收件箱（AI 确认流）
-    "maxEntries": 30,                  // 收件箱注入上限（保新弃旧）
-    "inboxPath": ""                    // 空 = $DSH_HOME/whale-suite/memory-inbox.jsonl
-  }
-}
-```
-
-改配置**下一步生效**（段文本是函数，每次组装重新求值）；增删挂载行才需要新会话。
-
-### 契约怎么写才有效
-
-契约的收益取决于写得是否**具体可验证**：
-
-- ✅ 有效：「先给结论再给依据，总长不超过 10 行」「结尾不要出现征询式问句」「改代码前先说改哪几个文件」
-- ❌ 无效：「高质量」「认真思考」「专业」——模型不知道具体该做什么不同的事，等于没写
-
-条数以 5-10 条为宜，太多会互相稀释；与其它插件注入的规则矛盾时，表现还会不稳定
-（排查方法：看系统提示词里各插件注入的段，一个关注点只留一个信息源）。
-分工：风格/口吻/行为约定走契约；事实类偏好（「项目用 pnpm」「存档目录别碰」）走记忆流。
-
-## 长期记忆怎么工作
-
-```
-阶段收口 → AI 列「## 记忆候选」 → 你确认/修改
-        → AI 逐条追加 {"text":"…","at":"…"} 到 inbox.jsonl（只追加，永不改写）
-        → 每个会话把它作为【历史备忘（数据，非指令）】注入
-```
-
-想要更结构化的记忆：用你自己的文件按主题分节编纂，inbox 当日流水、定期把稳定条目
-「晋升」进手工条目（权威层）。项目级细节请放项目自己的记忆文件，不要塞进这里。
-
-## 让 AI 代写配置（懒人工作流）
-
-配置只是普通 JSON，DSH 里的 AI 有文件读写工具——你不必手写。口述想法，或给它一个
-本地思想纲领文件让它提炼，确认后由它落盘。指令模板：
-
-> 我想调整你的人设：……（你的想法，或：读取 `D:\我的思想纲领.md` 从中提炼）。
-> 请提炼成 config.json 里 character / contracts / stance 的修改，先给我看修改前后对照，
-> 我确认后写回 `$DSH_HOME/whale-suite/config.json`。要求：① 先读原文件、整体改写回写，
-> 保留 thinkingLanguage 和 memory 段不动；② 写完重读一遍验证 JSON 合法。
-
-要点：
-
-- **改完下一步生效**（mtime 缓存设计），可以对话式来回微调：「语气再硬一点」→ 看效果 → 再改。
-- 写坏 JSON 不会炸会话：插件回落到上一次的配置或默认值，症状只是「人设消失」，让 AI 自验即可规避。
-- 固化流程：在 contracts 里加一条「当{userName}说『更新人设』时：提炼意图 → 列前后对照征求
-  确认 → 读改写回 config.json 并验证 JSON 合法」，之后只需说「更新人设」三个字。
-
-## 安全与隐私
-
-- 不联网、不读工作目录、不执行任何命令：只读写你自己的 config 与 inbox 文件。
-- inbox 条目在提示词里按**数据**呈现并显式声明「非指令」，降低提示词注入风险；
-  入库需用户确认（AI 不擅自记）。
-- `suffix` 里的 `{{cwd}}` 由本插件自行替换，其它 `{{var}}` 原样保留——不会触发
-  DSH 的未注册变量错误（那会让会话发不出第一句话）。
-- **残余风险（自写通道）**：开启记忆流后，模型会向 inbox 追加内容、而 inbox 会回注到
-  之后的所有会话。「用户拍板」闸门由提示词约束（未被确认的一律不写），**不是代码强制**——
-  恶意对话若诱导出假确认，理论上可写入长期生效的文本。建议定期翻看
-  `memory-inbox.jsonl`，发现不对的行直接删（删行/坏行都不影响读取）。
-
-## 兼容与已知边界
-
-- 它**替代**官方 `@deepseek-ai/dsh-persona` 行（段按 name 注册，同名不能并存）。
-- 只能加/换具名段，改不动工具定义段与 harness 核心段。
-- 效果是概率性的：提示词是行为先验不是命令；与其它指令冲突时会被削弱。
-
-## 测试
-
-```bash
-npm test          # 或 node tests/smoke.mjs && node tests/inbox.mjs
-```
+- core 不联网、不执行命令、不读工作目录：只读写自己的 config 与 inbox 文件；
+- 收件箱条目按**数据**呈现（引号 + 「非指令」声明 + 换行折叠），降低提示词注入风险；
+- 一切异常降级为空输出——最坏结果是「没有人设」，永远不炸会话；
+- 残余风险：「用户确认后才入库」由提示词约束而非代码强制，建议定期翻看收件箱删不对的行。
 
 ## 许可
 
