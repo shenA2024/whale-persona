@@ -1,16 +1,19 @@
 // 人设引擎冒烟（2026-09-18 起用固定夹具，不再依赖真机配置；断言强制——false 即非零退出）
-import { writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const tmp = path.join(os.tmpdir(), 'whale-persona-smoke.json')
+// 夹具隔离：DSH_HOME 指向临时目录，测试不读真机的配置与收件箱
+const home = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-smoke-'))
+const tmp = path.join(home, 'config.json')
+process.env.DSH_HOME = home
 process.env.DSH_WHALE_CONFIG = tmp
 writeFileSync(tmp, JSON.stringify({
   enabled: true,
   thinkingLanguage: 'zh-CN',
   persona: {
     enabled: true,
-    selfNameFlash: '小助手', selfNamePro: '首席助手', userName: 'shenA2024',
+    selfNameFlash: '小助手', selfNamePro: '首席助手', userName: '小林',
     stance: '{userName}的编程搭档，直来直去。',
     character: '你是{selfName}，{userName}是对你重要的人。',
     suffix: '工作目录在 {{cwd}}。',
@@ -46,10 +49,10 @@ t('SEC1 三段注册齐:', !!(prefix && suffix && think))
 const flash = prefix.text({ agent: { options: { model: 'deepseek-v4.1-flash' } } })
 const pro = prefix.text({ agent: { options: { model: 'deepseek-v4-pro' } } })
 t('SEC2 flash/pro 分档:', flash.includes('小助手') && pro.includes('首席助手'))
-t('SEC2 stance(渲染且在character前):', flash.includes('shenA2024的编程搭档，直来直去。')
-  && flash.indexOf('shenA2024的编程搭档') < flash.indexOf('你是小助手'))
-t('SEC2 契约填充:', flash.includes('shenA2024不喜欢被反复问') && !flash.includes('这条关了'))
-t('SEC2 记忆块:', flash.includes('长期记忆') && flash.includes('shenA2024喜欢先看证据'))
+t('SEC2 stance(渲染且在character前):', flash.includes('小林的编程搭档，直来直去。')
+  && flash.indexOf('小林的编程搭档') < flash.indexOf('你是小助手'))
+t('SEC2 契约填充:', flash.includes('小林不喜欢被反复问') && !flash.includes('这条关了'))
+t('SEC2 记忆块:', flash.includes('长期记忆') && flash.includes('小林喜欢先看证据'))
 t('SEC3 suffix({{cwd}}替换):', suffix.text({}).includes('工作目录在'))
 t('SEC4 思维链语言段(zh):', think.text({}).includes('简体中文'))
 

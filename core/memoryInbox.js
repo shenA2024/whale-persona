@@ -16,18 +16,18 @@
  * 读法带 mtime 缓存（与 store 同款纪律），任何异常返回空数组。
  *
  * 同源纪律：本仓库 core/ 是唯一源；adapters/zcode/vendor/core/ 的副本由
- * scripts/sync-core.mjs 刷新，勿手改。内部套件版（whale-suite）与本文同步维护。
+ * scripts/sync-core.mjs 刷新，勿手改（tests/zcode-hook.mjs 的 Z7 会校验两份一致）。
  */
 import { readFileSync, statSync } from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
+import { configDir } from './store.js'
 
+/** 收件箱默认落点：与配置同目录（见 store.js 的 configDir()） */
 export function inboxFile() {
-  const home = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
-  return path.join(home, 'whale-suite', 'memory-inbox.jsonl')
+  return path.join(configDir(), 'memory-inbox.jsonl')
 }
 
-/** 解析收件箱路径：config.memory.inboxPath（绝对路径）优先，空则默认 $DSH_HOME 下 */
+/** 解析收件箱路径：config.memory.inboxPath 优先，为空则用 inboxFile() 的默认落点 */
 export function resolveInbox(cfgPath) {
   const p = String(cfgPath || '').trim()
   return p ? p : inboxFile()

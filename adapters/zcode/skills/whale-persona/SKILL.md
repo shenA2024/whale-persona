@@ -1,6 +1,6 @@
 ---
 name: whale-persona
-description: whale人设引擎的配置管理工作流。当用户想查看、创建或修改 AI 人设（自称、称呼、关系立场、性格正文）、增删工作契约、设置思维链语言、管理长期记忆（收件箱晋升、坏行清理），或说「更新人设」「加条契约」「看看当前人设」时使用。也用于把渲染产物导出为静态文本（无 hook 兜底模式）。
+description: 人设引擎 whale-persona 的配置管理工作流。当用户想查看、创建或修改 AI 人设（自称、称呼、关系立场、性格正文）、增删工作契约、设置思维链语言、管理长期记忆（收件箱晋升、坏行清理），或说「更新人设」「加条契约」「看看当前人设」时使用。也用于把渲染产物导出为静态文本（无 hook 兜底模式）。
 ---
 
 # whale-persona · 人设配置管理
@@ -14,7 +14,7 @@ description: whale人设引擎的配置管理工作流。当用户想查看、�
 
 1. `$WHALE_PERSONA_CONFIG`（环境变量，显式指定）
 2. `$DSH_WHALE_CONFIG`（DSH 用户的显式指定）
-3. `$DSH_HOME/whale-suite/config.json`（DSH 默认位置；`DSH_HOME` 未设时为 `~/.dsh`）
+3. `$DSH_HOME/whale-persona/config.json`（默认位置；`DSH_HOME` 未设时为 `~/.dsh`。旧布局 `$DSH_HOME/whale-suite/config.json` 存在时自动沿用）
 4. `~/.whale-persona/config.json`（纯 ZCode 用户）
 
 都没有 → 询问用户用哪个位置，然后按「配置结构」创建默认文件（目录要递归建）。
@@ -40,7 +40,7 @@ description: whale人设引擎的配置管理工作流。当用户想查看、�
     "entries": [],                    // 手工条目（权威层，渲染为行为准则）
     "inbox": true,                    // 收件箱确认流
     "maxEntries": 30,                 // 收件箱注入上限（保新弃旧）
-    "inboxPath": ""                   // 空 = $DSH_HOME/whale-suite/memory-inbox.jsonl；纯 ZCode 用户建议显式指定
+    "inboxPath": ""                   // 空 = 配置目录下的 memory-inbox.jsonl；纯 ZCode 用户建议显式指定
   }
 }
 ```

@@ -15,6 +15,9 @@ whale-persona 的 ZCode 插件形态：**UserPromptSubmit hook 每轮动态注�
    来源填本仓库：`https://github.com/shenA2024/dsh-whale-persona`
 2. 在 Discover 里找到 **whale-persona**，安装并启用。
 
+> 本仓库根的 `marketplace.json` 就是市场清单（条目 `source` 指向 `adapters/zcode`）——
+> Discover 加仓库 URL 时读的是它，不是插件目录里的 `.zcode-plugin/plugin.json`。
+
 插件自带 hook——装上即生效（插件 hook 会自动启用 hook 运行器，无需改 hooks 配置）。
 
 ### 方式 B：让 AI 帮你装
@@ -31,13 +34,14 @@ git clone https://github.com/shenA2024/dsh-whale-persona
 ```
 
 Settings → Plugin Management → Discover → **+** → 添加**本地目录**
-`<克隆路径>/adapters/zcode` → 安装 whale-persona。
+`<克隆路径>`（**仓库根**，不是 `adapters/zcode`——市场清单在根目录）→ 安装 whale-persona。
 
 > 注意：本目录必须整体使用（hook 依赖 vendor/ 内的 core 副本）；只拷 SKILL.md 是不完整的。
 
 ## 验证安装
 
-1. 写一份测试配置（见下节定位链，最简单：`~/.whale-persona/config.json`），
+1. 写一份测试配置（见下节定位链，最简单：DSH 用户 `$DSH_HOME/whale-persona/config.json`，
+   纯 ZCode 用户 `~/.whale-persona/config.json`），
    给 `persona.character` 填一句可识别的话（如「测试：人设已注入」）；
 2. 新开一轮对话随便说句话——若 hook 正常，AI 的行为会带上你的人设；
 3. 不确定时看 ZCode 日志里 hook 的执行记录（fired / failed / timed-out）：
@@ -51,12 +55,13 @@ hook 与 skill 按以下优先级找 config（找到第一个存在的就用）�
 
 1. `$WHALE_PERSONA_CONFIG`
 2. `$DSH_WHALE_CONFIG`
-3. `$DSH_HOME/whale-suite/config.json`（**DSH 默认位置——双宿主用户共用这一份**）
-4. `~/.whale-persona/config.json`（纯 ZCode 用户的默认位置）
+3. `$DSH_HOME/whale-persona/config.json`（**默认位置**；`DSH_HOME` 未设时为 `~/.dsh`）
+4. `$DSH_HOME/whale-suite/config.json`（**旧布局**，该目录里已有 config.json 时自动沿用——老用户零迁移）
+5. `~/.whale-persona/config.json`（纯 ZCode 用户的默认位置）
 
 配置 schema、契约写法、记忆流说明见 [`adapters/dsh/README.md`](../dsh/README.md)
 （两宿主完全一致）。一个差别：纯 ZCode 用户建议显式设置 `memory.inboxPath`，
-否则收件箱默认落在 `$DSH_HOME/whale-suite/memory-inbox.jsonl`。
+否则收件箱默认落在配置同目录（`$DSH_HOME/whale-persona/memory-inbox.jsonl`，旧布局则为 `whale-suite/` 下同名文件）。
 
 日常改人设：直接对 AI 说「更新人设 / 加条契约 / 看看当前人设」，
 装好的 `whale-persona` 技能会引导「草案 → 确认 → 写回 → 验证」的完整流程。

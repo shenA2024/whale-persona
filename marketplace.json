@@ -1,0 +1,32 @@
+{
+  "name": "dsh-whale-persona",
+  "description": "whale-persona: a switchable, editable, memorable persona engine for AI coding harnesses (DeepSeek Harness + ZCode).",
+  "description_i18n": {
+    "en": "whale-persona: a switchable, editable, memorable persona engine for AI coding harnesses (DeepSeek Harness + ZCode).",
+    "zh-CN": "whale-persona：可开关、可编辑、可记忆的人设引擎，宿主为 DeepSeek Harness 与 ZCode（一份配置，两个宿主共用）。"
+  },
+  "owner": {
+    "name": "shenA2024",
+    "url": "https://github.com/shenA2024"
+  },
+  "plugins": [
+    {
+      "name": "whale-persona",
+      "source": "./adapters/zcode",
+      "description": "Persona engine (ZCode adapter): injects persona, work contracts and long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
+      "description_i18n": {
+        "en": "Persona engine (ZCode adapter): injects persona, work contracts and long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
+        "zh-CN": "人设引擎（ZCode 版）：UserPromptSubmit hook 每轮注入人设、工作契约与长期记忆，另带一个配置管理技能。"
+      },
+      "version": "0.1.1",
+      "category": "productivity",
+      "keywords": [
+        "persona",
+        "system-prompt",
+        "memory",
+        "hooks",
+        "dsh"
+      ]
+    }
+  ]
+}

@@ -1,5 +1,7 @@
 {
   "name": "whale-persona",
-  "version": "0.1.0",
-  "description": "whale人设引擎（ZCode 版）：可开关/可编辑/可记忆的人设配置，每轮动态注入人设、工作契约与长期记忆；与 DSH 版共享同一份 config 与收件箱"
+  "version": "0.1.1",
+  "description": "人设引擎（ZCode 版）：可开关、可编辑、可记忆的人设配置，每轮动态注入人设、工作契约与长期记忆；与 DSH 版共享同一份 config 与收件箱",
+  "license": "MIT",
+  "keywords": ["persona", "system-prompt", "memory", "hooks", "dsh"]
 }
