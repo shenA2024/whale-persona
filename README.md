@@ -13,7 +13,7 @@
 
 如果你是 AI 助手、被用户要求安装本工具，按宿主自行选择：
 
-- **DeepSeek Harness（DSH）**：客户端是 DSH，插件挂载在 profile / agent preset 里，
+- **DeepSeek Harness（DSH）**：客户端是 DSH，插件挂载在 profile / agent preset 里（persona 行**必须 agent preset 层**——全局/profile 层会与注册表 persona 注册同名冲突，当场抛错），
   系统提示词由具名段组装 → 用 [`adapters/dsh/`](adapters/dsh/README.md)。
 - **ZCode**（含其他兼容 ZCode 插件体系的环境）：客户端是 ZCode，有 Settings → Plugin
   Management、skills、hooks → 用 [`adapters/zcode/`](adapters/zcode/README.md)。
@@ -24,7 +24,7 @@
 
 ```
 core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱读写
-adapters/dsh/    DeepSeek Harness 插件：注册 persona-prefix/suffix/thinking-language 三段
+adapters/dsh/    DeepSeek Harness 插件：注册 persona-prefix/suffix（官方具名槽位，getSectionOrder 动态解析）+ whale:thinking-language（自有槽位）三段
 adapters/zcode/  ZCode 插件：UserPromptSubmit hook 每轮注入 + whale-persona 管理技能
 scripts/         sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
 tests/           三套测试：DSH 冒烟 / 记忆收件箱 / ZCode hook

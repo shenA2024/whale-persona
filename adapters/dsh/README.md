@@ -6,8 +6,12 @@ DSH 宿主适配；渲染核心在仓库根 [`core/`](../../core/)（与 ZCode �
 
 ## 特性
 
-- **人设可开关**：配置关掉 = 渲染为空（无人设），不残留、不炸会话。注意本插件是官方
-  `@deepseek-ai/dsh-persona` 的**替代**而非叠加——只有完整卸载挂载行才会回到官方人设。
+- **人设可开关**：配置关掉 = 渲染为空（无人设），不残留、不炸会话。与官方
+  `@deepseek-ai/dsh-persona` 占同一个架构位（preset 级 persona 遮蔽行）：**同一层两者只能挂一个**
+  （同名段装配抛错）；卸掉本插件挂载行即回到官方/部署级人设。
+- **能力差异要心里有数**：比官方多的——分档自称/契约勾选/记忆收件箱/思维链语言/用户级运行时改配置；
+  比官方少的——`complete`（人设独占整个系统提示词）、`includeRuntimeContext`（关运行时上下文）、
+  全量 `{{变量}}` 插值（本插件刻意关闭以防未知变量炸会话，仅支持 `{{cwd}}`）。
 - **自称/称呼/立场/契约**：双模型档自称（flash 档 / pro 档）、称呼用户、一句话关系立场（stance）、
   整段立场正文（character）、逐条可勾选的工作契约；产物是每步重新求值的提示词段，改完下一步生效。
 - **思维链语言**：`off`（默认不干预）/ `zh-CN` / `en` …，只影响思考可读性与 token，不改答复语言。
@@ -22,7 +26,9 @@ DSH 宿主适配；渲染核心在仓库根 [`core/`](../../core/)（与 ZCode �
 # 1) 克隆整个仓库（挂载需要 core/，不要只拷本目录），装进 DSH profile：
 dsh plugin --profile web add link:/path/to/whale-persona/repo/adapters/dsh
 
-# 2) 在 profile 或 agent preset 的补丁层挂一行（preset 层才能遮蔽部署级默认人设）：
+# 2) 在 agent preset 的补丁层挂一行（必须 agent scope：跨层同名=遮蔽部署级默认人设，
+#    这正是官方的替换机制；挂到全局/profile 层会与注册表自身的 persona 注册同名冲突，
+#    装配当场抛错。同一 preset 里已挂官方 dsh-persona 行的，先卸掉它再挂本插件）：
 #    - id: whale-persona
 #      name: '@dsh-external/dsh-whale-persona'
 ```
