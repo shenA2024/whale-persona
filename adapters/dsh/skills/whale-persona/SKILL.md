@@ -1,6 +1,6 @@
 ---
 name: whale-persona
-description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harness 版）。当用户想查看、创建或修改 AI 人设（自称、称呼、关系立场、性格正文）、增删工作契约、设置思维链语言、管理长期记忆（收件箱晋升、坏行清理、收口开关），或说「更新人设」「加条契约」「看看当前人设」时使用。
+description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harness 版）。当用户想查看、创建或修改 AI 人设（自称、称呼、关系立场、性格正文）、增删工作契约、设置思维链语言、管理长期记忆（收件箱晋升、坏行清理、收口开关）、改人设预设的显示名（「设置 → Agent 预设」里那张卡片叫什么），或说「更新人设」「加条契约」「看看当前人设」「以后叫某某」时使用。
 ---
 
 # whale-persona · 人设配置管理（DSH）
@@ -91,3 +91,19 @@ buildPersonaPrompt(cfg, 'flash', cwd, { capture: captureActive(cfg, agent) })
 ```
 
 或者直接跑仓库测试看夹具输出：`node tests/smoke.mjs`、`node tests/inbox.mjs`。
+
+## 两个"名字"别搞混（用户说「改个名字」时先分清）
+
+| 名字 | 是什么 | 存在哪 | 怎么改 |
+|---|---|---|---|
+| **预设显示名** | 「设置 → Agent 预设」里那张卡片的名字（出厂写「自定义人设」） | `$DSH_HOME/.agent-presets/whale-persona/preset.yml` 的 `name:` 一行 | 改那一行；预设元数据变化在下一次挂载/刷新时生效 |
+| **自称** | AI 在提示词里管自己叫什么（`{selfName}` 渲染出来的词） | `config.json` 的 `persona.selfNameFlash` / `selfNamePro`（flash/pro 两档） | 照「修改纪律」读改写回，**下一步生效** |
+
+判断口诀：用户说「设置里那张卡叫什么」= 预设显示名；用户说「你以后自称什么」= 自称。
+两个都改时，先列前后对照再落盘，别一次改两处还不告诉用户改了哪两处。
+
+## 设置面板（看得见的那一层）
+
+装了 UI 包（`@shenA2024/whale-persona-ui`，挂在 profile 平面）后，「设置 → 人设」是一张**只读**卡片，显示此刻实际注入的三段正文（可按 flash/pro 档切换）、逐条契约与开关态、长期记忆条数与最近几条。
+用户问「我现在的人设到底是什么」→ **先让他看这张卡片**，再考虑是不是要改配置；卡片上的文本与运行期注入同源（同一份 `core/`），不是另算的近似值。
+卡片只读，写入仍然只有两条路：本地编辑器（`node scripts/ui.mjs`）或你读改写回配置。

@@ -1,0 +1,172 @@
+/**
+ * @shenA2024/whale-persona-ui —— 设置面板（宿主半身）
+ *
+ * 它只做一件事：把「人设引擎此刻实际会注入什么」端给设置页，让用户看得见。
+ * 只读 —— 写配置仍然只有两条路：本地编辑器（scripts/ui.mjs）或让 AI 改。
+ *
+ * 挂载位必须是 **profile patch 栈**（UI 插件进不了 agent preset 平面）；
+ * 人设本体（@shenA2024/whale-persona 的三个段）必须在 **agent preset 平面**。
+ * 挂错平面的后果不是「这个插件失效」，而是整个插件树加载失败、DSH 起不来
+ * （prompt section "deployment:persona-prefix" is already registered）。
+ *
+ * 与渲染的唯一源一致：三段文本全部来自 core/，与运行期注入**同一套代码**，
+ * 不是面板自己拼的近似值。
+ */
+import { existsSync, statSync } from 'node:fs'
+import { configPath, createStore } from '../../core/store.js'
+import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../core/prompt.js'
+import { captureMode } from '../../core/capture.js'
+import { readInbox, resolveInbox } from '../../core/memoryInbox.js'
+import { selfNameOf } from '../../core/render.js'
+
+export const name = '@shenA2024/whale-persona-ui'
+
+/** 只依赖宿主 webServer：开 HTTP 路由给浏览器半身用 */
+export const inject = ['webServer']
+
+const API_PATH = '/whale-persona/api'
+
+/** 面板里显示的 flash / pro 两档代表模型（与 core/render.js 的 tierOf 判定一致） */
+const TIER_MODEL = { flash: 'deepseek-v4-flash', pro: 'deepseek-v4-pro' }
+
+/**
+ * 本机护栏：只有 loopback 的请求能读。
+ * 刻意**不**绑定部署端口 —— 端口由宿主决定（dsh --port 可以随时换），
+ * 写死端口会让面板在换端口后 403（本机实测过：3081 上硬编码 3080 的旧写法直接拒答）。
+ */
+function guard(req) {
+  const host = String((req.headers && req.headers.host) || '').toLowerCase()
+  if (!isLoopbackHost(host)) return { code: 403, error: 'host not allowed' }
+  const origin = req.headers && req.headers.origin
+  if (origin !== undefined && origin !== null && String(origin) !== '' && String(origin) !== 'null') {
+    let hostname = ''
+    try { hostname = new URL(String(origin)).hostname } catch { return { code: 403, error: 'origin not allowed' } }
+    if (!isLoopbackHost(hostname)) return { code: 403, error: 'origin not allowed' }
+  }
+  return null
+}
+
+function isLoopbackHost(value) {
+  const raw = String(value || '').trim().toLowerCase()
+  if (!raw) return false
+  const hostname = raw.startsWith('[') ? raw.slice(1, raw.indexOf(']'))
+    : (raw.includes(':') ? raw.slice(0, raw.lastIndexOf(':')) : raw)
+  return hostname === '127.0.0.1' || hostname === 'localhost' || hostname === '::1'
+}
+
+function editorInfo() {
+  const port = Number(process.env.DSH_WHALE_UI_PORT) > 0 ? Number(process.env.DSH_WHALE_UI_PORT) : 8787
+  return { url: 'http://127.0.0.1:' + port, port }
+}
+
+/** 本地编辑器在不在跑（400ms 超时；失败一律当没跑，不阻塞面板） */
+async function editorRunning(url) {
+  try {
+    const ctl = new AbortController()
+    const t = setTimeout(() => ctl.abort(), 400)
+    const res = await fetch(url + '/api/config', { signal: ctl.signal })
+    clearTimeout(t)
+    return !!res && res.status < 500
+  } catch {
+    return false
+  }
+}
+
+function fileState(file) {
+  try {
+    const st = statSync(file)
+    return { exists: true, bytes: st.size, mtimeMs: st.mtimeMs }
+  } catch {
+    return { exists: false, bytes: 0, mtimeMs: 0 }
+  }
+}
+
+/** 面板正文：与运行期同源的三段 + 配置概览 */
+function buildSummary(query) {
+  const file = configPath()
+  const state = fileState(file)
+  const store = createStore()
+  const cfg = store.get()
+
+  const wanted = String(query.get('tier') || '').toLowerCase()
+  const tier = wanted === 'pro' ? 'pro' : 'flash'
+  const model = TIER_MODEL[tier]
+  // 面板没有会话，拿不到本会话的 /memory 开关：只把 capture:'always'（每轮注入）算作激活
+  const capture = captureMode(cfg) === 'always'
+  const cwdLabel = '<当前工作目录>'
+
+  const sections = { prefix: '', thinking: '', suffix: '' }
+  try { sections.prefix = buildPersonaPrompt(cfg, model, '', { capture }) } catch { /* 降级：空段 */ }
+  try { sections.thinking = buildThinkingLanguage(cfg) } catch { /* 降级 */ }
+  try { sections.suffix = buildSuffix(cfg, cwdLabel) } catch { /* 降级 */ }
+
+  const persona = (cfg && cfg.persona) || {}
+  const contracts = Array.isArray(persona.contracts)
+    ? persona.contracts.map((c, i) => ({
+      id: typeof c.id === 'string' && c.id ? c.id : 'contract-' + (i + 1),
+      text: typeof c.text === 'string' ? c.text : '',
+      on: c.on !== false,
+    })).filter((c) => c.text)
+    : []
+
+  const memory = (cfg && cfg.memory) || {}
+  const manual = Array.isArray(memory.entries) ? memory.entries.filter((e) => e && typeof e.text === 'string') : []
+  const inbox = memory.inbox === false ? [] : readInbox(resolveInbox(memory.inboxPath))
+  const maxEntries = Number(memory.maxEntries) > 0 ? Number(memory.maxEntries) : 30
+
+  return {
+    ok: true,
+    tier,
+    model,
+    configPath: file,
+    configState: state,
+    enabled: cfg.enabled !== false,
+    thinkingLanguage: typeof cfg.thinkingLanguage === 'string' ? cfg.thinkingLanguage : 'off',
+    selfName: { flash: selfNameOf(cfg, 'flash'), pro: selfNameOf(cfg, 'pro') },
+    userName: typeof persona.userName === 'string' ? persona.userName : '',
+    contracts,
+    memory: {
+      enabled: memory.enabled === true,
+      inbox: memory.inbox !== false,
+      capture: captureMode(cfg),
+      captureNow: capture,
+      manualEntries: manual.length,
+      maxEntries,
+      inboxLines: inbox.length,
+      recent: inbox.slice(-5).map((e) => ({ text: e.text, tag: e.tag || '' })),
+    },
+    sections,
+  }
+}
+
+export function apply(ctx) {
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'prefix',
+    path: API_PATH,
+    handler: async (req, res) => {
+      const send = (code, payload) => {
+        res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+        res.end(JSON.stringify(payload))
+      }
+      try {
+        const blocked = guard(req)
+        if (blocked) return send(blocked.code, { ok: false, error: blocked.error })
+
+        const url = new URL(req.url, 'http://127.0.0.1')
+        if (url.pathname === API_PATH + '/summary' && req.method === 'GET') {
+          const summary = buildSummary(url.searchParams)
+          const editor = editorInfo()
+          summary.editor = { url: editor.url, port: editor.port, running: await editorRunning(editor.url) }
+          return send(200, summary)
+        }
+        if (url.pathname === API_PATH + '/health' && req.method === 'GET') {
+          return send(200, { ok: true, exists: existsSync(configPath()) })
+        }
+        return send(404, { ok: false, error: 'not found' })
+      } catch (e) {
+        // 面板坏掉不能连累设置页：永远回一个可读的 JSON
+        return send(500, { ok: false, error: String((e && e.message) || e) })
+      }
+    },
+  }), 'whale-persona-ui: api route')
+}

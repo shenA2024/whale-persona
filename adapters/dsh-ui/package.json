@@ -1,0 +1,24 @@
+{
+  "name": "@shenA2024/whale-persona-ui",
+  "version": "0.7.0",
+  "description": "DSH settings panel for whale-persona: a read-only card showing exactly which persona text the engine injects right now (self-name / character / contracts / thinking language / long-term memory), plus a one-click way to open the local config editor.",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": { "default": "./index.js" },
+    "./client": { "default": "./client.js" },
+    "./package.json": { "default": "./package.json" }
+  },
+  "dsh": {
+    "client": { "platform": "web" }
+  },
+  "files": ["index.js", "client.js", "README.md"],
+  "keywords": ["dsh", "dsh-plugin", "persona", "settings", "deepseek-harness"],
+  "engines": { "node": ">=20" },
+  "private": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shenA2024/whale-persona.git"
+  }
+}

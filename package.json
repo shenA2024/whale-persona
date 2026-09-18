@@ -1,0 +1,30 @@
+{
+  "name": "@shenA2024/whale-persona",
+  "version": "0.7.0",
+  "description": "Persona engine for AI coding harnesses: switchable, editable, memorable persona (self-name / user address / stance / character / per-item work contracts / thinking language / confirmation-gated long-term memory). Ships a DeepSeek Harness adapter (system-prompt sections + settings panel) and a ZCode adapter, sharing one config.",
+  "type": "module",
+  "main": "./adapters/dsh/index.js",
+  "exports": {
+    ".": { "default": "./adapters/dsh/index.js" },
+    "./package.json": { "default": "./package.json" }
+  },
+  "bin": {
+    "whale-persona-dsh": "./scripts/install-dsh.mjs"
+  },
+  "scripts": {
+    "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/ui-panel.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs",
+    "install-dsh": "node scripts/install-dsh.mjs",
+    "render": "node scripts/render-preview.mjs",
+    "ui": "node scripts/ui.mjs",
+    "sync-core": "node scripts/sync-core.mjs"
+  },
+  "files": ["core", "adapters", "scripts", "examples", "README.md", "LICENSE"],
+  "keywords": ["dsh", "dsh-plugin", "persona", "system-prompt", "memory", "deepseek-harness", "zcode"],
+  "engines": { "node": ">=20" },
+  "private": false,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shenA2024/whale-persona.git"
+  }
+}
