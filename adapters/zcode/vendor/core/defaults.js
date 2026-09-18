@@ -16,6 +16,8 @@ export const DEFAULTS = {
   thinkingLanguage: 'off',
   persona: {
     enabled: true,
+    /** 当前应用的人设预设 id（套件 whale-ui 用；纯引擎用户留空即可） */
+    preset: '',
     /** 自称（按模型分档：flash 档 / pro 档；只填一个时另一档回落它） */
     selfNameFlash: '我',
     selfNamePro: '我',
@@ -35,9 +37,9 @@ export const DEFAULTS = {
     enabled: false,
     /** 手工条目（用户在 UI 里直接维护，权威层） */
     entries: [],
-    /** 收件箱（AI 阶段收口提议 → 用户确认 → 只追加式入库，参考层） */
+    /** 收件箱（AI 阶段收口提议 → 用户确认 → 只追加式入库；[更新]/[删去]以 supersede/drop 操作行落地，参考层） */
     inbox: true,
-    /** 注入上限（收件箱，保新弃旧） */
+    /** 注入上限（收件箱；当前项目 tag 命中优先，其次全局，超出保新弃旧） */
     maxEntries: 30,
     /** 收件箱文件路径；空 = $DSH_HOME/whale-suite/memory-inbox.jsonl */
     inboxPath: '',
@@ -56,6 +58,7 @@ export function mergeConfig(user) {
     thinkingLanguage: u.thinkingLanguage === undefined ? d.thinkingLanguage : String(u.thinkingLanguage),
     persona: {
       enabled: p.enabled !== undefined ? !!p.enabled : d.persona.enabled,
+      preset: p.preset !== undefined ? p.preset : d.persona.preset,
       selfNameFlash: p.selfNameFlash || d.persona.selfNameFlash,
       selfNamePro: p.selfNamePro || d.persona.selfNamePro,
       userName: p.userName || d.persona.userName,

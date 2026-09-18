@@ -14,6 +14,12 @@ const HOOK = path.join(ROOT, 'adapters', 'zcode', 'hooks', 'render.mjs')
 
 const env = { ...process.env, WHALE_PERSONA_CONFIG: cfgFile, DSH_HOME: tmp, DSH_WHALE_CONFIG: cfgFile }
 
+// 断言助手：false 必须非零退出（跑器/CI 只认退出码，纯 console.log 会漏放坏改）
+const t = (name, ok) => {
+  console.log(name + ':', ok)
+  if (!ok) process.exitCode = 1
+}
+
 const runHook = (stdin, extraEnv = {}) => spawnSync(process.execPath, [HOOK], {
   input: stdin, encoding: 'utf8', env: { ...env, ...extraEnv },
 })
@@ -37,26 +43,26 @@ writeFileSync(cfgFile, JSON.stringify({
   const r = runHook(JSON.stringify({ prompt: 'hi', cwd: 'D:/work', model: 'deepseek-v4.1-flash' }))
   const out = JSON.parse(r.stdout)
   const ctx = out && out.hookSpecificOutput && out.hookSpecificOutput.additionalContext
-  console.log('Z1 exit0:', r.status === 0)
-  console.log('Z1 事件名:', out.hookSpecificOutput.hookEventName === 'UserPromptSubmit')
-  console.log('Z1 persona:', ctx.includes('shenA2024的编程搭档。') && ctx.includes('你是小助手。') && ctx.includes('结论先行。'))
-  console.log('Z1 思维链语言:', ctx.includes('内部思考语言') && ctx.includes('简体中文'))
-  console.log('Z1 收件箱数据块:', ctx.includes('历史备忘') && ctx.includes('「红线：游戏存档目录永远不碰」'))
-  console.log('Z1 suffix(cwd替换):', ctx.includes('工作目录在 D:/work。'))
+  t('Z1 exit0:', r.status === 0)
+  t('Z1 事件名:', out.hookSpecificOutput.hookEventName === 'UserPromptSubmit')
+  t('Z1 persona:', ctx.includes('shenA2024的编程搭档。') && ctx.includes('你是小助手。') && ctx.includes('结论先行。'))
+  t('Z1 思维链语言:', ctx.includes('内部思考语言') && ctx.includes('简体中文'))
+  t('Z1 收件箱数据块:', ctx.includes('历史备忘') && ctx.includes('「红线：游戏存档目录永远不碰」'))
+  t('Z1 suffix(cwd替换):', ctx.includes('工作目录在 D:/work。'))
 }
 
 // Z2 pro 模型 → selfNamePro 分档
 {
   const r = runHook(JSON.stringify({ model: 'glm-5-pro' }))
   const out = JSON.parse(r.stdout)
-  console.log('Z2 pro分档:', out.hookSpecificOutput.additionalContext.includes('你是首席助手。'))
+  t('Z2 pro分档:', out.hookSpecificOutput.additionalContext.includes('你是首席助手。'))
 }
 
 // Z3 纯默认（空对象配置）→ 输出为空（装上不改行为）
 {
   writeFileSync(cfgFile, JSON.stringify({}), 'utf8')
   const r = runHook('{}')
-  console.log('Z3 纯默认输出空:', r.status === 0 && r.stdout === '')
+  t('Z3 纯默认输出空:', r.status === 0 && r.stdout === '')
 }
 
 // Z4 坏 stdin / 坏 JSON 配置 → 安静 exit 0，不炸
@@ -65,14 +71,14 @@ writeFileSync(cfgFile, JSON.stringify({
   writeFileSync(cfgFile, '{broken json', 'utf8')
   const r2 = runHook('{}')
   writeFileSync(cfgFile, JSON.stringify({ enabled: true, persona: { enabled: true, character: 'x' } }), 'utf8')
-  console.log('Z4 坏stdin安静:', r1.status === 0 && r1.stdout === '')
-  console.log('Z4 坏config安静:', r2.status === 0 && r2.stdout === '')
+  t('Z4 坏stdin安静:', r1.status === 0 && r1.stdout === '')
+  t('Z4 坏config安静:', r2.status === 0 && r2.stdout === '')
 }
 
 // Z5 config 不存在（首次安装）→ 纯默认空输出
 {
   const r = runHook('{}', { WHALE_PERSONA_CONFIG: path.join(tmp, 'nope.json'), DSH_WHALE_CONFIG: path.join(tmp, 'nope2.json') })
-  console.log('Z5 无config安静:', r.status === 0 && r.stdout === '')
+  t('Z5 无config安静:', r.status === 0 && r.stdout === '')
 }
 
 // Z6 preview 模式：直接打印渲染全文（skill 预览/静态导出用）
@@ -82,7 +88,7 @@ writeFileSync(cfgFile, JSON.stringify({
     persona: { enabled: true, selfNameFlash: '小助手', character: '预览模式测试。' },
   }), 'utf8')
   const r = spawnSync(process.execPath, [HOOK, '--preview'], { encoding: 'utf8', env })
-  console.log('Z6 preview:', r.status === 0 && r.stdout.includes('预览模式测试。'))
+  t('Z6 preview:', r.status === 0 && r.stdout.includes('预览模式测试。'))
 }
 
 // Z7 vendor 与 core 一致（忘了跑 sync-core 时这里红）
@@ -92,5 +98,22 @@ writeFileSync(cfgFile, JSON.stringify({
   const vendorDir = path.join(ROOT, 'adapters', 'zcode', 'vendor', 'core')
   const files = ['defaults.js', 'render.js', 'store.js', 'memoryInbox.js', 'prompt.js']
   const allSame = files.every((f) => existsSync(path.join(vendorDir, f)) && hash(path.join(coreDir, f)) === hash(path.join(vendorDir, f)))
-  console.log('Z7 vendor与core一致:', allSame)
+  t('Z7 vendor与core一致:', allSame)
+}
+
+// Z8 相关性注入（cwd 穿透钩子）：tag 命中当前目录的条目挤掉更旧的全局条目；纪律含三类候选
+{
+  writeFileSync(cfgFile, JSON.stringify({
+    enabled: true,
+    persona: { enabled: true, selfNameFlash: '小助手', character: '你是{selfName}。' },
+    memory: { enabled: true, maxEntries: 1, inbox: true, inboxPath: inboxFile },
+  }), 'utf8')
+  writeFileSync(inboxFile, [
+    JSON.stringify({ text: '全局旧偏好', at: 't1' }),
+    JSON.stringify({ text: '项目事实', at: 't2', tag: 'work' }),
+  ].join('\n') + '\n', 'utf8')
+  const r = runHook(JSON.stringify({ prompt: 'hi', cwd: 'D:/work' }))
+  const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext
+  t('Z8 相关性注入:', ctx.includes('「项目事实（work）」') && ctx.includes('「全局旧偏好」') === false)
+  t('Z8 纪律三类候选:', ctx.includes('[新增]') && ctx.includes('[更新]') && ctx.includes('[删去]'))
 }

@@ -53,7 +53,7 @@ function render(cfg, input) {
   const model = input && typeof input.model === 'string' ? input.model : null
   const cwd = input && typeof input.cwd === 'string' ? input.cwd : ''
   const parts = [
-    buildPersonaPrompt(cfg, model),
+    buildPersonaPrompt(cfg, model, cwd),
     buildThinkingLanguage(cfg),
     buildSuffix(cfg, cwd),
   ].filter(Boolean)
