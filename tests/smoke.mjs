@@ -107,3 +107,13 @@ t('SEC10 dispose:', typeof dispose === 'function')
   d()
   t('SEC12 dispose 不抛错:', true)
 }
+
+// SEC13 README 承诺的命令可跑：render-preview 读示例配置能渲染出人设段
+{
+  const { spawnSync } = await import('node:child_process')
+  const { fileURLToPath } = await import('node:url')
+  const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+  const r = spawnSync(process.execPath, [path.join(root, 'scripts', 'render-preview.mjs'), '--config', 'examples/demo-config.json', '--capture'], { cwd: root, encoding: 'utf8' })
+  t('SEC13 render-preview 可跑:', r.status === 0 && r.stdout.includes('你是小助手') && r.stdout.includes('工作契约'))
+  t('SEC13 关掉的契约不出现:', !r.stdout.includes('这条是关掉的'))
+}

@@ -35,6 +35,30 @@ dsh plugin --profile web add link:/path/to/whale-persona/repo/adapters/dsh
 
 要求：DSH ≥ 0.1.6-alpha.1，Node ≥ 20。无运行时依赖。
 
+## 配套技能（推荐装）
+
+本目录带一份 DSH 技能 `skills/whale-persona/SKILL.md`：装上后用户**不用手写 JSON**——
+直接说「加条契约：结尾不要出现征询式问句」，AI 会读配置、给前后对照、确认后写回。
+这是本插件在 DSH 侧唯一的图形外交互面（本仓不含设置页 UI）。
+
+装法二选一：
+
+```bash
+# ① 放进用户级技能根（对全部工作区生效；Windows 上是 %USERPROFILE%\.dsh\skills）
+mkdir -p ~/.dsh/skills && cp -r <克隆路径>/adapters/dsh/skills/whale-persona ~/.dsh/skills/
+```
+
+```yaml
+# ② 或在 preset 里给技能发现加一个自定义根（不动全局）
+#    - id: skill-filesystem
+#      name: '@deepseek-ai/dsh-skill-filesystem'
+#      config:
+#        customSkillDirs: ['<克隆路径>/adapters/dsh/skills']
+```
+
+技能发现根（宿主约定，按优先级）：`<项目>/.dsh/skills`、`<项目>/.agents/skills`、
+`~/.dsh/skills`、`~/.agents/skills`，以及上面配置的自定义根。
+
 ## 配置
 
 `$DSH_HOME/whale-persona/config.json`（也可用环境变量 `DSH_WHALE_CONFIG` 指定别的文件；
