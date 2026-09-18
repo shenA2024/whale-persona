@@ -25,7 +25,6 @@
   "private": false,
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-name/dsh-whale-persona",
-    "_note": "发布前换成你的仓库地址"
+    "url": "git+https://github.com/shenA2024/dsh-whale-persona.git"
   }
 }
