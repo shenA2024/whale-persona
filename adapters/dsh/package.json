@@ -20,7 +20,7 @@
     "skills"
   ],
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/zcode-hook.mjs",
+    "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs",
     "sync-core": "node scripts/sync-core.mjs"
   },
   "private": false,

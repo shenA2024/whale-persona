@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>whale-persona · 配置编辑器</title>
+<style>
+  :root{--t1:#e8ecf2;--t2:#98a2ae;--line:rgba(255,255,255,.10);--accent:#4c8dff;--ok:#3fb950;--warn:#e5a03c}
+  *{box-sizing:border-box}
+  body{margin:0;color:var(--t1);font:13px/1.65 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+       background:radial-gradient(1100px 520px at 8% -12%,#1c2432 0%,#12161d 46%,#0c0e12 100%);min-height:100vh}
+  header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 20px;
+         border-bottom:1px solid var(--line);background:rgba(14,17,22,.82);backdrop-filter:blur(10px)}
+  header h1{font-size:14px;font-weight:600;margin:0}
+  .path{color:var(--t2);font-size:11.5px;font-family:ui-monospace,Consolas,monospace}
+  .grow{flex:1}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(63,185,80,.16)}
+  .dot.dirty{background:var(--warn);box-shadow:0 0 0 3px rgba(229,160,60,.18)}
+  button{font:inherit;font-size:12px;height:28px;padding:0 12px;border-radius:9px;cursor:pointer;color:var(--t1);
+         border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02))}
+  button:hover{border-color:rgba(255,255,255,.22);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
+  button.primary{border-color:rgba(140,180,255,.45);background:radial-gradient(120% 120% at 50% 0%,rgba(120,175,255,.42),rgba(46,110,220,.5) 70%);color:#f2f7ff}
+  main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,520px);gap:16px;padding:16px 20px 60px;align-items:start}
+  @media (max-width:1100px){main{grid-template-columns:1fr}}
+  .card{border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.022);padding:12px 14px;margin-bottom:14px;
+        backdrop-filter:blur(4px)}
+  .card h2{font-size:12px;font-weight:600;margin:0 0 10px;color:var(--t1)}
+  .row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .row>label{flex:0 0 150px;color:var(--t2)}
+  input[type=text],input[type=number],select,textarea{flex:1;min-width:0;font:inherit;font-size:12px;color:var(--t1);
+        background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:4px 8px}
+  input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
+  textarea{min-height:74px;resize:vertical;line-height:1.6}
+  .hint{color:var(--t2);font-size:11px;margin:4px 0 0 158px}
+  .contract{display:flex;gap:8px;align-items:center;margin:6px 0}
+  .contract input[type=text]{flex:1}
+  .contract button{height:26px;padding:0 9px}
+  .pre{border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.28);padding:10px 12px;margin:0 0 10px}
+  .pre h3{font-size:11.5px;margin:0 0 6px;color:var(--t2);font-weight:600}
+  .pre pre{margin:0;white-space:pre-wrap;word-break:break-word;font:11.5px/1.6 ui-monospace,Consolas,monospace;color:#cfe0ff;max-height:280px;overflow:auto}
+  .empty{color:var(--t2);font-style:italic}
+  .warn{font-size:11.5px;color:#e5a03c;border:1px solid rgba(229,160,60,.35);border-radius:10px;background:rgba(229,160,60,.08);padding:6px 9px;margin:0 0 8px}
+  .status{font-size:11.5px;color:var(--t2)}
+  .status.ok{color:var(--ok)}
+  .status.err{color:#e5534b}
+</style>
+</head>
+<body>
+<header>
+  <h1>whale-persona · 配置编辑器</h1>
+  <span class="path" id="filePath">…</span>
+  <span class="grow"></span>
+  <span class="dot" id="dirty" title="绿色＝已保存，橙色＝有未保存改动"></span>
+  <span class="status" id="status">就绪</span>
+  <button class="primary" id="save">保存</button>
+</header>
+<main>
+<section id="form">
+  <div class="card"><h2>总开关</h2>
+    <div class="row"><label>启用本插件人设</label><input type="checkbox" data-k="enabled" id="enabled"></div>
+    <div class="row"><label>思维链语言</label><select data-k="thinkingLanguage" id="thinkingLanguage"></select></div>
+    <p class="hint">关掉总开关 = 完全没有人设（不是回到宿主默认人设）；卸载插件才是回到默认。</p>
+  </div>
+  <div class="card"><h2>人设与称呼</h2>
+    <div class="row"><label>启用 persona 段</label><input type="checkbox" data-p="enabled" id="pEnabled"></div>
+    <div class="row"><label>自称（flash 档）</label><input type="text" data-p="selfNameFlash" id="selfNameFlash"></div>
+    <div class="row"><label>自称（pro 档）</label><input type="text" data-p="selfNamePro" id="selfNamePro"></div>
+    <div class="row"><label>它怎么称呼你</label><input type="text" data-p="userName" id="userName"></div>
+    <div class="row"><label>关系立场（一句话）</label><input type="text" data-p="stance" id="stance"></div>
+    <div class="row"><label>立场正文</label><textarea data-p="character" id="character"></textarea></div>
+    <p class="hint">自称通过 <b>{selfName}</b> 占位符生效：写进「立场正文」或任一条契约里才会出现在提示词中；同理称呼用 {userName}。</p>
+    <div class="row"><label>末尾追加句</label><input type="text" data-p="suffix" id="suffix"></div>
+    <p class="hint">末尾句支持 {{cwd}}（会替换成当前工作目录）。</p>
+  </div>
+  <div class="card"><h2>工作契约</h2><div id="contracts"></div>
+    <button id="addContract" style="margin-top:8px">+ 新增契约</button>
+    <p class="hint">写得具体可验证才有效：「结尾不要出现征询式问句」✅；「高质量」❌。5–10 条为宜。</p>
+  </div>
+  <div class="card"><h2>长期记忆</h2>
+    <div class="row"><label>启用长期记忆</label><input type="checkbox" data-m="enabled" id="mEnabled"></div>
+    <div class="row"><label>收件箱确认流</label><input type="checkbox" data-m="inbox" id="mInbox"></div>
+    <div class="row"><label>收口纪律</label><select data-m="capture" id="mCapture">
+      <option value="on-demand">on-demand（默认：会话里 /memory on 才注入）</option>
+      <option value="always">always（每轮都注入）</option></select></div>
+    <div class="row"><label>收件箱注入上限</label><input type="number" min="1" data-m="maxEntries" id="mMax"></div>
+    <div class="row"><label>收件箱路径</label><input type="text" data-m="inboxPath" id="mInboxPath" placeholder="空 = 配置目录下的 memory-inbox.jsonl"></div>
+    <div style="margin-top:10px" id="entries"></div>
+    <button id="addEntry" style="margin-top:8px">+ 新增手工条目</button>
+    <p class="hint">手工条目＝你明确要求记住的（进准则块）；收件箱＝AI 提议、你确认后追加的流水。</p>
+  </div>
+</section>
+<section>
+  <div class="card"><h2>实际注入的三段文本（实时预览）</h2>
+    <div class="row"><label style="flex:0 0 auto">预览时视为收口开关已打开</label><input type="checkbox" id="previewCapture" checked></div>
+    <p class="hint" style="margin-left:0">预览不写盘，用同一套 core/ 渲染 —— 与运行期逐字一致。</p>
+    <div id="warnings"></div>
+    <div class="pre"><h3>deployment:persona-prefix</h3><pre id="pvPrefix"></pre></div>
+    <div class="pre"><h3>whale:thinking-language</h3><pre id="pvThinking"></pre></div>
+    <div class="pre"><h3>deployment:persona-suffix</h3><pre id="pvSuffix"></pre></div>
+  </div>
+</section>
+</main>
+<script>
+var CFG = { enabled: true, thinkingLanguage: "off", persona: {}, memory: {} };
+var LANGS = ["off","zh-CN","zh-TW","en","ja","ko"];
+var dirty = false;
+function el(id){ return document.getElementById(id); }
+function setStatus(t, cls){ var s = el("status"); s.textContent = t; s.className = "status" + (cls ? " " + cls : ""); }
+function markDirty(on){ dirty = on; el("dirty").className = "dot" + (on ? " dirty" : ""); }
+function text(node, value, onChange){
+  var i = document.createElement("input"); i.type = "text"; i.value = value == null ? "" : value;
+  i.addEventListener("input", function(){ onChange(i.value); }); return i;
+}
+function contractRow(c, i){
+  var row = document.createElement("div"); row.className = "contract";
+  var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = c.on !== false;
+  cb.addEventListener("change", function(){ c.on = cb.checked; touched(); });
+  row.appendChild(cb);
+  row.appendChild(text(null, c.text, function(v){ c.text = v; touched(); }));
+  var del = document.createElement("button"); del.textContent = "删";
+  del.addEventListener("click", function(){ CFG.persona.contracts.splice(i,1); render(); touched(); });
+  row.appendChild(del); return row;
+}
+function entryRow(m, i){
+  var row = document.createElement("div"); row.className = "contract";
+  var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = m.on !== false;
+  cb.addEventListener("change", function(){ m.on = cb.checked; touched(); });
+  row.appendChild(cb);
+  row.appendChild(text(null, m.text, function(v){ m.text = v; touched(); }));
+  var del = document.createElement("button"); del.textContent = "删";
+  del.addEventListener("click", function(){ CFG.memory.entries.splice(i,1); render(); touched(); });
+  row.appendChild(del); return row;
+}
+function render(){
+  el("filePath").textContent = WFILE;
+  el("enabled").checked = CFG.enabled !== false;
+  el("thinkingLanguage").value = CFG.thinkingLanguage || "off";
+  var p = CFG.persona = CFG.persona || {};
+  p.contracts = p.contracts || [];
+  el("pEnabled").checked = p.enabled !== false;
+  el("selfNameFlash").value = p.selfNameFlash || "我";
+  el("selfNamePro").value = p.selfNamePro || "我";
+  el("userName").value = p.userName || "用户";
+  el("stance").value = p.stance || "";
+  el("character").value = p.character || "";
+  el("suffix").value = p.suffix || "";
+  var box = el("contracts"); box.innerHTML = "";
+  p.contracts.forEach(function(c, i){ box.appendChild(contractRow(c, i)); });
+  var m = CFG.memory = CFG.memory || {};
+  m.entries = m.entries || [];
+  el("mEnabled").checked = m.enabled === true;
+  el("mInbox").checked = m.inbox !== false;
+  el("mCapture").value = m.capture === "always" ? "always" : "on-demand";
+  el("mMax").value = m.maxEntries || 30;
+  el("mInboxPath").value = m.inboxPath || "";
+  var eb = el("entries"); eb.innerHTML = "";
+  m.entries.forEach(function(x, i){ eb.appendChild(entryRow(x, i)); });
+}
+var timer = null;
+function touched(){ markDirty(true); clearTimeout(timer); timer = setTimeout(preview, 250); }
+function preview(){
+  fetch("/api/preview", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ config: CFG, capture: el("previewCapture").checked }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { setStatus(d.error || "预览失败", "err"); return; }
+      show("pvPrefix", d.preview.prefix); show("pvThinking", d.preview.thinking); show("pvSuffix", d.preview.suffix);
+      showWarnings(d.preview.warnings);
+    }).catch(function(e){ setStatus("预览失败：" + e.message, "err"); });
+}
+function showWarnings(list){
+  var box = el("warnings"); box.innerHTML = "";
+  (list || []).forEach(function(w){
+    var d = document.createElement("div"); d.className = "warn"; d.textContent = "⚠ " + w; box.appendChild(d);
+  });
+}
+function show(id, text){ var n = el(id); n.textContent = text || ""; n.className = text ? "" : "empty"; if (!text) n.textContent = "(空 —— 该段不会出现在系统提示词里)"; }
+function save(){
+  setStatus("保存中…");
+  fetch("/api/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ config: CFG }) })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (!d.ok) { setStatus(d.error || "保存失败", "err"); return; }
+      markDirty(false); setStatus("已保存 · " + new Date().toLocaleTimeString(), "ok");
+      show("pvPrefix", d.preview.prefix); show("pvThinking", d.preview.thinking); show("pvSuffix", d.preview.suffix);
+      showWarnings(d.preview.warnings);
+    }).catch(function(e){ setStatus("保存失败：" + e.message, "err"); });
+}
+var WFILE = "";
+LANGS.forEach(function(l){ var o = document.createElement("option"); o.value = l; o.textContent = l; el("thinkingLanguage").appendChild(o); });
+el("enabled").addEventListener("change", function(e){ CFG.enabled = e.target.checked; touched(); });
+el("thinkingLanguage").addEventListener("change", function(e){ CFG.thinkingLanguage = e.target.value; touched(); });
+["pEnabled","selfNameFlash","selfNamePro","userName","stance","character","suffix"].forEach(function(id){
+  var key = id === "pEnabled" ? "enabled" : id;
+  el(id).addEventListener(id === "pEnabled" ? "change" : "input", function(e){
+    CFG.persona = CFG.persona || {};
+    CFG.persona[key] = id === "pEnabled" ? e.target.checked : e.target.value; touched();
+  });
+});
+el("mEnabled").addEventListener("change", function(e){ CFG.memory.enabled = e.target.checked; touched(); });
+el("mInbox").addEventListener("change", function(e){ CFG.memory.inbox = e.target.checked; touched(); });
+el("mCapture").addEventListener("change", function(e){ CFG.memory.capture = e.target.value; touched(); });
+el("mMax").addEventListener("input", function(e){ CFG.memory.maxEntries = Number(e.target.value) || 30; touched(); });
+el("mInboxPath").addEventListener("input", function(e){ CFG.memory.inboxPath = e.target.value; touched(); });
+el("addContract").addEventListener("click", function(){ CFG.persona.contracts.push({ id: "", text: "", on: true }); render(); touched(); });
+el("addEntry").addEventListener("click", function(){ CFG.memory.entries.push({ text: "", on: true }); render(); touched(); });
+el("previewCapture").addEventListener("change", preview);
+el("save").addEventListener("click", save);
+window.addEventListener("beforeunload", function(e){ if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+fetch("/api/state").then(function(r){ return r.json(); }).then(function(d){
+  if (!d.ok) { setStatus(d.error || "读取失败", "err"); return; }
+  WFILE = (d.file || "").replace(/\\\\/g, "/");
+  CFG = d.raw && Object.keys(d.raw).length ? d.raw : { enabled: true, thinkingLanguage: "off", persona: {}, memory: {} };
+  render(); show("pvPrefix", d.preview.prefix); show("pvThinking", d.preview.thinking); show("pvSuffix", d.preview.suffix);
+  setStatus(d.exists ? "已读取现有配置" : "配置文件还不存在，保存时创建", "ok");
+}).catch(function(e){ setStatus("读取失败：" + e.message, "err"); });
+</script>
+</body>
+</html>
