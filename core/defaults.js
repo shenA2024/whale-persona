@@ -21,6 +21,11 @@ export const DEFAULTS = {
     /** 自称（按模型分档：flash 档 / pro 档；只填一个时另一档回落它） */
     selfNameFlash: '我',
     selfNamePro: '我',
+    /**
+     * 按具体模型指定自称：{ "模型 id 或其中一段": "自称" }，如 {"grok-4.7": "小七", "GLM-5.1": "小五"}。
+     * 匹配：先精确（忽略大小写），再最长子串；都没命中才回落到上面的两档。空表 = 只用两档。
+     */
+    selfNameByModel: {},
     /** 它怎么称呼你 */
     userName: '用户',
     /** 关系立场（一句话即可，渲染在 character 之前），支持 {selfName}/{userName} */
@@ -66,6 +71,8 @@ export function mergeConfig(user) {
       preset: p.preset !== undefined ? p.preset : d.persona.preset,
       selfNameFlash: p.selfNameFlash || d.persona.selfNameFlash,
       selfNamePro: p.selfNamePro || d.persona.selfNamePro,
+      selfNameByModel: (p.selfNameByModel && typeof p.selfNameByModel === 'object' && !Array.isArray(p.selfNameByModel))
+        ? p.selfNameByModel : d.persona.selfNameByModel,
       userName: p.userName || d.persona.userName,
       stance: p.stance !== undefined ? p.stance : d.persona.stance,
       suffix: p.suffix !== undefined ? p.suffix : d.persona.suffix,

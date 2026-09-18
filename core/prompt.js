@@ -107,7 +107,8 @@ export function buildPersonaPrompt(cfg, model, cwd, opts) {
     const active = !!(opts && opts.capture === true)
     const tier = tierOf(model)
     const merged = withInbox(cfg, cwd)
-    return renderPersona(merged, tier) + inboxData(merged) + inboxDiscipline(merged, active)
+    // model 一路透传：自称可以按具体模型指定（见 render.js 的 selfNameOf）
+    return renderPersona(merged, tier, model) + inboxData(merged) + inboxDiscipline(merged, active)
   } catch {
     return ''
   }

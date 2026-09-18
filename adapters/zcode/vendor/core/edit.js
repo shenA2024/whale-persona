@@ -55,10 +55,14 @@ export function configWarnings(cfg, model) {
   const p = (cfg && cfg.persona) || {}
   const pro = String(model || 'flash').toLowerCase().includes('pro')
   const selfName = (pro ? (p.selfNamePro || p.selfNameFlash) : p.selfNameFlash) || ''
+  const table = (p.selfNameByModel && typeof p.selfNameByModel === 'object' && !Array.isArray(p.selfNameByModel)) ? p.selfNameByModel : {}
+  const tableNames = Object.keys(table).map((k) => String(table[k] == null ? '' : table[k]).trim()).filter(Boolean)
   const texts = [p.stance, p.character].concat((p.contracts || []).map((c) => c && c.text))
   const usesPlaceholder = texts.some((t) => typeof t === 'string' && t.includes('{selfName}'))
-  if (selfName && selfName !== '我' && !usesPlaceholder) {
-    out.push('自称「' + selfName + '」不会出现在提示词里：它只通过 {selfName} 占位符生效 —— 写进「立场正文」或任一条契约里即可。')
+  const named = [selfName].concat(tableNames).filter((n) => n && n !== '我')
+  if (named.length && !usesPlaceholder) {
+    const shown = named.slice(0, 3).map((n) => '「' + n + '」').join('、') + (named.length > 3 ? ' 等' : '')
+    out.push('自称 ' + shown + ' 不会出现在提示词里：它只通过 {selfName} 占位符生效 —— 写进「立场正文」或任一条契约里即可。')
   }
   const m = (cfg && cfg.memory) || {}
   const entries = (m.entries || []).filter((x) => x && x.on !== false && x.text)

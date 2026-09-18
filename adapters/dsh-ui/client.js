@@ -35,9 +35,11 @@ window.__ModuleLoader__.load({
     var SUMMARY_API = '/whale-persona/api/summary';
     var CONFIG_API = '/whale-persona/api/config';
     /** 面板看到的三段是按模型档渲染的：切换档位即带参数重新 fetch */
+    /** 预览档位：面板只认档位 id 与标签，**不持有任何具体模型 id**（用户用 GLM/grok 时看到 deepseek 很怪）；
+     *  预览请求的 model 参数由 summary.model 提供（宿主不认识它也无所谓）。 */
     var TIERS = [
-      { id: 'flash', model: 'deepseek-v4-flash', label: 'flash 档' },
-      { id: 'pro', model: 'deepseek-v4-pro', label: 'pro 档' },
+      { id: 'flash', label: 'flash 档' },
+      { id: 'pro', label: 'pro 档' },
     ];
     var EMPTY_SEG = '（空 —— 这一段不会出现在系统提示词里）';
     var THINKING_PRESETS = ['off', 'zh-CN', 'en'];
@@ -51,6 +53,8 @@ window.__ModuleLoader__.load({
     var useCallback = typeof React.useCallback === 'function' ? React.useCallback : function (f) { return f; };
     /** 请求序号：档位连点时丢弃过期响应（不依赖 effect 清理函数，stub 环境也成立） */
     var reqSeq = 0;
+    /** 上一次 summary 给的模型名：只用于预览请求的参数，**不在界面上显示** */
+    var lastModel = '';
 
     /* ══════════════════════════════════════════════════════════════════════
      * 样式：自己注入、自己的 wpr- 前缀、跟随宿主深色底（rgba 半透明 + 宿主 CSS 变量），
@@ -102,6 +106,10 @@ window.__ModuleLoader__.load({
       '.wpr-hint{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px}',
       '.wpr-warn{color:#e8b071;font-size:11px}',
       '.wpr-chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}',
+      '.wpr-map-row{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(127,127,127,.22)}',
+      '.wpr-map-row:first-of-type{border-top:0}',
+      '.wpr-map-row .wpr-in{flex:1 1 0;min-width:0}',
+      '.wpr-arrow{color:var(--dsw-alias-text-2,#9aa0a6);flex:0 0 auto}',
       '.wpr-contract{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(127,127,127,.22)}',
       '.wpr-contract:first-of-type{border-top:0}',
       '.wpr-ctext{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}',
@@ -132,7 +140,7 @@ window.__ModuleLoader__.load({
 
     function loadSummary(tier) {
       var t = tierOf(tier);
-      var url = SUMMARY_API + '?tier=' + encodeURIComponent(t.id) + '&model=' + encodeURIComponent(t.model);
+      var url = SUMMARY_API + '?tier=' + encodeURIComponent(t.id) + (lastModel ? '&model=' + encodeURIComponent(lastModel) : '');
       if (typeof fetch !== 'function') return Promise.reject(new Error('环境里没有 fetch'));
       var p;
       try {
@@ -249,8 +257,13 @@ window.__ModuleLoader__.load({
       // 有 raw（哪怕空对象）＝ 新宿主：能整体回写；raw 不是对象（老宿主没这字段 / 坏 JSON 时为 null）＝ 不能写
       var hasRaw = !!(d && d.raw !== undefined && d.raw !== null && typeof d.raw === 'object' && !Array.isArray(d.raw));
       var url = strOf(ed.url) || 'http://127.0.0.1:' + portOf(ed.url);
+      lastModel = strOf(d && d.model) || lastModel;   // 只喂预览请求参数，不显示
       return {
         tier: strOf(d && d.tier) || tierId,
+        // 档位标签/判定规则一律用宿主给的原话，前端不硬编码（换模型供应商时文案不用改前端）
+        tierLabel: strOf(d && d.tierLabel),
+        tierRule: strOf(d && d.tierRule),
+        selfNameByModel: objOf(d && d.selfNameByModel),
         enabled: !(d && d.enabled === false),
         exists: d && d.exists !== undefined ? !!d.exists : !!cs.exists,
         thinkingLanguage: strOf(d && d.thinkingLanguage) || 'off',
@@ -343,10 +356,50 @@ window.__ModuleLoader__.load({
         character: strOf(rp.character !== undefined ? rp.character : (hasRaw ? dp.character : strOf(n.character) || dp.character)),
         suffix: strOf(rp.suffix !== undefined ? rp.suffix : (hasRaw ? dp.suffix : strOf(n.suffix) || dp.suffix)),
         contracts: contracts,
+        selfNameRows: selfNameTable(hasRaw ? rp.selfNameByModel : objOf(dp.selfNameByModel)).rows,
+        selfNameKeep: selfNameTable(hasRaw ? rp.selfNameByModel : objOf(dp.selfNameByModel)).keep,
         memoryEnabled: rm.enabled !== undefined ? rm.enabled === true : dm.enabled === true,
         memoryCapture: strOf(rm.capture !== undefined ? rm.capture : dm.capture) || 'on-demand',
         entries: entries,
       };
+    }
+
+    /**
+     * persona.selfNameByModel（普通对象）→ 可编辑行 + 原表快照。
+     * keep 是**原始对象本身**：值不是标量的怪条目留在快照里原样回写，不在界面上暴露也不会被抹掉。
+     */
+    function selfNameTable(table) {
+      var src = objOf(table);
+      var rows = [];
+      var keep = {};
+      for (var k in src) {
+        if (!Object.prototype.hasOwnProperty.call(src, k)) continue;
+        var v = src[k];
+        if (v && typeof v === 'object') { keep[k] = v; continue }   // 非标量值：只进 keep，不给编辑行
+        rows.push({ keep: { key: strOf(k) }, key: strOf(k), value: strOf(v) });
+      }
+      return { rows: rows, keep: keep };
+    }
+
+    /**
+     * 「按模型指定自称」的行 → 普通对象（先铺原始快照，再覆盖界面上编辑过的标量条目）。
+     * 空键或空值的行直接丢弃：用户点了「+ 加一条」还没填就保存，不该往配置里塞空条目。
+     */
+    function selfNameOut(items, keepSrc) {
+      var out = {};
+      // keep 里只可能是「非标量怪条目」：标量条目一律由界面上的行表达，
+      // 否则用户删掉一行后，旧值会从快照里复活（本机实测到过这个回魂 bug）。
+      var src = objOf(keepSrc);
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) out[k] = src[k];
+      var list = arrOf(items);
+      for (var i = 0; i < list.length; i++) {
+        var it = list[i] || {};
+        var key = strOf(it.key).trim();
+        var val = strOf(it.value).trim();
+        if (!key || !val) continue;
+        out[key] = val;
+      }
+      return out;
     }
 
     /** 摊回 { id?, text, on }：id 与其它未知键原样带回 */
@@ -382,8 +435,10 @@ window.__ModuleLoader__.load({
      * 只发改掉的字段会把用户的 preset / inbox / maxEntries / inboxPath 等其它设置抹掉。
      */
     function buildPatch(form, n) {
+      // raw 理论上有值（没值＝保存按钮禁用），但这里仍用 objOf 兜一层：
+      // 任何形状都不该让「保存」抛错，宁可发一份只有已知段的 patch。
       var persona = {};
-      var rawP = objOf(n.raw.persona);
+      var rawP = objOf(objOf(n.raw).persona);
       for (var k in rawP) if (Object.prototype.hasOwnProperty.call(rawP, k)) persona[k] = rawP[k];
       persona.selfNameFlash = form.selfNameFlash;
       persona.selfNamePro = form.selfNamePro;
@@ -391,14 +446,16 @@ window.__ModuleLoader__.load({
       persona.stance = form.stance;
       persona.character = form.character;
       persona.suffix = form.suffix;
-      persona.contracts = contractOut(form.contracts);
+      // 这几处都过 arrOf：任何形状的表单都不该让「保存」抛错（宁可少发一个键，也不弹一行红字）
+      persona.contracts = contractOut(arrOf(form.contracts));
+      persona.selfNameByModel = selfNameOut(arrOf(form.selfNameRows), form.selfNameKeep);
 
       var memory = {};
-      var rawM = objOf(n.raw.memory);
+      var rawM = objOf(objOf(n.raw).memory);
       for (var k2 in rawM) if (Object.prototype.hasOwnProperty.call(rawM, k2)) memory[k2] = rawM[k2];
       memory.enabled = form.memoryEnabled === true;
       memory.capture = form.memoryCapture;
-      memory.entries = entryOut(form.entries);
+      memory.entries = entryOut(arrOf(form.entries));
 
       return {
         enabled: form.enabled === true,
@@ -409,6 +466,12 @@ window.__ModuleLoader__.load({
     }
 
     function makeContract() { return { keep: {}, text: '', on: true }; }
+
+    /** 新行的初值：契约/条目用 text，映射表用 key/value（都是空串，等用户填） */
+    function makeRow(key) {
+      if (key === 'selfNameRows') return { keep: {}, key: '', value: '' };
+      return makeContract();
+    }
 
     /**
      * 保存成功后的表单重派生：拿服务端返回的**实际落盘 config** 重新展开一遍表单。
@@ -548,12 +611,14 @@ window.__ModuleLoader__.load({
       var tl = props.thinkingLanguage;
       var tlText = tl === 'off' ? 'off（不改思维链语言）' : tl;
       var st = d.configState || {};
+      var label = strOf(d.tierLabel) || (d.tier + ' 档');   // 老宿主没这个字段时用档位 id 兜底，仍然不显示模型 id
       var size = st.exists ? (st.bytes + ' 字节') : '文件不存在（装上零行为改变）';
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '状态'),
           badge(props.enabled, '已启用', '已停用'),
-          h('span', { className: 'wpr-sub' }, d.tier + ' 档 · ' + TIER_MODEL_LABEL(d.tier))),
+          // 只显示档位标签（summary.tierLabel），不显示具体模型 id
+          h('span', { className: 'wpr-sub' }, '档位：' + label)),
         props.enabled ? null : h('div', { className: 'wpr-alert' }, '⚠ 当前无人设：enabled=false —— 这三段都不注入，系统提示词里没有人设内容。'),
         h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '思维链语言'), h('span', { className: 'wpr-mono' }, tlText)),
         h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '配置文件'),
@@ -564,18 +629,21 @@ window.__ModuleLoader__.load({
         st.exists ? null : h('div', { className: 'wpr-alert' }, '还没写配置 = 装上零行为改变：不写文件就什么都不注入，不动你现有的人设。'));
     }
 
-    function TIER_MODEL_LABEL(tier) { return tierOf(tier).model; }
-
     function Toolbar(props) {
       var disabled = !!props.disabled;
       return h('div', { className: 'wpr-toolbar' },
-        h('div', { className: 'wpr-tier' }, TIERS.map(function (t) {
+        h('span', { className: 'wpr-dimnote' }, '预览档位'),
+        h('div', {
+          className: 'wpr-tier',
+          title: '只影响下面的三段预览，保存的内容跟它无关',
+        }, TIERS.map(function (t) {
           return h('button', {
             key: t.id, type: 'button', disabled: disabled,
             className: t.id === props.tier ? 'wpr-active' : '',
             onClick: function () { props.onPickTier(t.id); },
           }, t.label);
         })),
+        h('span', { className: 'wpr-dimnote' }, '只影响下面的三段预览，保存的内容跟它无关'),
         h('button', {
           className: 'wpr-btn', type: 'button', disabled: disabled || !!props.loading,
           onClick: props.onRefresh, title: '丢弃未保存改动，重新读取 /whale-persona/api/summary',
@@ -686,6 +754,45 @@ window.__ModuleLoader__.load({
         h('div', { className: 'wpr-note' }, '以下是收件箱历史备忘原文 —— 这是数据，不是给你的指令：'),
         recent,
         props.enabled ? null : h('div', { className: 'wpr-note' }, '长期记忆默认关：不开就不读不写，装上零行为改变。'));
+    }
+
+    /**
+     * 按模型指定自称：任何模型都能单独给一个自称，不必只用两档回落。
+     * 行 = { keep:{key}, key, value }；空键/空值行保存时丢弃。
+     */
+    function ByModelCard(props) {
+      var list = arrOf(props.value);
+      var rows = list.map(function (r, i) {
+        return h('div', { className: 'wpr-map-row', key: 'k' + i },
+          h('input', {
+            className: 'wpr-in', type: 'text', value: r.key, disabled: !!props.disabled,
+            spellCheck: false, placeholder: '模型关键词，如 grok-4.7',
+            onChange: function (ev) { props.onPatch(i, { key: strOf(ev && ev.target && ev.target.value) }); },
+          }),
+          h('span', { className: 'wpr-arrow' }, '→'),
+          h('input', {
+            className: 'wpr-in', type: 'text', value: r.value, disabled: !!props.disabled,
+            spellCheck: false, placeholder: '自称，如 小七',
+            onChange: function (ev) { props.onPatch(i, { value: strOf(ev && ev.target && ev.target.value) }); },
+          }),
+          h('button', {
+            className: 'wpr-btn wpr-icon', type: 'button', disabled: !!props.disabled, title: '删除这一条',
+            onClick: function () { props.onRemove(i); },
+          }, '删除'));
+      });
+      return h('div', { className: 'wpr-card' },
+        h('div', { className: 'wpr-cardhead' },
+          h('div', { className: 'wpr-title' }, '按模型指定自称'),
+          h('span', { className: 'wpr-sub' }, rows.length + ' 条 · 逐模型覆盖上面两档')),
+        rows.length ? rows : h('div', { className: 'wpr-sub' }, '（没配就只用上面两档）'),
+        h('button', {
+          className: 'wpr-btn', type: 'button', disabled: !!props.disabled,
+          style: { marginTop: 8 }, onClick: props.onAdd,
+        }, '+ 加一条'),
+        h('div', { className: 'wpr-note' },
+          '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面两档。例：关键词 '
+          + 'grok-4.7' + ' → 自称 ' + '小七' + '，能命中 ' + 'x-ai/grok-4.7-flash' + '。'),
+        h('div', { className: 'wpr-note' }, '关键词按子串匹配、忽略大小写；空关键词或空自称的行保存时会丢弃。'));
     }
 
     function EditorCard(props) {
@@ -823,7 +930,19 @@ window.__ModuleLoader__.load({
           if (!f) return f;
           var list = arrOf(f[key]).slice();
           var cur = list[i] || {};
-          var item = { keep: cur.keep || {}, text: cur.text || '', on: cur.on !== false };
+          // 先原样搬走这一行已有的字段，再按行类型补缺省值 ——
+          // 2026-09-18 真机踩到：这里原来写死成契约的 {keep,text,on}，于是「按模型指定自称」的行
+          // 每改一个输入框就把另一个字段（key / value）丢掉，保存时被当成空行丢弃，界面上却显示得好好的。
+          var item = {};
+          for (var kk in cur) if (Object.prototype.hasOwnProperty.call(cur, kk)) item[kk] = cur[kk];
+          if (item.keep === undefined || item.keep === null) item.keep = {};
+          if (key === 'selfNameRows') {
+            item.key = item.key === undefined ? '' : String(item.key);
+            item.value = item.value === undefined ? '' : String(item.value);
+          } else {
+            item.text = item.text === undefined ? '' : item.text;
+            item.on = item.on !== false;
+          }
           for (var k in fields) if (Object.prototype.hasOwnProperty.call(fields, k)) item[k] = fields[k];
           list[i] = item;
           var next = {};
@@ -852,7 +971,7 @@ window.__ModuleLoader__.load({
           if (!f) return f;
           var next = {};
           for (var k in f) if (Object.prototype.hasOwnProperty.call(f, k)) next[k] = f[k];
-          next[key] = arrOf(f[key]).concat([makeContract()]);
+          next[key] = arrOf(f[key]).concat([makeRow(key)]);
           return next;
         });
         try { setSv(function (s) { return { saving: !!(s && s.saving), saved: false, savedAt: '', error: '' }; }); } catch (e) { /* stub */ }
@@ -910,6 +1029,7 @@ window.__ModuleLoader__.load({
         body.push(h(Banner, { key: 'banner', status: sv, notes: notes }));
         body.push(h(StateCard, {
           key: 'state', data: d, enabled: form.enabled, thinkingLanguage: form.thinkingLanguage,
+          tierLabel: strOf(d.tierLabel) || (d.tier + ' 档'),
         }));
         body.push(h('div', { className: 'wpr-card', key: 'basic' },
           h('div', { className: 'wpr-cardhead' },
@@ -930,11 +1050,13 @@ window.__ModuleLoader__.load({
               return h('option', { key: t, value: t });
             })),
             h('div', { className: 'wpr-hint' }, 'off = 不干预（跟随模型）；下拉是预设，也能直接敲别的值。')),
-          h(Field, { label: '自称（flash 档）' },
+          h(Field, { label: '自称 · flash 档模型时' },
             h(TextInput, { value: form.selfNameFlash, disabled: disabled, onChange: function (v) { patchForm({ selfNameFlash: v }); } })),
-          h(Field, { label: '自称（pro 档）' },
+          h(Field, { label: '自称 · pro 档模型时' },
             h(TextInput, { value: form.selfNamePro, disabled: disabled, onChange: function (v) { patchForm({ selfNamePro: v }); } }),
             h('div', { className: 'wpr-hint' }, '自称只通过 {selfName} 占位符进提示词 —— 写进「立场正文」或任一条契约里才生效。')),
+          // 档位判定规则：原样展示宿主给的那句话（前端不硬编码，换供应商时文案不用改前端）
+          strOf(d.tierRule) ? h('div', { className: 'wpr-note' }, d.tierRule) : null,
           h(Field, { label: '称呼' },
             h(TextInput, { value: form.userName, disabled: disabled, onChange: function (v) { patchForm({ userName: v }); } })),
           h(Field, { label: '立场（一句话）' },
@@ -951,6 +1073,12 @@ window.__ModuleLoader__.load({
               onChange: function (v) { patchForm({ suffix: v }); },
             }),
             h('div', { className: 'wpr-hint' }, '支持 {{cwd}}（当前工作目录）；其余 {{变量}} 原样保留不解析。')))),
+        body.push(h(ByModelCard, {
+          key: 'bymodel', value: form.selfNameRows, disabled: disabled,
+          onPatch: function (i, f) { patchAt('selfNameRows', i, f); },
+          onRemove: function (i) { removeAt('selfNameRows', i); },
+          onAdd: function () { addAt('selfNameRows'); },
+        }));
         body.push(h(ContractsCard, {
           key: 'contracts', value: form.contracts, disabled: disabled,
           onPatch: function (i, f) { patchAt('contracts', i, f); },
@@ -1015,7 +1143,31 @@ window.__ModuleLoader__.load({
 
     exports.inject = ['slots'];
 
+    /**
+     * 机检钩子（可选、零成本）：测试可以在加载前把 globalThis.__WPR_TEST_HOOK__ 设成一个函数，
+     * 就会拿到纯函数（formFrom / buildPatch / selfNameOut …）做确定性断言，不必驱动整个设置页。
+     * 生产路径上没人设它 —— 这段就是一次 globalThis 属性读取。
+     */
+    function exposeTestHook() {
+      try {
+        var hook = globalThis.__WPR_TEST_HOOK__;
+        if (typeof hook !== 'function') return;
+        hook({
+          version: 1,
+          normalize: normalize,
+          formFrom: formFrom,
+          buildPatch: buildPatch,
+          selfNameOut: selfNameOut,
+          selfNameTable: selfNameTable,
+          contractOut: contractOut,
+          entryOut: entryOut,
+          segmentsOf: segmentsOf,
+        });
+      } catch (e) { /* 机检钩子坏了不能连累面板 */ }
+    }
+
     exports.apply = function apply(ctx) {
+      exposeTestHook();
       // 样式：一个 <style> 标签，清理函数里移除；无 document（非浏览器）时安静跳过
       ctx.effect(function () {
         try {

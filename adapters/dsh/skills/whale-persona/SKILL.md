@@ -29,6 +29,7 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
     "enabled": true,
     "selfNameFlash": "我",            // flash 档自称（模型名不含 "pro" 时用）
     "selfNamePro": "我",              // pro 档自称
+  "selfNameByModel": { "grok-4.7": "小七" },  // 按具体模型指定自称（命中优先级最高；精确→最长子串→回落两档）
     "userName": "用户",               // 称呼用户
     "stance": "",                     // 关系立场（一句话，渲染在 character 之前）
     "character": "",                  // 立场正文（整段），stance/character/契约均支持 {selfName}/{userName}
@@ -97,9 +98,10 @@ buildPersonaPrompt(cfg, 'flash', cwd, { capture: captureActive(cfg, agent) })
 | 名字 | 是什么 | 存在哪 | 怎么改 |
 |---|---|---|---|
 | **预设显示名** | 「设置 → Agent 预设」里那张卡片的名字（出厂写「自定义人设」） | `$DSH_HOME/.agent-presets/whale-persona/preset.yml` 的 `name:` 一行 | 改那一行；预设元数据变化在下一次挂载/刷新时生效 |
-| **自称** | AI 在提示词里管自己叫什么（`{selfName}` 渲染出来的词） | `config.json` 的 `persona.selfNameFlash` / `selfNamePro`（flash/pro 两档） | 照「修改纪律」读改写回，**下一步生效** |
+| **自称** | AI 在提示词里管自己叫什么（`{selfName}` 渲染出来的词） | `config.json` 的 `persona.selfNameByModel`（按模型，优先）/ `selfNameFlash` / `selfNamePro`（两档回落） | 照「修改纪律」读改写回，**下一步生效** |
 
-判断口诀：用户说「设置里那张卡叫什么」= 预设显示名；用户说「你以后自称什么」= 自称。
+判断口诀：用户说「设置里那张卡叫什么」= 预设显示名；用户说「你以后自称什么」= 自称；
+用户说「用某个模型时你叫某某」= 往 `persona.selfNameByModel` 加一条（键写模型名里好认的一段即可，如 `grok-4.7`，子串能命中带前缀的完整 id）。
 两个都改时，先列前后对照再落盘，别一次改两处还不告诉用户改了哪两处。
 
 ## 设置面板（看得见的那一层）

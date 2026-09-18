@@ -12,7 +12,7 @@
     "whale-persona-dsh": "./scripts/install-dsh.mjs"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/ui-panel.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs",
+    "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/model-names.mjs && node tests/ui-panel.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs",
     "install-dsh": "node scripts/install-dsh.mjs",
     "render": "node scripts/render-preview.mjs",
     "ui": "node scripts/ui.mjs",
