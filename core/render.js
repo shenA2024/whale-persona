@@ -14,8 +14,31 @@ export function tierOf(model) {
   return 'flash'
 }
 
-export function selfNameOf(cfg, tier) {
-  const p = cfg.persona
+/**
+ * 自称解析（2026-09-18 扩展：任何模型都能单独指定，不再只有两档）
+ *
+ * 顺序（命中即返回）：
+ *   ① persona.selfNameByModel 里的**精确**键（忽略大小写）—— 例：{"Pro/zai-org/GLM-5.1": "小五"}
+ *   ② 同一张表里的**最长子串**命中 —— 键 "glm-5.1" 能命中 "Pro/zai-org/GLM-5.1"
+ *   ③ 回落两档：pro 档 selfNamePro（为空则 selfNameFlash）/ 否则 selfNameFlash
+ * 为什么要子串那一步：模型 id 常带前缀（Pro/、供应商/），让用户每次照抄全名太苛刻。
+ */
+export function selfNameOf(cfg, tier, model) {
+  const p = (cfg && cfg.persona) || {}
+  const table = p.selfNameByModel && typeof p.selfNameByModel === 'object' && !Array.isArray(p.selfNameByModel)
+    ? p.selfNameByModel : null
+  const want = typeof model === 'string' ? model.trim().toLowerCase() : ''
+  if (table && want) {
+    let best = null
+    for (const rawKey of Object.keys(table)) {
+      const key = String(rawKey || '').trim().toLowerCase()
+      const val = String(table[rawKey] == null ? '' : table[rawKey]).trim()
+      if (!key || !val) continue
+      if (key === want) return val
+      if (want.indexOf(key) >= 0 && (!best || key.length > best.key.length)) best = { key, val }
+    }
+    if (best) return best.val
+  }
   return tier === 'pro' ? (p.selfNamePro || p.selfNameFlash) : p.selfNameFlash
 }
 
@@ -23,12 +46,12 @@ function fill(text, vars) {
   return String(text).replace(/\{selfName\}/g, vars.selfName).replace(/\{userName\}/g, vars.userName)
 }
 
-export function renderPersona(cfg, tier) {
+export function renderPersona(cfg, tier, model) {
   if (!cfg || cfg.enabled === false) return ''
   const p = cfg.persona
   if (!p || p.enabled === false) return ''
 
-  const vars = { selfName: selfNameOf(cfg, tier), userName: p.userName }
+  const vars = { selfName: selfNameOf(cfg, tier, model), userName: p.userName }
   const blocks = []
 
   // stance = 一句话关系立场，character = 整段立场正文：两个都在就渲染两块，只填一个也成立

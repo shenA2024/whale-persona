@@ -75,7 +75,8 @@ hook 与 skill 按以下优先级找 config（找到第一个存在的就用）�
 ```
 
 - 纯默认配置渲染为空——**装上不改变任何行为**，填了配置才有人设；
-- 模型名含 "pro" 用 `selfNamePro`，否则 `selfNameFlash`（与 DSH 版同规则）；
+- 自称解析（与 DSH 版同规则、同一份 core）：`persona.selfNameByModel` 里精确命中 → 最长子串命中 → 回落两档
+  （模型名含 "pro" 用 `selfNamePro`，否则 `selfNameFlash`）；所以任何模型都能单独指定自称；
 - 一切异常安静退出——hook 永远不会打断会话。
 
 ## 收口开关（消息前缀）

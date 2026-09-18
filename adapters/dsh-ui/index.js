@@ -146,6 +146,10 @@ function buildSummary(query) {
     enabled: cfg.enabled !== false,
     thinkingLanguage: typeof cfg.thinkingLanguage === 'string' ? cfg.thinkingLanguage : 'off',
     selfName: { flash: selfNameOf(cfg, 'flash'), pro: selfNameOf(cfg, 'pro') },
+    // 面板展示用：档位标签 + 判定规则 + 按模型指定自称的表（前端不再显示具体模型 id，避免"GLM 用户看到 deepseek"）
+    tierLabel: tier === 'pro' ? 'pro 档' : 'flash 档',
+    tierRule: '档位由会话的模型名判定：名字含 "pro" 算 pro 档，其余算 flash 档。「按模型指定自称」的条目优先于档位。',
+    selfNameByModel: (persona.selfNameByModel && typeof persona.selfNameByModel === 'object' && !Array.isArray(persona.selfNameByModel)) ? persona.selfNameByModel : {},
     userName: typeof persona.userName === 'string' ? persona.userName : '',
     contracts,
     memory: {

@@ -29,6 +29,7 @@ description: 人设引擎 whale-persona 的配置管理工作流。当用户想�
     "enabled": true,
     "selfNameFlash": "我",            // flash 档自称（模型名不含 "pro" 时用）
     "selfNamePro": "我",              // pro 档自称
+"selfNameByModel": {},           // 按具体模型指定自称（命中优先级最高；精确→最长子串→回落两档）
     "userName": "用户",               // 称呼用户
     "stance": "",                     // 关系立场（一句话，渲染在 character 之前）
     "character": "",                  // 立场正文（整段），stance/character/契约均支持 {selfName}/{userName}
