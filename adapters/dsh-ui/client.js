@@ -720,8 +720,6 @@ window.__ModuleLoader__.load({
     function MemoryCard(props) {
       var m = props.mem || {};
       var list = arrOf(props.value);
-      var captureText = m.capture === 'always' ? 'always（每轮都注入）'
-        : (m.capture === 'on-demand' ? 'on-demand（会话里 /memory on 才注入）' : strOf(m.capture) + '（不注入）');
       var rows = list.map(function (e, i) {
         return h('div', { className: 'wpr-contract', key: 'm' + i },
           h('input', {
@@ -743,8 +741,22 @@ window.__ModuleLoader__.load({
           h('div', { className: 'wpr-title' }, '长期记忆'),
           badge(props.enabled, '已开', '关（默认关 · opt-in）'),
           h('span', { className: 'wpr-sub' }, '手工 ' + list.length + ' 条 · 收件箱 ' + (m.inboxLines || 0) + ' 行')),
-        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '收口模式'),
-          h('span', { className: 'wpr-mono' }, captureText + (m.captureNow ? ' · 面板口径算作激活' : ''))),
+        h(Field, { label: '总开关' },
+          h(CheckBox, {
+            checked: !!props.enabled, disabled: !!props.disabled, label: '启用长期记忆',
+            onChange: function (v) { props.onToggleEnabled(v); },
+          }),
+          h('div', { className: 'wpr-hint' }, '默认关（opt-in）：开着重启才读记忆，手工条目会进提示词。')),
+        h(Field, { label: '收口模式' },
+          h('select', {
+            className: 'wpr-sel', value: props.capture, disabled: !!props.disabled,
+            onChange: function (ev) { props.onCapture(strOf(ev && ev.target && ev.target.value)); },
+          },
+            h('option', { value: 'on-demand' }, 'on-demand（默认：会话里 /memory on 才注入）'),
+            h('option', { value: 'always' }, 'always（每轮都注入 · 旧行为）')),
+          (props.capture === 'on-demand' || props.capture === 'always')
+            ? null
+            : h('div', { className: 'wpr-warn' }, '当前值「' + strOf(props.capture) + '」不在预设里，保存后照原样写入。')),
         h('div', { className: 'wpr-note' }, '手工条目（你亲手维护的权威层）：'),
         rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有手工条目）'),
         h('button', {
@@ -799,25 +811,28 @@ window.__ModuleLoader__.load({
       var ed = props.editor || {};
       var port = ed.port || portOf(ed.url);
       var cmd = 'node scripts/ui.mjs --port ' + port;
+      // 2026-09-18 用户问「这张卡是不能改还是什么情况」：它不是开关或配置项，是**另一个进程**的入口。
+      // DSH 只能探测它在不在跑、帮你打开，不能代你启动（宿主里起常驻子进程要自己扛端口冲突与退出清理）。
+      // 面板现在已能改全部字段，所以这张卡降级成"可选入口"，不再顶一个刺眼的"没在跑"徽标。
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
-          h('div', { className: 'wpr-title' }, '本地编辑器'),
-          badge(ed.running, '编辑器在跑', '编辑器没在跑')),
+          h('div', { className: 'wpr-title' }, '本地编辑器（可选）'),
+          ed.running ? badge(true, '在跑', '') : null),
+        h('div', { className: 'wpr-note' },
+          '它是本仓自带的独立本地面板（两个宿主共用、与上面这张面板同一套读写纪律），不是 DSH 插件：'
+          + '要你自己在终端起它一次，DSH 只能探测与打开。上面已经能改全部字段，这里留给不开 DSH 的场景与 ZCode 用户。'),
+        h('div', { className: 'wpr-cmd' },
+          h('span', { className: 'wpr-mono' }, cmd),
+          h(CopyBtn, { text: cmd, label: '复制命令' })),
+        h('div', { className: 'wpr-hint' }, '换端口：起的时候用 --port，或设环境变量 DSH_WHALE_UI_PORT（面板按它显示）。'),
         ed.running
-          ? h('div', null,
-            h('button', {
-              className: 'wpr-btn wpr-primary', type: 'button',
-              onClick: function () {
-                try { if (typeof window !== 'undefined' && typeof window.open === 'function') window.open(ed.url); } catch (e) { /* 被弹窗拦截：地址仍可复制 */ }
-              },
-            }, '打开本地编辑器'),
-            h('span', { className: 'wpr-dimnote', style: { marginLeft: 8 } }, ed.url))
-          : h('div', null,
-            h('div', { className: 'wpr-sub' }, '本地面板（同一套读写纪律，能改全部字段）：'),
-            h('div', { className: 'wpr-cmd' },
-              h('span', { className: 'wpr-mono' }, cmd),
-              h(CopyBtn, { text: cmd, label: '复制命令' })),
-            h('button', { className: 'wpr-btn', type: 'button', disabled: true, style: { marginTop: 8 } }, '打开本地编辑器（未运行）')),
+          ? h('button', {
+            className: 'wpr-btn wpr-primary', type: 'button', style: { marginTop: 8 },
+            onClick: function () {
+              try { if (typeof window !== 'undefined' && typeof window.open === 'function') window.open(ed.url); } catch (e) { /* 被弹窗拦截：地址仍可复制 */ }
+            },
+          }, '打开本地编辑器（' + ed.url + '）')
+          : h('button', { className: 'wpr-btn', type: 'button', disabled: true, style: { marginTop: 8 } }, '打开本地编辑器（未运行）'),
         h('div', { className: 'wpr-footline' }, '改配置下一步生效；改挂载行要新会话。'));
     }
 
@@ -1085,31 +1100,17 @@ window.__ModuleLoader__.load({
           onRemove: function (i) { removeAt('contracts', i); },
           onAdd: function () { addAt('contracts'); },
         }));
+        // 开关与条目编辑放在同一张卡里：原来拆成两张（一张显示状态、一张放开关），
+        // 既重复又不同步（状态那行读的是服务端值，改了开关不保存它不动）。2026-09-18 用户点名后合并。
         body.push(h(MemoryCard, {
           key: 'memory', mem: d.memory, value: form.entries,
-          enabled: form.memoryEnabled, disabled: disabled,
+          enabled: form.memoryEnabled, capture: form.memoryCapture, disabled: disabled,
+          onToggleEnabled: function (v) { patchForm({ memoryEnabled: v }); },
+          onCapture: function (v) { patchForm({ memoryCapture: v }); },
           onPatch: function (i, f) { patchAt('entries', i, f); },
           onRemove: function (i) { removeAt('entries', i); },
           onAdd: function () { addAt('entries'); },
         }));
-        body.push(h('div', { className: 'wpr-card', key: 'memsw' },
-          h('div', { className: 'wpr-cardhead' }, h('div', { className: 'wpr-title' }, '长期记忆 · 开关')),
-          h(Field, { label: '总开关' },
-            h(CheckBox, {
-              checked: form.memoryEnabled, disabled: disabled, label: '启用长期记忆',
-              onChange: function (v) { patchForm({ memoryEnabled: v }); },
-            }),
-            h('div', { className: 'wpr-hint' }, '默认关（opt-in）：开着重启才读记忆，手工条目会进提示词。')),
-          h(Field, { label: '收口模式' },
-            h('select', {
-              className: 'wpr-sel', value: form.memoryCapture, disabled: disabled,
-              onChange: function (ev) { patchForm({ memoryCapture: strOf(ev && ev.target && ev.target.value) }); },
-            },
-              h('option', { value: 'on-demand' }, 'on-demand（默认：会话里 /memory on 才注入）'),
-              h('option', { value: 'always' }, 'always（每轮都注入 · 旧行为）')),
-            (form.memoryCapture === 'on-demand' || form.memoryCapture === 'always')
-              ? null
-              : h('div', { className: 'wpr-warn' }, '当前值「' + strOf(form.memoryCapture) + '」不在预设里，保存后照原样写入。'))));
         body.push(h(SectionsCard, {
           key: 'sections', sections: shown ? shown.sections : d.sections, warnings: shown ? shown.warnings : [],
           tier: d.tier, fromSave: !!savedPreview,
