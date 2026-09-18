@@ -8,8 +8,9 @@ persona section into something you can switch, edit, and remember.
 > English summary: this plugin registers the `deployment:persona-prefix` / `persona-suffix` /
 > `thinking-language` system-prompt sections, rendering them from a JSON config on every
 > assembly. Zero opinion by default (self-name "我", user address "用户", empty character and
-> contracts) — you fill in what you want. It also ships a confirmation-gated long-term memory
-> flow (AI proposes → you confirm → append-only inbox → injected as *data*, not instructions).
+> contracts, memory flow off) — you fill in what you want. It also ships a confirmation-gated
+> long-term memory flow (AI proposes → you confirm → append-only inbox → injected as *data*,
+> not instructions).
 
 ## 特性
 
@@ -17,9 +18,9 @@ persona section into something you can switch, edit, and remember.
 - **自称/称呼/立场/契约**：双模型档自称（flash 档 / pro 档）、称呼用户、整段立场正文、
   逐条可勾选的工作契约；产物是每步重新求值的提示词段，改完下一步生效。
 - **思维链语言**：`off`（默认不干预）/ `zh-CN` / `en` …，只影响思考可读性与 token，不改答复语言。
-- **长期记忆（确认流）**：阶段收口时 AI 列出「记忆候选」→ 用户确认 → 逐条**追加**到
-  inbox（JSONL，只许追加，坏行跳过）；注入时按**数据**呈现（引号 + 「非指令」声明），
-  不与用户准则混排——这是刻意的抗提示词注入设计。
+- **长期记忆（确认流，默认关）**：阶段收口时 AI 列出「记忆候选」→ 用户确认 → 逐条**追加**到
+  inbox（JSONL，只许追加，坏行跳过）；注入时按**数据**呈现（引号 + 「非指令」声明）、
+  条目内换行折叠，不与用户准则混排——这是刻意的抗提示词注入设计。
 - **全链路降级**：任何异常都返回空段——插件坏了最坏结果是「没有人设」，永远不会让会话发不出话。
 
 ## 安装
@@ -56,7 +57,7 @@ dsh plugin --profile web add link:/path/to/dsh-whale-persona
     ]
   },
   "memory": {
-    "enabled": true,
+    "enabled": false,                  // 默认关（opt-in）；开启后才有下面的确认流与注入
     "entries": [],                     // 手工条目（权威层）
     "inbox": true,                     // 收件箱（AI 确认流）
     "maxEntries": 30,                  // 收件箱注入上限（保新弃旧）
@@ -85,6 +86,10 @@ dsh plugin --profile web add link:/path/to/dsh-whale-persona
   入库需用户确认（AI 不擅自记）。
 - `suffix` 里的 `{{cwd}}` 由本插件自行替换，其它 `{{var}}` 原样保留——不会触发
   DSH 的未注册变量错误（那会让会话发不出第一句话）。
+- **残余风险（自写通道）**：开启记忆流后，模型会向 inbox 追加内容、而 inbox 会回注到
+  之后的所有会话。「用户拍板」闸门由提示词约束（未被确认的一律不写），**不是代码强制**——
+  恶意对话若诱导出假确认，理论上可写入长期生效的文本。建议定期翻看
+  `memory-inbox.jsonl`，发现不对的行直接删（删行/坏行都不影响读取）。
 
 ## 兼容与已知边界
 

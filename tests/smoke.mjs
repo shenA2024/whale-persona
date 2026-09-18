@@ -42,11 +42,15 @@ console.log('SEC2 记忆块:', flash.includes('长期记忆') && flash.includes(
 console.log('SEC3 suffix:', JSON.stringify(suffix.text({})))
 console.log('SEC4 思维链语言段(zh):', think.text({}).includes('简体中文'))
 
-// 开源通用默认值（2026-09-18）：纯引擎零观点
+// 开源通用默认值（2026-09-18）：纯引擎零观点（记忆流默认关）
 const g = mergeConfig(null)
 console.log('SEC5 通用默认:', g.persona.selfNameFlash === '我' && g.persona.userName === '用户'
-  && g.persona.character === '' && g.persona.contracts.length === 0 && DEFAULTS.thinkingLanguage === 'off')
+  && g.persona.character === '' && g.persona.contracts.length === 0 && DEFAULTS.thinkingLanguage === 'off'
+  && DEFAULTS.memory.enabled === false)
 console.log('SEC5 通用渲染为空串(装上不改行为):', JSON.stringify(renderPersona(g, 'flash').slice(0, 8)))
+// 补测：纯默认下完整 prefix 段（含入库纪律块）也为空——「装上不改变任何行为」的完整口径
+writeFileSync(tmp, JSON.stringify({}), 'utf8')
+console.log('SEC5b 纯默认完整prefix为空:', JSON.stringify(prefix.text({ agent: { options: { model: 'flash' } } })))
 
 // 总开关/人设开关
 console.log('SEC7 master-off ->', JSON.stringify(renderPersona(mergeConfig({ enabled: false }), 'flash').slice(0, 8)))
