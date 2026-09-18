@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-whale-persona",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH plugin: persona engine — make the system prompt's persona section switchable, editable, and memorable (self-name / user address / character / contracts / long-term memory).",
   "type": "module",
   "main": "index.js",
