@@ -1,0 +1,31 @@
+{
+  "name": "@dsh-external/dsh-whale-persona",
+  "version": "0.1.0",
+  "description": "DSH plugin: persona engine — make the system prompt's persona section switchable, editable, and memorable (self-name / user address / character / contracts / long-term memory).",
+  "type": "module",
+  "main": "index.js",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "persona",
+    "system-prompt",
+    "memory",
+    "deepseek-harness"
+  ],
+  "files": [
+    "index.js",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node tests/smoke.mjs && node tests/inbox.mjs"
+  },
+  "private": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-name/dsh-whale-persona",
+    "_note": "发布前换成你的仓库地址"
+  }
+}
