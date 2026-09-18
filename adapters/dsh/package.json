@@ -1,6 +1,6 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "DSH adapter of whale-persona: persona engine — switchable, editable, memorable persona (self-name / user address / stance / character / contracts / long-term memory). Rendering core is shared at repo root core/ (also used by the ZCode adapter).",
   "type": "module",
   "main": "index.js",
@@ -16,7 +16,8 @@
   ],
   "files": [
     "index.js",
-    "README.md"
+    "README.md",
+    "skills"
   ],
   "scripts": {
     "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/zcode-hook.mjs",
