@@ -13,12 +13,12 @@
     {
       "name": "whale-persona",
       "source": "./adapters/zcode",
-      "description": "Persona engine (ZCode adapter): injects persona, work contracts, thinking-chain language and confirmed long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
+      "description": "Persona engine (ZCode adapter, FROZEN as of 0.9.0 — kept installable, no longer developed): injects persona, work contracts, thinking-chain language and confirmed long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
       "description_i18n": {
         "en": "Persona engine (ZCode adapter): injects persona, work contracts, thinking-chain language and confirmed long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
-        "zh-CN": "人设引擎（ZCode 版）：UserPromptSubmit hook 每轮注入人设、工作契约、思维链语言与已确认的长期记忆，另带一个配置管理技能。"
+        "zh-CN": "人设引擎（ZCode 版，自 0.9.0 起冻结：仍可安装，不再单独开发）：UserPromptSubmit hook 每轮注入人设、工作契约、思维链语言与已确认的长期记忆，另带一个配置管理技能。"
       },
-      "version": "0.8.1",
+      "version": "0.9.0",
       "category": "productivity",
       "keywords": [
         "persona",

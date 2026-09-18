@@ -20,6 +20,8 @@
 import { createStore } from '../../core/store.js'
 import { captureActive, runMemoryCommand } from '../../core/capture.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../core/prompt.js'
+// 记下宿主**真实**用的模型 id：界面显示名与它就常常不是一个东西（见 core/lastModel.js 头注）
+import { recordModel } from '../../core/lastModel.js'
 
 export const name = '@shenA2024/whale-persona'
 
@@ -68,6 +70,7 @@ export function apply(ctx) {
           || (agent && agent.session && agent.session.cwd)
           || (agent && agent.options && agent.options.cwd)
         const cfg = store.get()
+        recordModel(model)
         // 【历史备忘】与【入库纪律】只在会话开关打开（或配置 capture:'always'）时注入
         return buildPersonaPrompt(cfg, model, cwd, { capture: captureActive(cfg, agent) })
       } catch {

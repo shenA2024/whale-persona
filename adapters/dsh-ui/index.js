@@ -18,6 +18,10 @@ import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../co
 import { captureMode } from '../../core/capture.js'
 import { readInbox, resolveInbox } from '../../core/memoryInbox.js'
 import { selfNameOf } from '../../core/render.js'
+// 语气预设的文案只有 core/presets.js 一份：面板（/summary）与本地编辑页都从这里取，两处各写一份必然漂移
+import { TONE_PRESETS } from '../../core/presets.js'
+// 宿主上一次真实注入用的模型 id：界面上的模型显示名通常不是它（见 core/lastModel.js 头注）
+import { readLastModel } from '../../core/lastModel.js'
 // 读写纪律与本地编辑器页（scripts/ui.mjs）**同一套**：只替换已知段、未知键保留、坏 JSON 拒写
 import { DEFAULTS, mergeConfig, readRawConfig, renderSections, writeMergedConfig } from '../../core/edit.js'
 
@@ -149,7 +153,12 @@ function buildSummary(query) {
     // 面板展示用：档位标签 + 判定规则 + 按模型指定自称的表（前端不再显示具体模型 id，避免"GLM 用户看到 deepseek"）
     tierLabel: tier === 'pro' ? 'pro 档' : 'flash 档',
     tierRule: '档位由会话的模型名判定：名字含 "pro" 算 pro 档，其余算 flash 档。「按模型指定自称」的条目优先于档位。',
+    // 「按模型」表里的关键词该写什么 —— 就写这个 id（界面上的模型显示名往往不是它）
+    lastModel: readLastModel(),
     selfNameByModel: (persona.selfNameByModel && typeof persona.selfNameByModel === 'object' && !Array.isArray(persona.selfNameByModel)) ? persona.selfNameByModel : {},
+    // 语气预设（0.9.0）：形象 / 语气的按模型覆盖表随 raw / defaults 下发，前端不必再问一次；
+    // 预设本身只是「一键填进 tone.text 的现成文案」（core/presets.js）—— 面板点一下填进输入框，用户可继续手改
+    tonePresets: TONE_PRESETS,
     userName: typeof persona.userName === 'string' ? persona.userName : '',
     contracts,
     memory: {

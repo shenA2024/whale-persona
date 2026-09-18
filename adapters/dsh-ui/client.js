@@ -253,6 +253,17 @@ window.__ModuleLoader__.load({
           on: c.on !== false,
         });
       }
+      // 语气预设（0.9.0）：宿主从 core/presets.js 下发（唯一一份文案）；坏条目直接丢 ——
+      // 按钮点了没反应，好过让整块设置页崩掉
+      var presets = [];
+      var plist = arrOf(d && d.tonePresets);
+      for (var pi = 0; pi < plist.length; pi++) {
+        var pr = objOf(plist[pi]);
+        var ptext = strOf(pr.text);
+        if (!ptext) continue;
+        var pid = strOf(pr.id) || ('preset-' + (pi + 1));
+        presets.push({ id: pid, label: strOf(pr.label) || pid, text: ptext });
+      }
       var raw = objOf(d && d.raw);
       // 有 raw（哪怕空对象）＝ 新宿主：能整体回写；raw 不是对象（老宿主没这字段 / 坏 JSON 时为 null）＝ 不能写
       var hasRaw = !!(d && d.raw !== undefined && d.raw !== null && typeof d.raw === 'object' && !Array.isArray(d.raw));
@@ -264,6 +275,9 @@ window.__ModuleLoader__.load({
         tierLabel: strOf(d && d.tierLabel),
         tierRule: strOf(d && d.tierRule),
         selfNameByModel: objOf(d && d.selfNameByModel),
+        tonePresets: presets,
+        // 宿主上一次真实注入用的模型 id（界面上的模型显示名通常不是它，见 core/lastModel.js）
+        seenModel: strOf(d && d.lastModel),
         enabled: !(d && d.enabled === false),
         exists: d && d.exists !== undefined ? !!d.exists : !!cs.exists,
         thinkingLanguage: strOf(d && d.thinkingLanguage) || 'off',
@@ -346,6 +360,9 @@ window.__ModuleLoader__.load({
       if (!hasRaw) {
         if (!contracts.length && curContracts.length) contracts = curContracts;
       }
+      // 形象 / 语气（0.9.0）：与自称同一套读取次序 —— 磁盘 raw 优先，无 raw 时回落出厂默认
+      var appearance = styleForm(hasRaw ? rp.appearance : dp.appearance);
+      var tone = styleForm(hasRaw ? rp.tone : dp.tone);
       return {
         enabled: raw.enabled !== undefined ? raw.enabled !== false : (n.enabled !== undefined ? n.enabled !== false : (def.enabled !== false)),
         thinkingLanguage: strOf(raw.thinkingLanguage !== undefined ? raw.thinkingLanguage : (n.thinkingLanguage !== undefined ? n.thinkingLanguage : def.thinkingLanguage)) || 'off',
@@ -358,6 +375,14 @@ window.__ModuleLoader__.load({
         contracts: contracts,
         selfNameRows: selfNameTable(hasRaw ? rp.selfNameByModel : objOf(dp.selfNameByModel)).rows,
         selfNameKeep: selfNameTable(hasRaw ? rp.selfNameByModel : objOf(dp.selfNameByModel)).keep,
+        appearanceEnabled: appearance.enabled,
+        appearanceText: appearance.text,
+        appearanceRows: appearance.rows,
+        appearanceKeep: appearance.keep,
+        toneEnabled: tone.enabled,
+        toneText: tone.text,
+        toneRows: tone.rows,
+        toneKeep: tone.keep,
         memoryEnabled: rm.enabled !== undefined ? rm.enabled === true : dm.enabled === true,
         memoryCapture: strOf(rm.capture !== undefined ? rm.capture : dm.capture) || 'on-demand',
         entries: entries,
@@ -382,6 +407,17 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * 「开关 + 通用文本 + 按模型覆盖表」这一族字段（形象 / 语气，0.9.0）的表单展开。
+     * 两者配置形状相同（{ enabled, text, byModel }，未知子键原样保留），所以共用一份展开；
+     * 与 core/defaults.js 的 styleField() 同一口径：坏形状一律回落成「关 + 空」，绝不抛错。
+     */
+    function styleForm(src) {
+      var s = objOf(src);
+      var table = selfNameTable(s.byModel);   // 通用的按模型映射表（名字为兼容测试钩子保留，不改）
+      return { enabled: s.enabled === true, text: strOf(s.text), rows: table.rows, keep: table.keep };
+    }
+
+    /**
      * 「按模型指定自称」的行 → 普通对象（先铺原始快照，再覆盖界面上编辑过的标量条目）。
      * 空键或空值的行直接丢弃：用户点了「+ 加一条」还没填就保存，不该往配置里塞空条目。
      */
@@ -399,6 +435,21 @@ window.__ModuleLoader__.load({
         if (!key || !val) continue;
         out[key] = val;
       }
+      return out;
+    }
+
+    /**
+     * 形象 / 语气：表单 → 配置对象。
+     * **先摊开 raw 里已有的同名对象，再覆盖** enabled / text / byModel ——
+     * 未知子键（别的工具或未来版本写进去的）不许在保存时被裁掉（本仓硬纪律，与 persona 整体回写同一口径）。
+     */
+    function styleOut(enabled, text, rows, keepSrc, rawField) {
+      var out = {};
+      var src = objOf(rawField);
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) out[k] = src[k];
+      out.enabled = enabled === true;
+      out.text = strOf(text);
+      out.byModel = selfNameOut(arrOf(rows), keepSrc);
       return out;
     }
 
@@ -449,6 +500,9 @@ window.__ModuleLoader__.load({
       // 这几处都过 arrOf：任何形状的表单都不该让「保存」抛错（宁可少发一个键，也不弹一行红字）
       persona.contracts = contractOut(arrOf(form.contracts));
       persona.selfNameByModel = selfNameOut(arrOf(form.selfNameRows), form.selfNameKeep);
+      // 形象 / 语气：**先展开 raw 里的同名对象再覆盖**这三个已知子键（未知子键照旧不许被裁掉）
+      persona.appearance = styleOut(form.appearanceEnabled, form.appearanceText, form.appearanceRows, form.appearanceKeep, rawP.appearance);
+      persona.tone = styleOut(form.toneEnabled, form.toneText, form.toneRows, form.toneKeep, rawP.tone);
 
       var memory = {};
       var rawM = objOf(objOf(n.raw).memory);
@@ -467,9 +521,13 @@ window.__ModuleLoader__.load({
 
     function makeContract() { return { keep: {}, text: '', on: true }; }
 
+    /** 映射表的三个表单 key（自称 / 形象 / 语气）：行形状都是 { keep, key, value }，不是契约的 { keep, text, on } */
+    var MAP_ROW_KEYS = ['selfNameRows', 'appearanceRows', 'toneRows'];
+
     /** 新行的初值：契约/条目用 text，映射表用 key/value（都是空串，等用户填） */
-    function makeRow(key) {
-      if (key === 'selfNameRows') return { keep: {}, key: '', value: '' };
+    function makeRow(key, seed) {
+      // seed：按模型表的新行预填关键词（调用点传宿主真实模型 id，用户少猜一次）
+      if (MAP_ROW_KEYS.indexOf(key) >= 0) return { keep: {}, key: strOf(seed), value: '' };
       return makeContract();
     }
 
@@ -769,22 +827,42 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 按模型指定自称：任何模型都能单独给一个自称，不必只用两档回落。
+     * 「按模型指定自称」那张卡的文案（2026-09-18 泛化后由调用点传入 —— 一字不改，
+     * 用户与测试看到的都和泛化前一样；这里只是把文案从组件里搬出来，让形象 / 语气能复用同一个行编辑器）。
+     */
+    var SELF_NAME_CARD = {
+      title: '按模型指定自称',
+      subtitle: function (n) { return n + ' 条 · 逐模型覆盖上面两档'; },
+      empty: '（没配就只用上面两档）',
+      keyPlaceholder: '模型关键词，如 grok-4.7',
+      valuePlaceholder: '自称，如 小七',
+      notes: [
+        '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面两档。例：关键词 '
+          + 'grok-4.7' + ' → 自称 ' + '小七' + '，能命中 ' + 'x-ai/grok-4.7-flash' + '。',
+        '关键词按子串匹配、忽略大小写；空关键词或空自称的行保存时会丢弃。',
+      ],
+    };
+
+    /**
+     * 按模型映射表（键 → 文本）的行编辑器：任何模型都能单独给一条，不必只用上面两档回落。
+     * 自称 / 形象 / 语气三处共用这一张卡，文案**全部由调用点 props 传入**（SELF_NAME_CARD / StyleCard）：
+     *   plain: true → 当**卡内子块**用（形象 / 语气卡里），省掉外层卡片与标题，只留行、加号与说明。
      * 行 = { keep:{key}, key, value }；空键/空值行保存时丢弃。
      */
     function ByModelCard(props) {
       var list = arrOf(props.value);
+      var notes = arrOf(props.notes);
       var rows = list.map(function (r, i) {
         return h('div', { className: 'wpr-map-row', key: 'k' + i },
           h('input', {
             className: 'wpr-in', type: 'text', value: r.key, disabled: !!props.disabled,
-            spellCheck: false, placeholder: '模型关键词，如 grok-4.7',
+            spellCheck: false, placeholder: props.keyPlaceholder,
             onChange: function (ev) { props.onPatch(i, { key: strOf(ev && ev.target && ev.target.value) }); },
           }),
           h('span', { className: 'wpr-arrow' }, '→'),
           h('input', {
             className: 'wpr-in', type: 'text', value: r.value, disabled: !!props.disabled,
-            spellCheck: false, placeholder: '自称，如 小七',
+            spellCheck: false, placeholder: props.valuePlaceholder,
             onChange: function (ev) { props.onPatch(i, { value: strOf(ev && ev.target && ev.target.value) }); },
           }),
           h('button', {
@@ -792,19 +870,69 @@ window.__ModuleLoader__.load({
             onClick: function () { props.onRemove(i); },
           }, '删除'));
       });
-      return h('div', { className: 'wpr-card' },
-        h('div', { className: 'wpr-cardhead' },
-          h('div', { className: 'wpr-title' }, '按模型指定自称'),
-          h('span', { className: 'wpr-sub' }, rows.length + ' 条 · 逐模型覆盖上面两档')),
-        rows.length ? rows : h('div', { className: 'wpr-sub' }, '（没配就只用上面两档）'),
+      var body = [
+        rows.length ? rows : h('div', { className: 'wpr-sub', key: 'none' }, props.empty),
         h('button', {
-          className: 'wpr-btn', type: 'button', disabled: !!props.disabled,
+          className: 'wpr-btn', type: 'button', disabled: !!props.disabled, key: 'add',
           style: { marginTop: 8 }, onClick: props.onAdd,
         }, '+ 加一条'),
-        h('div', { className: 'wpr-note' },
-          '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面两档。例：关键词 '
-          + 'grok-4.7' + ' → 自称 ' + '小七' + '，能命中 ' + 'x-ai/grok-4.7-flash' + '。'),
-        h('div', { className: 'wpr-note' }, '关键词按子串匹配、忽略大小写；空关键词或空自称的行保存时会丢弃。'));
+      ];
+      for (var n = 0; n < notes.length; n++) body.push(h('div', { className: 'wpr-note', key: 'n' + n }, notes[n]));
+      if (props.plain) return h('div', null, body);   // 卡内子块：外层卡片由 StyleCard 提供
+      return h('div', { className: 'wpr-card' },
+        h('div', { className: 'wpr-cardhead' },
+          h('div', { className: 'wpr-title' }, props.title),
+          h('span', { className: 'wpr-sub' }, props.subtitle)),
+        body);
+    }
+
+    /**
+     * 形象 / 语气卡（0.9.0）：两张卡同一套形状 —— 总开关 + 通用文本 + 按模型覆盖表。
+     * 差别只有文案、占位符，以及语气多一排「预设」按钮（数据来自 summary.tonePresets，
+     * 也就是 core/presets.js 唯一那份文案：点一下写进通用文本，用户还能继续手改）。
+     * 「按模型覆盖表」是卡内子块（ByModelCard plain）：条目命中优先，没命中回落通用文本。
+     */
+    function StyleCard(props) {
+      var rows = arrOf(props.rows);
+      var presets = arrOf(props.presets);
+      var sub = rows.length
+        ? (rows.length + ' 条按模型覆盖 · 未命中回落通用文本')
+        : '没有按模型覆盖 · 只用通用文本';
+      return h('div', { className: 'wpr-card' },
+        h('div', { className: 'wpr-cardhead' },
+          h('div', { className: 'wpr-title' }, props.title),
+          badge(props.enabled === true, '已启用', '关（默认关 · opt-in）'),
+          h('span', { className: 'wpr-sub' }, sub)),
+        h(Field, { label: '总开关' },
+          h(CheckBox, {
+            checked: props.enabled === true, disabled: !!props.disabled, label: props.switchLabel,
+            onChange: function (v) { props.onToggleEnabled(v); },
+          }),
+          h('div', { className: 'wpr-hint' }, props.switchHint)),
+        h(Field, { label: '通用文本' },
+          h(TextInput, {
+            multiline: true, value: props.text, disabled: !!props.disabled,
+            placeholder: props.placeholder, onChange: function (v) { props.onText(v); },
+          }),
+          h('div', { className: 'wpr-hint' }, '每行一条（注入时自动加「- 」）；支持 {selfName} / {userName} 占位符。')),
+        presets.length ? h(Field, { label: '预设' },
+          h('div', { className: 'wpr-row' }, presets.map(function (p) {
+            return h('button', {
+              className: 'wpr-btn', type: 'button', key: p.id, disabled: !!props.disabled, title: p.text,
+              style: { marginRight: 6 },
+              onClick: function () { props.onUsePreset(p.text); },
+            }, p.label);
+          })),
+          h('div', { className: 'wpr-hint' },
+            '点一下把该预设的文案填进上面的「通用文本」，填完还能继续手改 —— 预设只是现成文案，不是枚举。')) : null,
+        h('div', { className: 'wpr-note' }, '按模型覆盖（命中优先，没命中回落上面的通用文本；空关键词或空文本的行保存时会丢弃）：'),
+        h(ByModelCard, {
+          plain: true, value: rows, disabled: props.disabled,
+          keyPlaceholder: props.keyPlaceholder, valuePlaceholder: props.valuePlaceholder,
+          empty: props.empty, notes: props.notes,
+          onPatch: props.onPatch, onRemove: props.onRemove, onAdd: props.onAdd,
+        }),
+        h('div', { className: 'wpr-note' }, props.note));
     }
 
     function EditorCard(props) {
@@ -951,7 +1079,7 @@ window.__ModuleLoader__.load({
           var item = {};
           for (var kk in cur) if (Object.prototype.hasOwnProperty.call(cur, kk)) item[kk] = cur[kk];
           if (item.keep === undefined || item.keep === null) item.keep = {};
-          if (key === 'selfNameRows') {
+          if (MAP_ROW_KEYS.indexOf(key) >= 0) {
             item.key = item.key === undefined ? '' : String(item.key);
             item.value = item.value === undefined ? '' : String(item.value);
           } else {
@@ -981,12 +1109,12 @@ window.__ModuleLoader__.load({
         try { setSv(function (s) { return { saving: !!(s && s.saving), saved: false, savedAt: '', error: '' }; }); } catch (e) { /* stub */ }
       }
 
-      function addAt(key) {
+      function addAt(key, seed) {
         setForm(function (f) {
           if (!f) return f;
           var next = {};
           for (var k in f) if (Object.prototype.hasOwnProperty.call(f, k)) next[k] = f[k];
-          next[key] = arrOf(f[key]).concat([makeRow(key)]);
+          next[key] = arrOf(f[key]).concat([makeRow(key, seed)]);
           return next;
         });
         try { setSv(function (s) { return { saving: !!(s && s.saving), saved: false, savedAt: '', error: '' }; }); } catch (e) { /* stub */ }
@@ -1028,6 +1156,12 @@ window.__ModuleLoader__.load({
       }
 
       var shown = savedPreview || (d ? { sections: d.sections, warnings: [] } : null);
+      // 「按模型」条目的关键词到底该写什么：用宿主**真实**注入用的 id，
+      // 因为界面上的模型显示名（如「DeepSeek-V4.1-Flash High」）与 id（如 deepseek-flash）常常不是一回事。
+      var seenModel = strOf(d && d.seenModel);
+      var modelNotes = seenModel
+        ? ['宿主最近一次真实注入用的模型 id 是「' + seenModel + '」—— 关键词照它写即可（忽略大小写，写其中一段也能命中）。']
+        : [];
 
       var body = [];
       if (st.error) {
@@ -1090,9 +1224,68 @@ window.__ModuleLoader__.load({
             h('div', { className: 'wpr-hint' }, '支持 {{cwd}}（当前工作目录）；其余 {{变量}} 原样保留不解析。')))),
         body.push(h(ByModelCard, {
           key: 'bymodel', value: form.selfNameRows, disabled: disabled,
+          title: SELF_NAME_CARD.title,
+          subtitle: SELF_NAME_CARD.subtitle(form.selfNameRows.length),
+          empty: SELF_NAME_CARD.empty,
+          keyPlaceholder: SELF_NAME_CARD.keyPlaceholder,
+          valuePlaceholder: SELF_NAME_CARD.valuePlaceholder,
+          notes: SELF_NAME_CARD.notes.concat(modelNotes),
           onPatch: function (i, f) { patchAt('selfNameRows', i, f); },
           onRemove: function (i) { removeAt('selfNameRows', i); },
-          onAdd: function () { addAt('selfNameRows'); },
+          onAdd: function () { addAt('selfNameRows', seenModel); },
+        }));
+        // 形象 / 语气（0.9.0）：卡序与提示词里的渲染顺序对齐 —— 立场正文之后、工作契约之前
+        body.push(h(StyleCard, {
+          key: 'appearance',
+          title: '形象（appearance）',
+          switchLabel: '启用形象设定',
+          switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
+          enabled: form.appearanceEnabled,
+          text: form.appearanceText,
+          placeholder: '例：你是一位 20 岁的女性，身高 1.75 m。',
+          rows: form.appearanceRows,
+          keyPlaceholder: '模型关键词，如 deepseek-v4.1-flash',
+          valuePlaceholder: '这个模型下的形象，如 你是一位 20 岁的女性，身高 1.75 m。',
+          empty: '（没配就所有模型都用上面的通用文本）',
+          notes: [
+            '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面的通用文本。',
+            '形象是「你是谁／长什么样」的既定事实：不必解释、不要否认，也不要反复强调或拿它加戏；被问到年龄/性别/长相时照它回答。',
+            '注入位置：立场正文之后、工作契约之前。',
+          ].concat(modelNotes),
+          note: '形象是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
+          disabled: disabled,
+          onToggleEnabled: function (v) { patchForm({ appearanceEnabled: v }); },
+          onText: function (v) { patchForm({ appearanceText: v }); },
+          onPatch: function (i, f) { patchAt('appearanceRows', i, f); },
+          onRemove: function (i) { removeAt('appearanceRows', i); },
+          onAdd: function () { addAt('appearanceRows', seenModel); },
+        }));
+        body.push(h(StyleCard, {
+          key: 'tone',
+          title: '回复语气（tone）',
+          switchLabel: '启用回复语气',
+          switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
+          enabled: form.toneEnabled,
+          text: form.toneText,
+          placeholder: '例：语气温柔有耐心：先接住对方的处境再给方案，但该说的问题照样直说。',
+          rows: form.toneRows,
+          keyPlaceholder: '模型关键词，如 glm-5.1',
+          valuePlaceholder: '这个模型下的语气，如 语气严肃克制：先摆结论和依据。',
+          empty: '（没配就所有模型都用上面的通用文本）',
+          presets: arrOf(d.tonePresets),
+          onUsePreset: function (text) { patchForm({ toneText: text }); },
+          notes: [
+            '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面的通用文本。',
+            '语气只改措辞与节奏：不改变结论、证据标准与工作契约。',
+            '注入位置：立场正文之后、工作契约之前。',
+          ].concat(modelNotes),
+          note: '语气是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
+          disabled: disabled,
+          onToggleEnabled: function (v) { patchForm({ toneEnabled: v }); },
+          onText: function (v) { patchForm({ toneText: v }); },
+          onPatch: function (i, f) { patchAt('toneRows', i, f); },
+          onRemove: function (i) { removeAt('toneRows', i); },
+          onAdd: function () { addAt('toneRows', seenModel); },
         }));
         body.push(h(ContractsCard, {
           key: 'contracts', value: form.contracts, disabled: disabled,
@@ -1160,9 +1353,16 @@ window.__ModuleLoader__.load({
           buildPatch: buildPatch,
           selfNameOut: selfNameOut,
           selfNameTable: selfNameTable,
+          styleForm: styleForm,
+          styleOut: styleOut,
           contractOut: contractOut,
           entryOut: entryOut,
           segmentsOf: segmentsOf,
+          // 图片层的两张卡一并交出去：它们是无 hook 的纯函数，测试可以拿 createElement 桩直接渲染出树，
+          // 把「文案没有退化」钉成回归（2026-09-18 泛化 ByModelCard 时加）
+          selfNameCard: SELF_NAME_CARD,
+          ByModelCard: ByModelCard,
+          StyleCard: StyleCard,
         });
       } catch (e) { /* 机检钩子坏了不能连累面板 */ }
     }

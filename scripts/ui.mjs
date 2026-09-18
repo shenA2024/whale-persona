@@ -28,6 +28,8 @@ import { captureMode } from '../core/capture.js'
 import { configPath } from '../core/store.js'
 // 读写纪律与渲染口径全部来自 core/（与 DSH 设置面板**同一套**，见 core/edit.js 的头注）
 import { DEFAULTS, mergeConfig, readRawConfig, renderSections, writeMergedConfig } from '../core/edit.js'
+// 语气预设也来自 core/（面板与本地页共用同一份文案，见 core/presets.js 头注）—— 页面只负责把按钮排出来
+import { TONE_PRESETS } from '../core/presets.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PAGE = path.join(HERE, 'ui.html')
@@ -122,7 +124,7 @@ const server = createServer(async (req, res) => {
       const cfg = mergeConfig(raw)
       return json(res, 200, {
         ok: true, file: FILE, exists: existsSync(FILE),
-        raw, effective: cfg, defaults: DEFAULTS,
+        raw, effective: cfg, defaults: DEFAULTS, tonePresets: TONE_PRESETS,
         preview: render(raw, captureMode(cfg) === 'always' || true, 'flash', process.cwd()),
       })
     }

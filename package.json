@@ -1,7 +1,7 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.8.1",
-  "description": "Persona engine for AI coding harnesses (DeepSeek Harness + ZCode): self-name per model, user address, stance, character, per-item work contracts, thinking-chain language, and a long-term memory inbox where AI entries only take effect after an explicit human confirm line (enforced in code). One shared config.json, zero runtime dependencies, never touches the network.",
+  "version": "0.9.0",
+  "description": "Persona engine for AI coding harnesses (DeepSeek Harness; the ZCode adapter is frozen as of 0.9.0 and no longer developed): self-name per model, self-image (appearance) and reply tone per model (both opt-in), user address, stance, character, per-item work contracts, thinking-chain language, and a long-term memory inbox where AI entries only take effect after an explicit human confirm line (enforced in code). One shared config.json, zero runtime dependencies, never touches the network.",
   "type": "module",
   "main": "./adapters/dsh/index.js",
   "exports": {
@@ -12,7 +12,7 @@
     "whale-persona-dsh": "./scripts/install-dsh.mjs"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/model-names.mjs && node tests/ui-panel.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs",
+    "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/model-names.mjs && node tests/style-fields.mjs && node tests/ui-panel.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs",
     "install-dsh": "node scripts/install-dsh.mjs",
     "render": "node scripts/render-preview.mjs",
     "ui": "node scripts/ui.mjs",
