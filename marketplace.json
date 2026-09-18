@@ -1,9 +1,9 @@
 {
   "name": "whale-persona",
-  "description": "whale-persona: a switchable, editable, memorable persona engine for AI coding harnesses (DeepSeek Harness + ZCode).",
+  "description": "whale-persona: a switchable, editable, memorable persona engine for AI coding harnesses (DeepSeek Harness + ZCode). Persona, work contracts, thinking-chain language and a confirmation-gated long-term memory — one shared config.",
   "description_i18n": {
-    "en": "whale-persona: a switchable, editable, memorable persona engine for AI coding harnesses (DeepSeek Harness + ZCode).",
-    "zh-CN": "whale-persona：可开关、可编辑、可记忆的人设引擎，宿主为 DeepSeek Harness 与 ZCode（一份配置，两个宿主共用）。"
+    "en": "whale-persona: a switchable, editable, memorable persona engine for AI coding harnesses (DeepSeek Harness + ZCode). Persona, work contracts, thinking-chain language and a confirmation-gated long-term memory — one shared config.",
+    "zh-CN": "whale-persona：可开关、可编辑、可记忆的人设引擎，宿主为 DeepSeek Harness 与 ZCode。自称/称呼/立场正文/逐条工作契约/思维链语言/长期记忆（AI 只能提议，人工确认后才生效）——一份 config.json 两个宿主共用。"
   },
   "owner": {
     "name": "shenA2024",
@@ -13,12 +13,12 @@
     {
       "name": "whale-persona",
       "source": "./adapters/zcode",
-      "description": "Persona engine (ZCode adapter): injects persona, work contracts and long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
+      "description": "Persona engine (ZCode adapter): injects persona, work contracts, thinking-chain language and confirmed long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
       "description_i18n": {
-        "en": "Persona engine (ZCode adapter): injects persona, work contracts and long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
-        "zh-CN": "人设引擎（ZCode 版）：UserPromptSubmit hook 每轮注入人设、工作契约与长期记忆，另带一个配置管理技能。"
+        "en": "Persona engine (ZCode adapter): injects persona, work contracts, thinking-chain language and confirmed long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
+        "zh-CN": "人设引擎（ZCode 版）：UserPromptSubmit hook 每轮注入人设、工作契约、思维链语言与已确认的长期记忆，另带一个配置管理技能。"
       },
-      "version": "0.2.0",
+      "version": "0.8.1",
       "category": "productivity",
       "keywords": [
         "persona",

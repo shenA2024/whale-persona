@@ -1,61 +1,84 @@
 # whale-persona —— 多宿主人设引擎
 
-把 AI 编码助手的「人设」变成**可开关、可编辑、可记忆**的配置产物：自称（按模型分档）、
-称呼、关系立场、性格正文、逐条可勾选的工作契约、思维链语言、确认闸门的长期记忆。
-一份 `config.json` + 一个收件箱文件，**多个宿主共用同一套人设与记忆**。
+把 AI 编码助手的**人设**变成一份可开关、可编辑、可记忆的配置：自称（按模型分档）、对用户的称呼、
+关系立场、性格正文、逐条可勾选的工作契约、思维链语言，以及**带代码级确认闸门**的长期记忆。
+一份 `config.json` + 一个收件箱文件，**DSH 与 ZCode 两个宿主共用同一个人设**。
 
-> English summary: a persona engine for AI coding harnesses. One shared JSON config drives
-> self-name (tiered by model), user address, stance, character, per-contract toggles,
-> thinking-chain language, and a confirmation-gated long-term memory inbox. Dual adapters:
-> DeepSeek Harness (system-prompt sections) and ZCode (plugin hook + skill).
+MIT · 纯 ESM · 零运行时依赖 · 不联网 · 异常一律降级为空（最坏是"没有人设"，不炸会话）。
+
+**English**: a persona engine for AI coding harnesses. One shared JSON config drives self-name
+(tiered by model), user address, stance, character, per-contract toggles, thinking-chain language,
+and a long-term memory inbox whose entries only take effect after an explicit human `confirm` line
+(enforced in code, not just in the prompt). Dual adapters: DeepSeek Harness (system-prompt sections
++ settings panel) and ZCode (plugin hook + skill). MIT, no runtime dependencies, never touches the
+network; any error degrades to an empty section.
+
+---
+
+## 它给你什么
+
+| 能力 | 说明 |
+|---|---|
+| 自称 / 称呼 | `{selfName}` `{userName}` 占位符；自称可按**具体模型**指定（`selfNameByModel`），未命中回落 flash / pro 两档 |
+| 立场与性格 | `stance`（一句话）与 `character`（整段正文），渲染在提示词最前面 |
+| 工作契约 | 逐条可勾选，`on:false` 即停用；写得具体可验证才有效 |
+| 思维链语言 | 只改**思考**语言，不改答复语言（`off` / `zh-CN` / `en` …） |
+| 长期记忆 | 手工条目（权威层）+ 收件箱（AI 提议 → **人确认** → 只追加式入库） |
+| 两个编辑入口 | DSH「设置 → 人设」可编辑面板 + 本仓自带本地编辑器页；**同一套读写纪律** |
+| 零行为改变 | 不写配置 = 三段全空，装上不改变任何行为（有单测钉住） |
+| 默认安全 | 不联网、不执行命令、不读你的工作目录；只读写自己的 config 与收件箱 |
 
 ## 60 秒上手
 
-1. **装**（选你的宿主）
-   - **ZCode**：Settings → Plugin Management → Discover → **+** 添加 marketplace，来源填本仓库 URL → 安装 `whale-persona`。
-   - **DSH**：**一条命令**（装插件 + 建预设 + 设默认 + 拷技能 + 自检）：
-     ```bash
-     node scripts/install-dsh.mjs            # 从本仓克隆里跑；--dry-run 可先看要做什么
-     ```
-     安装器**跟随你当前的默认 preset**做基座（`--base ptc` 可指定）——人设插件与模式正交，
-     它只替换基座里的那行人设，不会把你的标准模式悄悄换成 PTC（或反过来）。
-     装完重启 DSH，你会看到两处新东西：**设置 → Agent 预设** 里多出一张
-     「**自定义人设**」卡片（已标「新任务默认」，名字就存在它的 `preset.yml` 里，随你改）、
-     **设置 → 人设** 是一张**可以直接改**的面板：左边填（自称/称呼/立场/正文/工作契约/长期记忆），
-     右边实时显示此刻**实际会注入系统提示词的那几段正文**，保存即落盘（下一步生效）。
-     手工装法与两个平面的规则见 [`adapters/dsh/README.md`](adapters/dsh/README.md)。
-
-     **为什么会多出一个 Agent 预设？** 因为人设**没有别的地方可挂**：
-     ① 随部署提供的 `standard`/`ptc` 预设是宿主的文件，不可改、不可删，升级会覆盖；
-     ② 人设段只能挂在 **agent preset 平面**——挂到 profile 平面会与部署级注册同名冲突，整个 DSH 起不来（实测报错见下）；
-     ③ 宿主官方的创作机制就是「**复制**一份既有预设再改」（UI 上的复制按钮、`AgentPresets.copy`）——安装器做的正是这件事。
-     所以「自定义人设」不是多余的中间层，**它是人设的挂载点**：一份从你当前默认预设复制来、只换掉那行人设的完整装配。
-
-     **谁会用人设？** 只有**绑定这份预设的会话**。安装器把它设成默认，所以之后新建的会话都用它；
-     你在新建会话时显式选了别的预设（比如「标准模式」），那个会话就是官方人设。
-     会话**出过内容之后不能换预设**（宿主的规矩：只有空会话能切），子代理则跟随父会话的装配。
-     一个预设只能是一种呈现模式，所以要「PTC + 人设」和「标准 + 人设」两份，
-     就跑两次安装器、分别指定 `--base ptc` 与 `--base standard`。
-2. **配**（二选一）
-   - **让 AI 写**：装好技能后直接说「加条契约：结尾不要出现征询式问句」；
-   - **自己写**：照配置段的 schema 写一份 config.json（定位链见下）。
-3. **看 / 改配置（两种方式）**
+**① 装（DSH）** —— 一条命令：装插件 + 建预设 + 设默认 + 拷技能 + 自检
 
 ```bash
-# ① 图形界面（推荐）：表单填、右边实时显示"实际注入的三段文本"，一键保存
-node scripts/ui.mjs            # 打开 http://127.0.0.1:8787
+git clone https://github.com/shenA2024/whale-persona.git
+cd whale-persona
+node scripts/install-dsh.mjs --dry-run   # 先看它要做什么
+node scripts/install-dsh.mjs             # 真装
+```
 
-# ② 命令行预览：不想开界面时用，输出与运行期逐字一致
+要求：**Node ≥ 20**、**DSH ≥ 0.1.6-alpha.1**，装完**重启 DSH**。装完你会看到两处新东西：
+
+- **设置 → Agent 预设**：多出一张「**自定义人设**」卡片（已是「新任务默认」）；
+- **设置 → 人设**：左边填（自称/称呼/立场/正文/工作契约/长期记忆），右边**实时显示此刻实际注入的三段文本**，保存即生效。
+
+**② 装（ZCode）**：Settings → Plugin Management → Discover → **+** 添加 marketplace，来源填本仓库 URL → 安装 `whale-persona`。
+
+**③ 配人设** —— 三选一：
+
+```bash
+# a) 对 AI 说（装了配套技能后）：加条契约：结尾不要出现征询式问句
+# b) 图形界面：
+node scripts/ui.mjs                     # http://127.0.0.1:8787
+# c) 命令行预览（输出与运行期逐字一致）：
 node scripts/render-preview.mjs --config examples/demo-config.json --capture
 ```
 
-**没写配置 = 零行为改变**：默认值渲染为空，三段都不出现（见下节实测）。
+### 为什么 DSH 上会多出一个 Agent 预设？
+
+因为人设**没有别的地方可挂**：
+
+1. 宿主的 `standard`/`ptc` 预设是随包发布的文件，改不得也删不得，升级即覆盖；
+2. 人设段只能挂 **agent preset 平面**——挂到 profile 平面会与部署级注册同名冲突，整个 DSH 起不来
+   （实测报错：`prompt section "deployment:persona-prefix" is already registered`）；
+3. 宿主官方的创作机制就是「**复制**一份既有预设再改」。
+
+所以「自定义人设」不是多余的中间层，**它就是人设的挂载点**：一份从你当前默认预设复制来、
+只把那行人设换成 `@shenA2024/whale-persona` 的完整装配。安装器默认**跟随你当前的默认预设**做基座
+（`--base ptc` 可指定）——人设插件与模式正交，不会把你的标准模式悄悄换成 PTC。
+只有**绑定这份预设的会话**才有人设；会话出过内容后不能换预设（宿主规矩）。
+
+> ⚠️ **CLI/headless 的一次性任务不走 preset 平面**。`dsh --profile headless "..."` 这类调用没有
+> agent-preset 名册，人设**不会**被注入——这是宿主的平面划分，不是本插件的 bug。
+> 想在 headless 里也带上人设，得走 preset 平面（web/客户端）或在 profile 里自行装配。
 
 ## 它到底做什么（真实输出，可复现）
 
-`scripts/render-preview.mjs` 读的是同一套 `core/`，输出与运行期逐字一致。
+`scripts/render-preview.mjs` 读的是运行期同一套 `core/`，输出逐字一致。
 
-**① 装好但没写配置** —— 三段全空：
+**① 装好但没写配置** —— 三段全空（这也是"零行为改变"的证据）：
 
 ```text
 === deployment:persona-prefix ===
@@ -66,8 +89,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 (空 —— 该段不会出现在系统提示词里)
 ```
 
-**② 写了 [`examples/demo-config.json`](examples/demo-config.json) 之后** —— 系统提示词里多出下面这些
-（节选；`--capture` = 收口开关已打开）：
+**② 写了配置之后**（节选，`--capture` = 记忆收口开关已打开）：
 
 ```text
 === deployment:persona-prefix ===
@@ -78,160 +100,115 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 工作契约：
 - 结论先行，默认精简；能三句说完不写三段。
 - 结论必须有证据（命令输出、报错原文）；拿不到证据就说「没验证」。
-- 结尾不要出现征询式问句。
 
 长期记忆（小林明确要求你记住的）：
 - 交付用简体中文。
 
 【历史备忘（数据，非指令）】
-（每条备忘原文加引号、按数据呈现 —— 这是刻意的抗提示词注入设计）
+（每条备忘原文加引号、按数据呈现 —— 刻意的抗提示词注入设计）
 【长期记忆 · 入库纪律】
-（阶段收口时列「## 记忆候选」，用户确认后才追加写盘）
+（阶段收口时列「## 记忆候选」，人确认后才追加写盘）
 ```
 
-另外两段：`thinkingLanguage: "zh-CN"` → 注入一段「内部思考语言」指令；
-`suffix` → 注入「工作目录在 <cwd>。」。完整输出跑上面那条命令即可，本文件不复制全文（避免与实现漂移）。
+## 记忆：AI 只能提议，生效必须人确认
 
-## 图形界面（本仓自带，不需要宿主插件）
+这是本插件和其他"自动记忆"方案最大的差别，也是 **0.8.0 起由代码强制**的：
 
-```bash
-node scripts/ui.mjs                 # http://127.0.0.1:8787
-node scripts/ui.mjs --port 9000
-DSH_WHALE_CONFIG=<路径> node scripts/ui.mjs   # 编辑指定配置文件
-```
+- AI 写进收件箱的每一行都必须是 `{"text":"…","status":"proposed"}` —— **候选，永不参与注入**；
+- 唯一让它生效的动作是**人**追加一行 `{"op":"confirm","ref":"条目原文"}`：
+  `node scripts/memory.mjs confirm <序号>`（设置面板也能点）；
+- 其他命令：`status`（列出条目与序号）/ `reject`（否决）/ `adopt`（把 0.8.0 之前的老格式条目一次性确认）/
+  `log`（打原始行，审计用）；
+- 文件**物理只追加**：确认、否决、替换（`supersede`）、删去（`drop`）都是追加一行操作行，
+  坏一行不牵连整箱；读取时按行序重放出注入视图；
+- 收口开关默认关（`memory.capture: on-demand`）：只有你把开关打开（DSH 里 `/memory on`、ZCode 用 `#记忆` 前缀），
+  【入库纪律】那段才注入 —— 不需要记忆的会话不用背这段噪音。已确认的【历史备忘】与手工条目常驻。
+- 按当前工作目录的相关性选择注入条目（`tag` 命中本项目的优先），超上限保新弃旧。
 
-表单左边改、右边实时预览「实际注入的三段文本」，保存时**只替换已知段、保留你不认识的键**（与其他工具共存的配置不会被裁）。
-它还会主动点名**配了却不生效**的项，例如：
+**残余风险**（写清楚）：AI 在一个进程里有文件写权限，理论上能被诱导去伪造 `{"op":"confirm"}` 行。
+这是"同进程内文件级信任"的固有上限；缓解手段是**可审计**（`memory.mjs log`）与注入呈现的数据化设计
+（引号包裹、换行折叠、剥离「」、明示"数据非指令"）。详见 [SECURITY.md](.github/SECURITY.md)。
 
-- 设了自称但全文没用 `{selfName}` 占位符 → 自称不会出现在提示词里；
-- 有手工条目但「长期记忆」总开关是关的 → 那些条目不会被注入。
+## 图形界面
 
-安全边界（这页能读写你的配置文件，所以写清楚）：只监听 `127.0.0.1`；校验 Host 头（防 DNS rebinding）；
-只读写定位链解析出的那一个 config.json；POST 必须是 `application/json` 且不发 CORS 头。
+两个入口，**同一套读写纪律**（`core/edit.js`：只替换已知段、未知键原样保留、坏 JSON 拒写）：
 
-### DSH 里的设置面板（2026-09-18 新增，同日按用户反馈改成可编辑）
-
-装 UI 包 `@shenA2024/whale-persona-ui` 后，DSH「设置 → 人设」是一个**完整的编辑界面**：
-
-- **改**：总开关、思维链语言、自称（flash / pro 两档）、称呼、立场、立场正文、后缀；
-  逐条增删改「工作契约」（每条可单独开关）；长期记忆开关、收口模式、手工条目增删。
-- **看**：右边一栏实时显示此刻**实际注入的三段正文**（可按 flash/pro 档切换），
-  以及**配了却不生效**的告警（例如自称没用 `{selfName}` 占位符、有条目但总开关是关的）。
-- **存**：`POST /whale-persona/api/config` —— 与本地编辑页**同一套读写纪律**（`core/edit.js`）：
-  只替换 `enabled`/`thinkingLanguage`/`persona`/`memory` 四个已知段，**未知键原样保留**
-  （配置里其他工具的段不会被裁）；磁盘上现有文件不是合法 JSON 时**拒绝写入**（409），绝不覆盖。
-
-三段文本与运行期注入**同一套 `core/`**，不是面板自己拼的近似值。
-
-挂载规矩（装错会让整个 DSH 起不来，实测报错：`prompt section "deployment:persona-prefix" is already registered`）：
-
-| 件 | 平面 | 原因 |
+| 入口 | 怎么开 | 说明 |
 |---|---|---|
-| 人设段（`@shenA2024/whale-persona`） | **agent preset** | 与官方 persona 占同一架构位，跨层才是「遮蔽」 |
-| 设置面板（`@shenA2024/whale-persona-ui`） | **profile patch 栈** | UI 插件进不了 preset 平面 |
+| 宿主设置面板 | DSH「设置 → 人设」（装 `@shenA2024/whale-persona-ui`） | 左改右预览，保存走 `POST /whale-persona/api/config` |
+| 本地编辑器页 | `node scripts/ui.mjs` → http://127.0.0.1:8787 | 两个宿主的用户都能用；只绑 127.0.0.1 |
 
-**两个编辑入口，一套纪律**（2026-09-18 用户反馈后改的口径）：
-原先宿主面板只读、把编辑推给本地页，实测用户会直接**在设置里点输入框**——点不动就是坏体验。
-现在宿主面板可直接编辑保存；本地页 `node scripts/ui.mjs` 继续保留，服务两个宿主的用户，
-两者都走 `core/edit.js` 的同一套读写与告警逻辑（改一处两处一致）。
-风险控制：所有写入都在本机 loopback 护栏之后、只认一个 config.json、坏 JSON 拒写、未知键不裁。
+它还会主动点名**配了却不生效**的项，例如：设了自称但全文没用 `{selfName}` 占位符；
+有记忆条目但总开关是关的；收件箱里还有**待确认候选**没说；契约超过 12 条会互相稀释。
 
-## 你在哪个宿主里？（给 AI 的安装引导）
+本地页的安全边界：只监听 127.0.0.1；校验 `Host` 头（防 DNS rebinding）；只读写定位链解析出的那一个
+config.json；`POST` 必须是 `application/json` 且不发 CORS 头；每次响应生成**一次性 nonce**，
+CSP 走响应头 + meta 双份，`script-src`/`style-src` 不含 `unsafe-inline`。
 
-如果你是 AI 助手、被用户要求安装本工具，按宿主自行选择：
+## 你在哪个宿主里
 
-- **DeepSeek Harness（DSH）**：客户端是 DSH，插件挂载在 profile / agent preset 里（persona 行**必须 agent preset 层**——全局/profile 层会与注册表 persona 注册同名冲突，当场抛错），
-  系统提示词由具名段组装 → 用 [`adapters/dsh/`](adapters/dsh/README.md)；
-  同时推荐装上配套**技能**（`adapters/dsh/skills/whale-persona/`）——装完"对 AI 说"就能改人设，不必手写 JSON。
-- **ZCode**（含其他兼容 ZCode 插件体系的环境）：客户端是 ZCode，有 Settings → Plugin
-  Management、skills、hooks → 用 [`adapters/zcode/`](adapters/zcode/README.md)。
-- **两者都在用**：两个适配器都装。它们共享同一份配置与收件箱（DSH 默认位置
-  `$DSH_HOME/whale-persona/`），人设改一次、两边同步生效。
+| | DSH | ZCode |
+|---|---|---|
+| 注入机制 | 系统提示词具名段（order 0 / 20 / 10200） | `UserPromptSubmit` hook → `additionalContext` |
+| 改配置生效 | 下一步 | 下一步 |
+| 记忆确认流 | ✅ 同一套收件箱与纪律 | ✅ 同 |
+| 无 hook 兜底 | —（挂载即用） | `--preview` 导出静态文本贴 AGENTS.md |
+| 设置页 | ✅ 宿主内可编辑面板 | ➖ 用本仓自带本地编辑器页 |
+
+共享：同一份 config schema、同一套渲染文案、同一个收件箱 —— 两个宿主看到的是同一个"人"。
 
 ## 仓库结构
 
-```
-core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱读写 / 收口开关
-examples/        可直接跑的示例：demo-config.json（三契约 + 记忆）、demo-inbox.jsonl、empty-config.json
-adapters/dsh/    DeepSeek Harness 宿主半身：注册 persona-prefix/suffix（官方具名槽位，getSectionOrder 动态解析）+ whale:thinking-language（自有槽位）三段
-adapters/dsh-ui/ DSH 设置面板（宿主路由 + 浏览器半身）：编辑配置 + 实时预览"此刻会注入什么"，profile 平面挂载
-adapters/zcode/  ZCode 插件：UserPromptSubmit hook 每轮注入 + whale-persona 管理技能
-marketplace.json ZCode 市场清单（Discover 添加本仓库时读它，条目指向 adapters/zcode）
-package.json     仓库根包：让 `dsh plugin add <本仓 URL>` 也能装（main 指向 adapters/dsh）
-scripts/         install-dsh.mjs：DSH 一条命令安装器（装包/建预设/设默认/拷技能/自检）
-                 sync-core.mjs：core → zcode vendor 副本同步（改 core 后必跑）
-                 render-preview.mjs：把配置渲染成"实际注入的三段文本"并打印（命令行预览）
-                 ui.mjs + ui.html：本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
-                 memory.mjs：长期记忆确认台（status / confirm / reject / adopt / log；注入只认人工确认过的条目）
-tests/           五套测试：DSH 冒烟 / 记忆收件箱 / 设置面板宿主半身 / ZCode hook / 本地编辑器 API
+```text
+core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱 / 收口开关
+examples/        可直接跑的示例：demo-config.json、demo-inbox.jsonl、empty-config.json
+adapters/dsh/    DSH 宿主半身：注册 persona-prefix/suffix（官方具名槽位）+ whale:thinking-language
+adapters/dsh-ui/ DSH 设置面板（宿主路由 + 浏览器半身）
+adapters/zcode/  ZCode 插件：UserPromptSubmit hook + whale-persona 管理技能
+scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设默认/拷技能/自检）
+                 sync-core.mjs     core → zcode vendor 副本同步（改 core 后必跑）
+                 render-preview.mjs 把配置渲染成"实际注入的三段文本"并打印
+                 ui.mjs + ui.html 本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
+                 memory.mjs       长期记忆确认台（status/confirm/reject/adopt/log）
+tests/           五套测试：DSH 冒烟 / 记忆收件箱 / 设置面板 / ZCode hook / 本地编辑器 API
 ```
 
-## 两个适配器的能力对照
-
-| 能力 | DSH 版 | ZCode 版 |
-|---|---|---|
-| 注入机制 | 系统提示词具名段（order 0/20/10200） | `UserPromptSubmit` hook → `additionalContext` |
-| 改配置生效 | 下一步 | 下一步 |
-| 自称 | ✅ 可按**具体模型**指定（`selfNameByModel`），未命中回落两档 | ✅ 同规则（hook 按事件输入的模型选档） |
-| 思维链语言 | ✅ 专用段 | ✅ |
-| 记忆确认流 | ✅（收件箱按数据注入） | ✅（同一套收件箱与纪律文案） |
-| 无 hook 兜底 | —（挂载即用） | `--preview` 导出静态文本贴 AGENTS.md，新会话生效 |
-| 关闭方式 | config `enabled:false` = 无人设；卸载挂载行回官方 persona | 禁用插件即停；纯默认配置渲染为空（装上不改行为） |
-| 设置页可见性 | ✅ 宿主设置页内直接编辑 + 三段正文实时预览 | ➖ 用本仓自带的本地编辑器页（与面板同一套读写纪律） |
-
-共享：同一份 config schema、同一套渲染文案、同一个收件箱文件——两个宿主看到的是
-同一个「人」。差异只在注入通道。
-
-## 快速开始（人设怎么写）
-
-配置结构与「契约怎么写才有效」「让 AI 代写配置」的完整说明在
-[`adapters/dsh/README.md`](adapters/dsh/README.md)（两宿主通用，ZCode 用户同样适用，
-配置文件定位链见 [`adapters/zcode/README.md`](adapters/zcode/README.md)）。
+配置结构与「契约怎么写才有效」「让 AI 代写配置」的完整说明：
+[adapters/dsh/README.md](adapters/dsh/README.md)；ZCode 侧见 [adapters/zcode/README.md](adapters/zcode/README.md)。
 
 ## 开发
 
 ```bash
-node scripts/sync-core.mjs     # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
-npm test                       # 在仓库根跑全部五套测试
-npm run install-dsh -- --dry-run   # 看安装器会做什么，不落盘
+node scripts/sync-core.mjs          # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
+npm test                            # 仓库根跑全部五套测试（含记忆闸门 T18-T22、CSP U5）
+npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 ```
 
-## 记忆流（2026-09-18 升级：合并式候选 + tag 相关性）
+## 安全与隐私
 
-- 候选分三类：`[新增]` 落事实行 `{"text","at","tag"?}`；`[更新]` 落 `{"op":"supersede","ref":"旧原文","text":"新原文"}`；`[删去]` 落 `{"op":"drop","ref":"旧原文"}`。读取时按行序**重放**出注入视图——物理只追加（坏一行不牵连整箱），逻辑可更新可删去，矛盾旧事实被替代而非无限堆积。
-- 注入按 cwd/tag 相关性选择：当前项目目录命中的条目优先、其次全局（无 tag）、再其他项目，超出 `memory.maxEntries` 才组内保新弃旧。DSH 从 agent session 取 cwd，ZCode 从 hook 输入取，两宿主同链。
-- 首次运行落盘只写**骨架**（persona 段），不写死 memory 段——memory 默认关（opt-in），谁读谁按默认补。
-- **收口开关默认关（只管「写」）**：`memory.capture` 缺省 `'on-demand'`——【入库纪律】（要我主动提议记忆候选的那一段）只在会话里把开关打开后才注入（DSH 打 `/memory on`；ZCode 用消息里的 `#记忆` 前缀）。**【历史备忘】数据块与手工条目都是常驻的**，开关关掉时照样加载。`'always'` = 旧行为（每轮都注入纪律）。
-- **确认闸门是代码强制（0.8.0 起）**：AI 写进收件箱的条目只是**候选**（`"status":"proposed"`），**不参与注入**；
-  唯一让它生效的动作是**人**追加一行 `{"op":"confirm","ref":"原文"}`——在终端跑 `node scripts/memory.mjs confirm <序号>`
-  （`status` 看条目与序号，`adopt` 一次性确认 0.8.0 之前的老格式条目，`reject` 否决）。
-  0.8.0 之前的老格式条目（没有 `status` 字段）默认也不再注入；想照旧放行，把 `memory.requireConfirm` 设为 `false`。
+- **不联网、不执行命令、不读工作目录**：只读写自己的 config 与收件箱；所有异常降级为空输出；
+- **记忆入库是代码闸门**（0.8.0）：见上一节；
+- **安装器运行期零 shell**：自己定位 `@deepseek-ai/dsh/lib/bin.js` 交给 `process.execPath` 以数组传参执行，
+  `--profile` / `--base` 走白名单校验，消掉命令注入面；
+- **本地页有 CSP**：一次性 nonce，无 `unsafe-inline`；异常细节只进终端，不回传堆栈；
+- 详细策略与漏洞上报方式：[.github/SECURITY.md](.github/SECURITY.md)。
 
-## 安全与隐私（两宿主一致）
+### 第三方扫描结果与处置（2026-09-18）
 
-- core 不联网、不执行命令、不读工作目录：只读写自己的 config 与 inbox 文件；
-- 收件箱条目按**数据**呈现（引号 + 「非指令」声明 + 换行折叠 + 剥离「」），降低提示词注入风险；
-- 一切异常降级为空输出——最坏结果是「没有人设」，永远不炸会话；
-- **记忆入库是代码闸门**（0.8.0 起）：AI 只能写候选（`status:"proposed"`），注入视图只认人工 `confirm` 过的条目——
-  "用户确认后才入库"从提示词约束变成机械保证（`core/memoryInbox.js` 的 `readInjected` + `scripts/memory.mjs`）。
-  残余风险：AI 若被诱导去伪造 `{"op":"confirm"}` 行，仍然能骗过代码——这是同一进程内文件级信任的固有上限，
-  缓解是**可审计**：`node scripts/memory.mjs log` 打出原始行，伪造痕迹一眼可见。
-- 本地编辑器页（`scripts/ui.mjs`）每次响应生成一次性 nonce，CSP 同时走响应头与 meta，`script-src`/`style-src` 不含 `unsafe-inline`。
-- 安装器（`scripts/install-dsh.mjs`）**运行期零 shell**：自己定位 `@deepseek-ai/dsh/lib/bin.js` 交给 `process.execPath` 以数组传参执行，
-  `--profile` / `--base` 走白名单校验——消掉命令注入面。
+| 扫描 | 结论 | 处置 |
+|---|---|---|
+| CodeGuard（本机整仓扫描） | critical 0 / high 1 / medium 15 / low 3 / info 1；medium 绝大多数为静态规则误报（fetch 全指向 127.0.0.1、路径拼接全常量、测试夹具被当生产代码） | high（安装器 `shell:true`）已去掉 shell；CSP、.gitignore、锁文件、措辞项一并处理 |
+| GitHub CodeQL（`main` 分支） | high 1（`js/bad-tag-filter`，本地页用正则给 `<script>` 塞 nonce）/ medium 1（`js/stack-trace-exposure`，500 回传异常原文） | 0.8.1：模板改**占位符纯字符串替换**（不再用正则碰 HTML）；500 改固定文案 + 细节仅进终端 |
+| 自查（扫描报告之外） | 记忆入库门禁原本只是**提示词约束** | 0.8.0 升级为**代码强制**的 proposed/confirm 闸门 |
 
-## 第三方审查与修复（2026-09-18，CodeGuard 扫描 + 人工复核）
+## 常见问题
 
-审查结论：**critical 0 / high 1 / medium 15 / low 3 / info 1**，15 条 medium 里绝大多数是静态规则误报
-（fetch 全指向 127.0.0.1、路径拼接全是常量、测试夹具被当成生产代码）。真实项与处置：
-
-| 项 | 问题 | 处置 | 验证 |
-|---|---|---|---|
-| CG-001 high | `install-dsh.mjs` 用 `spawnSync(shell:true)`，`--profile` 畸形值理论上可注入 | 去掉 shell：自己定位 `dsh/lib/bin.js` + `process.execPath` + 数组传参；id 加白名单 | `tests/smoke.mjs` SEC13 + 本仓全量测试；`grep shell: true` 零命中 |
-| CG-020 info | `scripts/ui.html` 缺 CSP | 一次性 nonce CSP（响应头 + meta），行内 style 属性改工具类 | `tests/ui.mjs` U5 六条断言 |
-| CG-017/CG-018 low | .gitignore 缺常见条目 / 无锁文件 | 补齐 `.env``dist/``build/``data/` 等；补 `package-lock.json` | 仓库文件 |
-| CG-005 medium | SKILL.md 一句「别…不告诉用户」被规则误读为隐瞒 | 改写为「落盘后逐条说明改了哪两处」（本意就是透明，只是措辞踩雷） | 两份 SKILL.md |
-| 报告外（自审） | 记忆入库门禁只是提示词约束 | 升级为代码强制：`proposed` 候选 + 人工 `confirm` 行（见下节） | `tests/inbox.mjs` T18-T22 |
+- **装上没反应？** 新建一个会话（人设只在**新建**的、绑定该预设的会话里生效；旧会话出过内容后不能换预设）。
+- **改配置没生效？** 配置是每步求值，改完下一步就生效；但**增删挂载行**要重启宿主。
+- **关掉插件开关就回到官方人设了吗？** 不是。`enabled:false` = 没有人设；要回官方人设得**卸载挂载行**。
+- **`stance` 和 `character` 有什么区别？** `stance` 是一句话关系立场（渲染在前），`character` 是整段正文；两个都填就渲染两块。
+- **`{selfName}` 不生效？** 它只是占位符：必须写进 `character`/契约/记忆条目里才会渲染出自称。
+- **记忆写了没进去？** 检查 `memory.mjs status` —— 候选要你 `confirm` 才生效；老格式条目默认也不注入了（`adopt` 可一次性确认）。
 
 ## 许可
 

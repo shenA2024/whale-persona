@@ -1,7 +1,7 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.8.0",
-  "description": "Persona engine for AI coding harnesses: switchable, editable, memorable persona (self-name / user address / stance / character / per-item work contracts / thinking language / confirmation-gated long-term memory). Ships a DeepSeek Harness adapter (system-prompt sections + settings panel) and a ZCode adapter, sharing one config.",
+  "version": "0.8.1",
+  "description": "Persona engine for AI coding harnesses (DeepSeek Harness + ZCode): self-name per model, user address, stance, character, per-item work contracts, thinking-chain language, and a long-term memory inbox where AI entries only take effect after an explicit human confirm line (enforced in code). One shared config.json, zero runtime dependencies, never touches the network.",
   "type": "module",
   "main": "./adapters/dsh/index.js",
   "exports": {

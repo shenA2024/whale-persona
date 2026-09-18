@@ -4,8 +4,8 @@
 
 | 版本 | 支持 |
 | --- | --- |
-| `main`（当前 0.3.x） | ✅ |
-| 0.2.x 及更早 | ❌ 请先升级 |
+| `main`（当前 0.8.x） | ✅ |
+| 0.7.x 及更早 | ❌ 请先升级（0.8.0 起记忆入库改为代码闸门，升级后旧格式条目默认不再注入，用 `node scripts/memory.mjs adopt` 一次性确认） |
 
 ## 报告漏洞
 
@@ -25,7 +25,12 @@ https://github.com/shenA2024/whale-persona/security/advisories/new
 
 所以这里不存在「远程代码执行」式的漏洞。真实的可利用面是：
 
-1. **记忆投毒（最现实）**——一条未经你确认就被追加进 `memory-inbox.jsonl` 的条目，会长期注入到之后的每一轮系统提示词里。插件内置三层缓解（条目以「数据非指令」+ 引号呈现、条目内换行折叠、只保留最近 30 条），但「用户确认后才入库」这道闸门**只是提示词约束，代码无法强制**。
+1. **记忆投毒**——一条未经你确认就被追加进 `memory-inbox.jsonl` 的条目，可能长期注入到之后的每一轮系统提示词里。
+   **0.8.0 起闸门由代码强制**：AI 只能写 `"status":"proposed"` 的候选，**永不参与注入**；只有**人**追加的
+   `{"op":"confirm","ref":"…"}` 操作行（`node scripts/memory.mjs confirm`／设置面板）才让它生效。
+   叠加原有的三层呈现缓解（「数据非指令」+ 引号包裹 + 换行折叠 + 剥离「」）与 30 条上限。
+   仍有残余面：AI 在同一进程里有文件写权限，**若被诱导去伪造 `op:"confirm"` 行**，代码拦不住——
+   缓解是可审计（`node scripts/memory.mjs log` 打原始行）。这类"伪造确认"的报告我们当作安全问题受理。
 2. **配置投毒**——`config.json` 中的 `character` / `contracts` 字段会被逐字渲染进系统提示词，等于给 AI 下指令。能改这个文件的人（或能诱导 AI 去改它的人）就能改变 AI 行为。
 
 结论：**能写到上述两个文件的人，就能影响 AI 行为。** 这不是漏洞，是本插件的设计前提；报漏洞时请围绕「绕过确认闸门」「越界读文件」「渲染导致提示词注入逃逸」这三类来论。
@@ -33,10 +38,11 @@ https://github.com/shenA2024/whale-persona/security/advisories/new
 ## 已知设计约束（不算漏洞）
 
 - 插件按**同名段替换**官方 `@deepseek-ai/dsh-persona`：装上即遮蔽官方人设，`enabled: false` 得到的是「没有人设」，不是「回到官方人设」；只有卸载才恢复。
-- 收件箱是只读注入，插件自身不删除条目、不写入条目；条目过期需要人工清理。
+- 收件箱是只读注入，插件自身不删除条目、不写入条目（写入由宿主 AI 提议、由人工确认）；条目过期需要人工清理。
+- CLI/headless 的一次性任务（`dsh --profile headless "…"`）**不走 agent preset 平面**，因此不会注入人设——这是宿主的平面划分，不是漏洞。
 
 ## English
 
 Report vulnerabilities through GitHub private vulnerability reporting (link above), **not** public issues. This plugin is local-only: no network access, no subprocesses, no `eval`. Its only writes are the plugin config and (read-only) memory inbox.
 
-The realistic threat is **memory poisoning**: an unconfirmed entry appended to the memory inbox persists into every future system prompt. The built-in mitigations (data-not-instructions framing, newline folding, 30-entry cap) are defense in depth; the confirmation gate is a prompt-level convention, not an enforced one. Report bypasses of that gate, out-of-scope file access, or prompt-injection escapes as security issues.
+The realistic threat is **memory poisoning**: an unconfirmed entry appended to the memory inbox could persist into every future system prompt. Since 0.8.0 the gate is **enforced in code**: the model may only append `"status":"proposed"` candidates, which are never injected; an entry becomes effective only when a human appends a `{"op":"confirm","ref":"…"}` line (`node scripts/memory.mjs confirm`, or the settings panel). Data-not-instructions framing, newline folding, quote stripping and the 30-entry cap remain as defense in depth. Residual surface: the model shares the filesystem with you, so a **forged `op:"confirm"` line** still bypasses the gate (`node scripts/memory.mjs log` keeps it auditable). Report forged confirmations, out-of-scope file access, or prompt-injection escapes as security issues.
