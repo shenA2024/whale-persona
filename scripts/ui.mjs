@@ -18,13 +18,13 @@
  *   · POST 必须是 application/json；没有 CORS 头，浏览器跨域拿不到结果。
  */
 import { createServer } from 'node:http'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DEFAULTS, mergeConfig } from '../core/defaults.js'
-import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../core/prompt.js'
 import { captureMode } from '../core/capture.js'
 import { configPath } from '../core/store.js'
+// 读写纪律与渲染口径全部来自 core/（与 DSH 设置面板**同一套**，见 core/edit.js 的头注）
+import { DEFAULTS, mergeConfig, readRawConfig, renderSections, writeMergedConfig } from '../core/edit.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PAGE = path.join(HERE, 'ui.html')
@@ -36,62 +36,9 @@ function argOf(name, fallback) {
 const PORT = Number(argOf('--port', process.env.WHALE_UI_PORT || '8787'))
 const FILE = configPath()
 
-/** 读原始配置（保留未知键；不存在则视为空对象） */
-function readRaw() {
-  try {
-    if (!existsSync(FILE)) return {}
-    const parsed = JSON.parse(readFileSync(FILE, 'utf8'))
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return null // 坏 JSON：明确报错，不覆盖用户的文件
-  }
-}
-
-/** 已知段整体替换、未知键原样保留 —— 与插件的写回纪律一致 */
-function writeMerged(patch) {
-  const raw = readRaw()
-  if (raw === null) throw new Error('现有 config.json 不是合法 JSON，先修好它（本页不会覆盖坏文件）')
-  const next = { ...raw }
-  for (const key of ['enabled', 'thinkingLanguage', 'persona', 'memory']) {
-    if (patch && Object.prototype.hasOwnProperty.call(patch, key)) next[key] = patch[key]
-  }
-  mkdirSync(path.dirname(FILE), { recursive: true })
-  writeFileSync(FILE, JSON.stringify(next, null, 2) + '\n', 'utf8')
-  return next
-}
-
-/** 配了却不会生效的项 —— 静默失效是配置界面最坑人的地方，这里主动点名 */
-function warningsOf(cfg, model) {
-  const out = []
-  const p = cfg.persona || {}
-  const pro = String(model || 'flash').toLowerCase().includes('pro')
-  const selfName = (pro ? (p.selfNamePro || p.selfNameFlash) : p.selfNameFlash) || ''
-  const texts = [p.stance, p.character].concat((p.contracts || []).map((c) => c && c.text))
-  const usesPlaceholder = texts.some((t) => typeof t === 'string' && t.includes('{selfName}'))
-  if (selfName && selfName !== '我' && !usesPlaceholder) {
-    out.push('自称「' + selfName + '」不会出现在提示词里：它只通过 {selfName} 占位符生效 —— 写进「立场正文」或任一条契约里即可。')
-  }
-  const m = cfg.memory || {}
-  const entries = (m.entries || []).filter((x) => x && x.on !== false && x.text)
-  if (entries.length && m.enabled !== true) {
-    out.push('有 ' + entries.length + ' 条手工条目，但「长期记忆」总开关是关的 —— 它们不会被注入。')
-  }
-  if (m.enabled === true && m.capture === 'always' && m.inbox !== false) {
-    out.push("收口模式是 always：每一轮都会注入【入库纪律】（旧行为）。想按需用，改成 on-demand 并在会话里 /memory on。")
-  }
-  return out
-}
-
-function render(cfgRaw, capture, model, cwd) {
-  const cfg = mergeConfig(cfgRaw)
-  return {
-    prefix: buildPersonaPrompt(cfg, model, cwd, { capture }),
-    thinking: buildThinkingLanguage(cfg),
-    suffix: buildSuffix(cfg, cwd),
-    mode: captureMode(cfg),
-    warnings: warningsOf(cfg, model),
-  }
-}
+const readRaw = () => readRawConfig(FILE)
+const writeMerged = (patch) => writeMergedConfig(patch, FILE)
+const render = (cfgRaw, capture, model, cwd) => renderSections(cfgRaw, { capture, model, cwd })
 
 function json(res, code, payload) {
   res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' })
