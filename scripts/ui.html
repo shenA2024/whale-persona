@@ -51,6 +51,13 @@
   .mt10{margin-top:10px}
   .shrink0{flex:0 0 auto}
   .ml0{margin-left:0}
+  .sub{margin:10px 0 4px;font-size:12px;font-weight:600}
+  .kv{display:flex;gap:8px;align-items:center;margin:6px 0}
+  .kv input.k{flex:0 0 160px}
+  .kv input.v{flex:1}
+  .kv button{height:26px;padding:0 9px}
+  .presets{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+  .presets button{height:26px;padding:0 10px}
 </style>
 </head>
 <body>
@@ -79,6 +86,21 @@
     <p class="hint">自称通过 <b>{selfName}</b> 占位符生效：写进「立场正文」或任一条契约里才会出现在提示词中；同理称呼用 {userName}。</p>
     <div class="row"><label>末尾追加句</label><input type="text" data-p="suffix" id="suffix"></div>
     <p class="hint">末尾句支持 {{cwd}}（会替换成当前工作目录）。</p>
+  </div>
+  <div class="card"><h2>形象 / 语气</h2>
+    <div class="sub">形象：把「你是谁、长什么样」当既定事实注入（默认关，属于 opt-in）</div>
+    <div class="row"><label>启用形象</label><input type="checkbox" id="aEnabled"></div>
+    <div class="row"><label>通用形象</label><textarea id="aText" placeholder="例：你是一位 20 岁的女性，身高 1.75 m。支持 {selfName} / {userName} 占位符"></textarea></div>
+    <div id="aRows"></div>
+    <button id="aAdd" class="mt8">+ 加一条（按模型覆盖）</button>
+    <p class="hint ml0">匹配：先精确（忽略大小写）、再最长子串，都没中才回落「通用形象」；关键词或文本为空的行保存时丢弃。</p>
+    <div class="sub mt10">语气：只改措辞与节奏，不改结论、证据标准与工作契约（默认关，属于 opt-in）</div>
+    <div class="row"><label>启用语气</label><input type="checkbox" id="tEnabled"></div>
+    <div class="row"><label>通用语气</label><textarea id="tText" placeholder="例：语气干脆利落，短句为主、能列点就不写散文。支持 {selfName} / {userName} 占位符"></textarea></div>
+    <div class="presets" id="tPresets"></div>
+    <div id="tRows"></div>
+    <button id="tAdd" class="mt8">+ 加一条（按模型覆盖）</button>
+    <p class="hint ml0">预设只是现成文案：点一下填进上面的「通用语气」，填完随便改；不用预设也完全可以。两段都在「立场正文」之后、「工作契约」之前注入。</p>
   </div>
   <div class="card"><h2>工作契约</h2><div id="contracts"></div>
     <button id="addContract" class="mt8">+ 新增契约</button>
@@ -139,6 +161,85 @@ function entryRow(m, i){
   del.addEventListener("click", function(){ CFG.memory.entries.splice(i,1); render(); touched(); });
   row.appendChild(del); return row;
 }
+/* ── 形象 / 语气（0.9.0 新增）：两段的形状都是 { enabled, text, byModel } ──────────────
+   与 core 的口径逐字对齐（core/render.js 的 styleText）：enabled 只认严格 true；
+   byModel 命中优先、回落 text；空关键词 / 空值的行保存时丢弃。
+   保存走整体读改写，所以这里只覆盖这三个子键 —— 字段里的未知子键一个都不许裁。 */
+var TONE_PRESETS = [];
+var STYLE_UI = {
+  appearance: { on: "aEnabled", text: "aText", rows: "aRows" },
+  tone: { on: "tEnabled", text: "tText", rows: "tRows" }
+};
+// byModel 是对象，但界面上得能一行行编辑：拆成有序行；非字符串值不进输入框（免得被 String() 改写），
+// 单独存一份，保存时原样放回。
+var styleRows = { appearance: [], tone: [] };
+var styleKept = { appearance: {}, tone: {} };
+var styleOn = { appearance: false, tone: false };   // 用户是否碰过这一段（没碰过、配置里也没有 → 不凭空加键）
+function styleRaw(key){
+  var p = CFG.persona || {}, f = p[key];
+  return (f && typeof f === "object" && Object.prototype.toString.call(f) !== "[object Array]") ? f : null;
+}
+function styleField(key){
+  var p = CFG.persona = CFG.persona || {}, f = styleRaw(key);
+  if (!f) { f = {}; p[key] = f; }
+  styleOn[key] = true; return f;
+}
+function renderTonePresets(){
+  var box = el("tPresets"); box.innerHTML = "";
+  TONE_PRESETS.forEach(function(pr){
+    var b = document.createElement("button");
+    b.textContent = pr.label || pr.id || "预设"; b.title = pr.text || "点一下填进通用语气";
+    b.addEventListener("click", function(){ el("tText").value = pr.text || ""; styleField("tone").text = pr.text || ""; touched(); });
+    box.appendChild(b);
+  });
+}
+function styleRow(key, r, i){
+  var row = document.createElement("div"); row.className = "kv";
+  var k = document.createElement("input"); k.type = "text"; k.className = "k"; k.value = r.k || "";
+  k.placeholder = "模型关键词（如 glm-5.1，忽略大小写）";
+  k.addEventListener("input", function(){ styleRows[key][i].k = k.value; touched(); });
+  var v = document.createElement("input"); v.type = "text"; v.className = "v"; v.value = r.v || "";
+  v.placeholder = "这个模型用这段文本（支持 {selfName} / {userName}）";
+  v.addEventListener("input", function(){ styleRows[key][i].v = v.value; touched(); });
+  var del = document.createElement("button"); del.textContent = "删";
+  del.addEventListener("click", function(){ styleRows[key].splice(i, 1); styleOn[key] = true; renderStyles(); touched(); });
+  row.appendChild(k); row.appendChild(v); row.appendChild(del); return row;
+}
+function renderStyles(){
+  Object.keys(STYLE_UI).forEach(function(key){
+    var ui = STYLE_UI[key], f = styleRaw(key) || {};
+    el(ui.on).checked = f.enabled === true;
+    el(ui.text).value = f.text == null ? "" : String(f.text);
+    var box = el(ui.rows); box.innerHTML = "";
+    styleRows[key].forEach(function(r, i){ box.appendChild(styleRow(key, r, i)); });
+  });
+}
+function loadStyleRows(){
+  Object.keys(STYLE_UI).forEach(function(key){
+    var bm = (styleRaw(key) || {}).byModel;
+    styleRows[key] = []; styleKept[key] = {};
+    if (bm && typeof bm === "object" && Object.prototype.toString.call(bm) !== "[object Array]") {
+      Object.keys(bm).forEach(function(k){
+        if (typeof bm[k] === "string") styleRows[key].push({ k: k, v: bm[k] });
+        else styleKept[key][k] = bm[k];
+      });
+    }
+  });
+}
+// 把行列表拼回 byModel（空关键词 / 空值的行丢弃）。预览与保存都先过这一步。
+function syncStyles(){
+  Object.keys(STYLE_UI).forEach(function(key){
+    if (!styleOn[key] && !styleRaw(key)) return;   // 没碰过、配置里也没有 → 这一段不写进配置
+    var f = styleField(key), bm = {};
+    Object.keys(styleKept[key]).forEach(function(k){ bm[k] = styleKept[key][k]; });
+    styleRows[key].forEach(function(r){
+      var k = String(r.k == null ? "" : r.k).trim(), v = String(r.v == null ? "" : r.v);
+      if (!k || !v.trim()) return;
+      bm[k] = v;
+    });
+    f.byModel = bm;
+  });
+}
 function render(){
   el("filePath").textContent = WFILE;
   el("enabled").checked = CFG.enabled !== false;
@@ -163,10 +264,12 @@ function render(){
   el("mInboxPath").value = m.inboxPath || "";
   var eb = el("entries"); eb.innerHTML = "";
   m.entries.forEach(function(x, i){ eb.appendChild(entryRow(x, i)); });
+  renderStyles();
 }
 var timer = null;
 function touched(){ markDirty(true); clearTimeout(timer); timer = setTimeout(preview, 250); }
 function preview(){
+  syncStyles();
   fetch("/api/preview", { method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ config: CFG, capture: el("previewCapture").checked }) })
     .then(function(r){ return r.json(); })
@@ -184,6 +287,7 @@ function showWarnings(list){
 }
 function show(id, text){ var n = el(id); n.textContent = text || ""; n.className = text ? "" : "empty"; if (!text) n.textContent = "(空 —— 该段不会出现在系统提示词里)"; }
 function save(){
+  syncStyles();
   setStatus("保存中…");
   fetch("/api/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ config: CFG }) })
     .then(function(r){ return r.json(); })
@@ -212,6 +316,13 @@ el("mMax").addEventListener("input", function(e){ CFG.memory.maxEntries = Number
 el("mInboxPath").addEventListener("input", function(e){ CFG.memory.inboxPath = e.target.value; touched(); });
 el("addContract").addEventListener("click", function(){ CFG.persona.contracts.push({ id: "", text: "", on: true }); render(); touched(); });
 el("addEntry").addEventListener("click", function(){ CFG.memory.entries.push({ text: "", on: true }); render(); touched(); });
+Object.keys(STYLE_UI).forEach(function(key){
+  var ui = STYLE_UI[key];
+  el(ui.on).addEventListener("change", function(e){ styleField(key).enabled = e.target.checked === true; touched(); });
+  el(ui.text).addEventListener("input", function(e){ styleField(key).text = e.target.value; touched(); });
+});
+el("aAdd").addEventListener("click", function(){ styleOn.appearance = true; styleRows.appearance.push({ k: "", v: "" }); renderStyles(); touched(); });
+el("tAdd").addEventListener("click", function(){ styleOn.tone = true; styleRows.tone.push({ k: "", v: "" }); renderStyles(); touched(); });
 el("previewCapture").addEventListener("change", preview);
 el("save").addEventListener("click", save);
 window.addEventListener("beforeunload", function(e){ if (dirty) { e.preventDefault(); e.returnValue = ""; } });
@@ -219,7 +330,8 @@ fetch("/api/state").then(function(r){ return r.json(); }).then(function(d){
   if (!d.ok) { setStatus(d.error || "读取失败", "err"); return; }
   WFILE = (d.file || "").replace(/\\\\/g, "/");
   CFG = d.raw && Object.keys(d.raw).length ? d.raw : { enabled: true, thinkingLanguage: "off", persona: {}, memory: {} };
-  render(); show("pvPrefix", d.preview.prefix); show("pvThinking", d.preview.thinking); show("pvSuffix", d.preview.suffix);
+  TONE_PRESETS = (d.tonePresets && d.tonePresets.length) ? d.tonePresets : [];
+  renderTonePresets(); loadStyleRows(); render(); show("pvPrefix", d.preview.prefix); show("pvThinking", d.preview.thinking); show("pvSuffix", d.preview.suffix);
   setStatus(d.exists ? "已读取现有配置" : "配置文件还不存在，保存时创建", "ok");
 }).catch(function(e){ setStatus("读取失败：" + e.message, "err"); });
 </script>

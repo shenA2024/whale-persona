@@ -34,6 +34,19 @@ export const DEFAULTS = {
     suffix: '',
     /** 立场正文：可整段自定义，支持 {selfName} / {userName} 占位 */
     character: '',
+    /**
+     * 形象（opt-in，默认关）：把「你是谁／长什么样」当成关于你自己的既定事实注入，如
+     * 「你是一位 20 岁的女性，身高 1.75 m」。
+     * 结构 = { enabled, text（所有模型通用的默认）, byModel（按模型覆盖，命中优先） }。
+     * 匹配规则与 selfNameByModel 完全一致（精确 → 最长子串 → 回落 text）。
+     * 默认关 + 默认空 = 装上零行为改变（与 memory 同一口径）。
+     */
+    appearance: { enabled: false, text: '', byModel: {} },
+    /**
+     * 语气（opt-in，默认关）：只改**措辞与节奏**，不改结论、证据标准与工作契约。
+     * 结构与 appearance 相同：{ enabled, text, byModel }。
+     */
+    tone: { enabled: false, text: '', byModel: {} },
     /** 工作契约：逐条可勾选启停，{selfName}/{userName} 占位可用 */
     contracts: [],
   },
@@ -63,6 +76,20 @@ export const DEFAULTS = {
   },
 }
 
+/**
+ * 「开关 + 通用文本 + 按模型覆盖表」这一族字段的归一化（appearance / tone 共用）。
+ * 未知子键原样透传（与整体纪律一致：保存一次不许把别人的键裁掉），坏形状一律回落默认。
+ */
+function styleField(user, def) {
+  const u = user && typeof user === 'object' && !Array.isArray(user) ? user : {}
+  return {
+    ...u,
+    enabled: u.enabled !== undefined ? !!u.enabled : def.enabled,
+    text: u.text !== undefined ? String(u.text) : def.text,
+    byModel: (u.byModel && typeof u.byModel === 'object' && !Array.isArray(u.byModel)) ? u.byModel : def.byModel,
+  }
+}
+
 /** 浅合并 + 数组整体替换：未知键透传（避免保存一次就把别的段裁掉） */
 export function mergeConfig(user) {
   const u = user && typeof user === 'object' ? user : {}
@@ -84,6 +111,8 @@ export function mergeConfig(user) {
       stance: p.stance !== undefined ? p.stance : d.persona.stance,
       suffix: p.suffix !== undefined ? p.suffix : d.persona.suffix,
       character: p.character !== undefined ? p.character : d.persona.character,
+      appearance: styleField(p.appearance, d.persona.appearance),
+      tone: styleField(p.tone, d.persona.tone),
       contracts: Array.isArray(p.contracts) ? p.contracts : d.persona.contracts,
     },
     memory: {

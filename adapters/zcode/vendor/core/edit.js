@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { DEFAULTS, mergeConfig } from './defaults.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from './prompt.js'
+import { pickByModel } from './render.js'
 import { captureMode } from './capture.js'
 import { STATUS, readPending, resolveInbox } from './memoryInbox.js'
 import { configPath } from './store.js'
@@ -50,6 +51,30 @@ export function writeMergedConfig(patch, file) {
   return next
 }
 
+/**
+ * 形象 / 语气的静默失效点名（0.9.0）：这两段都是 opt-in + 按模型覆盖，
+ * 「填了没开」「开了没填」「按模型条目没命中且没有通用兜底」三种都极容易让人以为插件坏了。
+ */
+function styleWarnings(out, label, field, model) {
+  const f = field && typeof field === 'object' && !Array.isArray(field) ? field : {}
+  const on = f.enabled === true
+  const text = String(f.text == null ? '' : f.text).trim()
+  const table = (f.byModel && typeof f.byModel === 'object' && !Array.isArray(f.byModel)) ? f.byModel : {}
+  const rows = Object.keys(table).filter((k) => String(table[k] == null ? '' : table[k]).trim())
+  const hit = pickByModel(table, model)
+  if (!on) {
+    if (text || rows.length) out.push('「' + label + '」已经填了内容，但开关是关的 —— 不会注入（这一段默认关，属于 opt-in）。')
+    return
+  }
+  if (!text && !rows.length) {
+    out.push('「' + label + '」开关开着，但通用内容和按模型条目都是空的 —— 注入里不会出现这一段。')
+    return
+  }
+  if (!hit && !text && rows.length) {
+    out.push('「' + label + '」只有 ' + rows.length + ' 条按模型条目、没有通用内容，当前模型 ' + String(model || '') + ' 一条都没命中 —— 这个模型下不会注入。')
+  }
+}
+
 /** 配了却不会生效的项 —— 静默失效是配置界面最坑人的地方，这里主动点名 */
 export function configWarnings(cfg, model) {
   const out = []
@@ -58,7 +83,8 @@ export function configWarnings(cfg, model) {
   const selfName = (pro ? (p.selfNamePro || p.selfNameFlash) : p.selfNameFlash) || ''
   const table = (p.selfNameByModel && typeof p.selfNameByModel === 'object' && !Array.isArray(p.selfNameByModel)) ? p.selfNameByModel : {}
   const tableNames = Object.keys(table).map((k) => String(table[k] == null ? '' : table[k]).trim()).filter(Boolean)
-  const texts = [p.stance, p.character].concat((p.contracts || []).map((c) => c && c.text))
+  const texts = [p.stance, p.character, (p.appearance || {}).text, (p.tone || {}).text]
+    .concat((p.contracts || []).map((c) => c && c.text))
   const usesPlaceholder = texts.some((t) => typeof t === 'string' && t.includes('{selfName}'))
   const named = [selfName].concat(tableNames).filter((n) => n && n !== '我')
   if (named.length && !usesPlaceholder) {
@@ -83,6 +109,8 @@ export function configWarnings(cfg, model) {
   if (m.enabled === true && m.capture === 'always' && m.inbox !== false) {
     out.push('收口模式是 always：每一轮都会注入【入库纪律】（旧行为）。想按需用，改成 on-demand 并在会话里 /memory on。')
   }
+  styleWarnings(out, '形象', p.appearance, model)
+  styleWarnings(out, '语气', p.tone, model)
   const contracts = (p.contracts || []).filter((c) => c && c.text)
   if (contracts.length > 12) {
     out.push('契约有 ' + contracts.length + ' 条：超过 12 条会互相稀释，建议合并成更少、更具体的条目。')

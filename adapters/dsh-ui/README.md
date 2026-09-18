@@ -26,10 +26,12 @@
 |---|---|
 | 状态行 | 看到 启用/停用、配置路径（可复制）、文件大小 |
 | 基本 | **改** 总开关、思维链语言、自称（flash/pro 两档）、称呼、立场、立场正文、后缀 |
+| 形象 / 语气 | **改** `persona.appearance`（形象）与 `persona.tone`（语气，0.9.0 起）：两张卡形状相同 —— 总开关（opt-in，默认关，关着时填了也不注入）+ 通用文本 + 按模型覆盖行（`+ 加一条`，关键词用宿主真实模型 id 预填）；语气卡另有 4 个预设按钮一键填进「通用语气」。卡序与提示词里的渲染顺序一致（立场正文之后、工作契约之前），右侧预览逐字显示渲染结果 |
+| 按模型关键词 | 三张「按模型」卡（自称／形象／语气）显示一行「宿主最近一次真实注入用的模型 id 是「xxx」」，点「+ 加一条」时用它**预填关键词**。这个 id 来自 `summary.lastModel`，读的是配置目录下的 `last-model.json`（由 DSH 适配器在段求值时写，见 `core/lastModel.js`）—— **界面上的模型显示名不是它**（显示名「DeepSeek-V4.1-Flash High」对应的真实 id 是 `deepseek-flash`），照显示名写关键词永远命中不了 |
 | 工作契约 | **增删改** 逐条契约，每条单独开关；关掉的仍可编辑，只是不注入 |
 | 长期记忆 | **改** 总开关、收口模式；**增删** 手工条目。收件箱最近几条只读（按**数据**呈现） |
 | 实际注入的三段 | 实时预览 `deployment:persona-prefix` / `whale:thinking-language` / `deployment:persona-suffix` 的**全文**，可按 flash/pro 档切换；保存后就地更新 |
-| 告警 | 主动点名**配了却不生效**的项（自称没用 `{selfName}`、有条目但总开关关着、契约过多过长…） |
+| 告警 | 主动点名**配了却不生效**的项（自称没用 `{selfName}`、有条目但总开关关着、契约过多过长、形象/语气「填了没开」「开了没填」「只有按模型条目、当前模型没命中又没兜底」…） |
 
 三段的文本来自仓库根 `core/`——与运行期注入**同一套渲染代码**，不是面板自己拼的近似值。
 
@@ -58,12 +60,21 @@
 
 ## 宿主路由（面板的数据源）
 
-`GET /whale-persona/api/summary?tier=flash|pro` → `{ ok, tier, model, configPath, configState, enabled, thinkingLanguage, selfName, userName, contracts, memory, sections, editor }`
+`GET /whale-persona/api/summary?tier=flash|pro` → `{ ok, tier, model, lastModel, configPath, configState, configValid, enabled, thinkingLanguage, selfName, selfNameByModel, userName, contracts, memory, sections, warnings, tonePresets, raw, defaults, editor }`
+
+`lastModel`（0.9.0 补丁）= **宿主最近一次真实注入用的模型 id**，来自 `core/lastModel.js` 的 `readLastModel()`（读配置目录下的 `last-model.json`）；没有记录时是空串（不报错，面板就不显示那行提示）。
+前端拿它做两件事：① 在三张「按模型」卡的提示里显示出来；② 新建「按模型」条目时预填关键词（`client.js` 的 `addAt(..., seenModel)`）。
+注意它和顶层的 `model` 不是一回事：`model` 是**查询参数**（面板当前按 flash/pro 哪一档渲染预览），`lastModel` 是宿主**实际传进来**的 id。
+
+形象与语气（`persona.appearance` / `persona.tone`）**不单列顶层字段**：它们随 `raw`（磁盘原文，含按模型覆盖表）与 `defaults`（出厂形状）一起下发，
+前端 `client.js` 的 `styleForm` 把两者抹平成表单形状（`appearanceEnabled / appearanceText / appearanceRows / appearanceKeep`，语气同）；
+保存时 `styleOut` **先展开 `raw` 里的同名对象再覆盖这三个已知子键** —— 未知子键照旧原样保留（测试 N2 / N3 钉住）。
+`tonePresets` 就是 `core/presets.js` 的 `TONE_PRESETS` 4 条（严肃 / 温柔 / 简洁 / 幽默），点一下填进「通用语气」输入框，填完可继续手改。
 
 护栏：Host / Origin 必须 loopback，否则 403；未知路径 404；任何异常都回可读 JSON（面板坏掉不连累设置页）。
 
 ## 测试
 
 ```bash
-node tests/ui-panel.mjs     # 宿主半身 27 项断言（读写路由、护栏、未知键保留、坏 JSON 拒写、换档、字段口径）
+node tests/ui-panel.mjs     # 宿主半身 34 项断言（读写路由、护栏、未知键保留、坏 JSON 拒写、换档、字段口径，含形象/语气卡与预设下发）
 ```

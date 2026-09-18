@@ -80,6 +80,25 @@ try {
   t('U5 页面无行内 style 属性:', !/ style="/.test(html))
   const csp2 = (await fetch('http://127.0.0.1:' + PORT + '/')).headers.get('content-security-policy') || ''
   t('U5 nonce 每次请求都换:', csp2 !== csp && csp2.length > 0)
+
+  // U6–U8（0.9.0 形象 / 语气）：本地页要能跟 core 的 appearance / tone 对齐
+  t('U6 state 带语气预设（4 条）:', Array.isArray(state.tonePresets) && state.tonePresets.length === 4
+    && state.tonePresets.every((p) => p && p.id && p.label && typeof p.text === 'string' && p.text.length > 20))
+
+  const styleBody = { config: { enabled: true, persona: { userName: '小林',
+    appearance: { enabled: true, text: '你是一位 20 岁的女性，身高 1.75 m。', byModel: { 'glm-5.1': '更年轻的形象。' }, note: '未知子键不要裁' },
+    tone: { enabled: true, text: '语气干脆利落。', byModel: {}, ext: { keep: 1 } } } } }
+  const savedStyle = await (await post('/save', styleBody)).json()
+  const disk2 = JSON.parse(readFileSync(cfgFile, 'utf8'))
+  const ap = (disk2.persona || {}).appearance || {}
+  const tn = (disk2.persona || {}).tone || {}
+  t('U7 形象/语气落盘形状正确 + 未知子键仍在 + 预览带这两段:', savedStyle.ok
+    && ap.enabled === true && ap.text === '你是一位 20 岁的女性，身高 1.75 m。' && ap.byModel['glm-5.1'] === '更年轻的形象。' && ap.note === '未知子键不要裁'
+    && tn.enabled === true && tn.text === '语气干脆利落。' && tn.ext && tn.ext.keep === 1
+    && savedStyle.preview.prefix.includes('【形象设定】') && savedStyle.preview.prefix.includes('【回复语气】'))
+
+  t('U8 页面模板带形象/语气卡（预设容器 + 行列表 + 加一条）:', ['aRows','tRows','tPresets','aAdd','tAdd','aText','tText']
+    .every((id) => html.includes('id="' + id + '"')))
 } finally {
   child.kill()
 }

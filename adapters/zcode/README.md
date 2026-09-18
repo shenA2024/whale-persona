@@ -1,5 +1,9 @@
 # whale-persona —— ZCode 适配器
 
+> **维护状态（2026-09-19 起）：ZCode 适配器已冻结。** 作者已不再使用 ZCode —— 这里不再单独开发、不做真机回归，
+> 出问题不优先修。它仍可用：渲染核心仍在仓库根 `core/`，发布前跑一次 `node scripts/sync-core.mjs` 就把新能力同步进 `vendor/`。
+> 冻结的是**为 ZCode 单独投的精力**，不是这个目录的存在。
+
 whale-persona 的 ZCode 插件形态：**UserPromptSubmit hook 每轮动态注入**人设、工作契约
 与长期记忆（对齐 DSH 版「改配置下一步生效」的体验），外加一个 `whale-persona` 技能
 负责配置管理。渲染核心在仓库根 [`core/`](../../core/)（vendor/ 内为自包含副本，
@@ -42,7 +46,8 @@ Settings → Plugin Management → Discover → **+** → 添加**本地目录**
 
 1. 写一份测试配置（见下节定位链，最简单：DSH 用户 `$DSH_HOME/whale-persona/config.json`，
    纯 ZCode 用户 `~/.whale-persona/config.json`），
-   给 `persona.character` 填一句可识别的话（如「测试：人设已注入」）；
+   给 `persona.character` 填一句可识别的话（如「测试：人设已注入」）；想顺带验证形象/语气，
+   再把 `persona.appearance` 的 `enabled` 设为 `true`、`text` 填一句（如「测试：形象已注入」）；
 2. 新开一轮对话随便说句话——若 hook 正常，AI 的行为会带上你的人设；
 3. 不确定时看 ZCode 日志里 hook 的执行记录（fired / failed / timed-out）：
    - `failed` 且提示 JSON 校验失败 → 反馈 issue（附日志片段）；
@@ -78,6 +83,57 @@ hook 与 skill 按以下优先级找 config（找到第一个存在的就用）�
 - 自称解析（与 DSH 版同规则、同一份 core）：`persona.selfNameByModel` 里精确命中 → 最长子串命中 → 回落两档
   （模型名含 "pro" 用 `selfNamePro`，否则 `selfNameFlash`）；所以任何模型都能单独指定自称；
 - 一切异常安静退出——hook 永远不会打断会话。
+- 形象（`persona.appearance`）与语气（`persona.tone`）也走同一份 core 渲染：两段都是 opt-in、默认关，
+  `enabled` 严格为 `true` 才注入，按模型匹配＝精确键（忽略大小写）→ 最长子串 → 回落 `text`，
+  渲染在立场正文之后、工作契约之前；**语气只改措辞**，不改结论、证据标准与工作契约。
+
+## 形象与语气（0.9.0，两段都是 opt-in）
+
+与 DSH 版**同一份 core**（`vendor/core/` 是自包含副本）：`persona.appearance`（形象）与 `persona.tone`（语气）
+结构都是 `{ enabled, text, byModel }`：
+
+- **默认关**：`enabled` 必须严格为 `true` 才注入；`false`／缺省时**填了内容也不注入**；
+- **`text` 是所有模型通用的兜底，`byModel` 是 `{"模型关键词": "文本"}` 的按模型覆盖** —— 关键词写**宿主真实模型 id**，不是界面显示名（见下节）；
+- **匹配规则＝精确键（忽略大小写）→ 最长子串 → 回落 `text`**；空键、空值条目忽略，都没命中且 `text` 也空 → 这一段不出现；
+- **文本支持 `{selfName}` / `{userName}` 占位符**；
+- **渲染位置**：立场正文之后、工作契约之前；
+- **语气只改措辞与节奏**，不改结论、证据标准与工作契约（这句逐字写在注入文本里）。
+
+改法三选一：① 直接改配置文件的这两段；② 对 AI 说「给你设个形象：…」「语气温柔点」「用某个模型时形象换成…」——
+装好的 `whale-persona` 技能会读配置、给前后对照、确认后写回（**只有用户明确要求时才动这两段**）；
+③ 本地编辑器 `node scripts/ui.mjs`（两个宿主通用）里的「形象 / 语气」卡，改完右侧预览就是注入全文。
+改完预览：`node <插件目录>/hooks/render.mjs --preview`，里面出现的【形象设定】/【回复语气】就是下一轮真会注入的文本
+（注意：预览不带模型，`byModel` 命中不了时显示的是通用 `text` —— 见下节）。
+schema 全量与注入文本逐字版见 [`adapters/dsh/README.md`](../dsh/README.md) 的「形象与语气」一节。
+
+### 按模型关键词写什么（ZCode 侧）
+
+前提与 DSH 一样：**界面上的模型显示名 ≠ 宿主传给插件的模型 id**。hook 用的是事件 JSON 里的 `model` 字段
+（`hooks/render.mjs` 的 `input.model`）。DSH 侧实测：显示名「DeepSeek-V4.1-Flash High」对应的真实 id 是 `deepseek-flash`——
+照显示名写 `byModel` 的键**永远命中不了**，不报错，只是注入的不是你写的那条。
+
+- **`last-model.json` 是 DSH 侧的能力，ZCode 这里没有**：只有 DSH 适配器在 persona 段求值时写它
+  （`core/lastModel.js` 的 `recordModel`），ZCode 的 hook **不写**这个文件；设置面板
+  （`@shenA2024/whale-persona-ui`）也是 DSH 侧的，ZCode 没有面板可看。
+  所以别把 `$DSH_HOME/whale-persona/last-model.json` 当 ZCode 的依据 —— 除非你同时在用 DSH，
+  那份记录反映的是 **DSH 会话**最近一次的 id。
+- **预览看不到 `byModel` 的命中结果**：`node hooks/render.mjs --preview` 不带模型（内部按 `model: null` 渲染），
+  所以预览里那段【形象设定】永远显示 `text` 兜底那条；`byModel` 命中没命中，**在预览里看不出来**（别拿它当验收）。
+- **ZCode 用户怎么拿真实 id**：它在 hook 的事件 JSON 里，插件默认不打印。最省事的是**先兜底**
+  （把通用 `text` 填上，必有注入），只在「要按模型区分」时才需要确切 id；这时临时给 hook 加一行把事件落盘，
+  跑一轮后读出来（看完删掉）：
+
+  ```js
+  // ① 顶部 import 补上 appendFileSync：
+  import { readFileSync, existsSync, appendFileSync } from 'node:fs'
+  // ② 在 `const input = raw.trim() ? JSON.parse(raw) : {}` 之后加一行（路径换成工作目录里的文件）：
+  appendFileSync('D:/work/zcode-hook-event.jsonl', JSON.stringify(input) + '\n')
+  ```
+
+  落盘文件里那一行的 `"model"` 就是真实 id，直接抄进 `byModel` 的键。
+  （也可以问会话里的 AI「你现在用的模型 id 是什么」，但以落盘的值/宿主显示为准。）
+- **匹配是忽略大小写的子串**：精确命中优先、其次最长子串，都没中才回落 `text`；
+  真实 id 里够独特的一段（如 `glm` / `flash`）也能命中，但**抄完整 id 最稳**。
 
 ## 收口开关（消息前缀）
 

@@ -5,7 +5,7 @@
  * 一直背着噪音，也多一块提示词注入面。改成按需——默认关，用户打开才注入。
  *
  * 怎么打开（三条路，读写同一份真源）：
- *   ① 宿主 UI 的开关控件（插件套件的输入框 chip 就是调本模块的 isOnId/setOnId；第三方 UI 同样可调）；
+ *   ① 宿主 UI 的开关控件（宿主自带的输入框 chip 就是调本模块的 isOnId/setOnId；第三方 UI 同样可调）；
  *   ② 会话内命令 /memory on|off|status（DSH 命令平面，零 token）；ZCode 版用消息里的 #记忆 前缀；
  *   ③ 配置 memory.capture='always' = 旧行为（每轮都注入，不经开关）。
  *
