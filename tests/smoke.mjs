@@ -23,9 +23,9 @@ writeFileSync(tmp, JSON.stringify({
   memory: { enabled: true, entries: [{ text: '{userName}喜欢先看证据', on: true }] },
 }), 'utf8')
 
-const { apply } = await import('../index.js')
-const { renderPersona } = await import('../lib/render.js')
-const { mergeConfig, DEFAULTS } = await import('../lib/defaults.js')
+const { apply } = await import('../adapters/dsh/index.js')
+const { renderPersona } = await import('../core/render.js')
+const { mergeConfig, DEFAULTS } = await import('../core/defaults.js')
 
 const reg = []
 const ctx = { systemPrompt: { section(s) { reg.push(s); return () => {} } } }

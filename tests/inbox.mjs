@@ -17,7 +17,7 @@ const base = () => ({
   memory: { enabled: true, entries: [{ text: '手工条目：交付用简体', on: true }] },
 })
 
-const { apply } = await import('../index.js')
+const { apply } = await import('../adapters/dsh/index.js')
 const box = {}
 apply({ systemPrompt: { section: (s) => { box[s.name] = s; return () => {} } } })
 const text = () => box['deployment:persona-prefix'].text({})
