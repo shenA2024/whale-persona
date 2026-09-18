@@ -38,14 +38,20 @@ export function createStore() {
     return cache
   }
 
-  /** 首次运行落一份默认配置，方便用户直接改 */
+  /**
+   * 首次运行落一份**骨架**配置，方便用户直接改。
+   * 只写 persona 段，不写 memory 段——两个宿主的默认不同（开源独立版 memory 默认关、
+   * 套件侧 core/UI 默认开），落盘写死任何一边都会在另一边静默生效；
+   * 骨架不写，各读取方 mergeConfig 时按自己的默认补，谁读谁负责。
+   */
   function ensureFile() {
     try {
       statSync(file)
     } catch {
       try {
         mkdirSync(path.dirname(file), { recursive: true })
-        writeFileSync(file, JSON.stringify(DEFAULTS, null, 2), 'utf8')
+        const skeleton = { enabled: DEFAULTS.enabled, thinkingLanguage: DEFAULTS.thinkingLanguage, persona: DEFAULTS.persona }
+        writeFileSync(file, JSON.stringify(skeleton, null, 2) + '\n', 'utf8')
         stamp = ''
       } catch { /* 写不了就算了，内存默认值照样能用 */ }
     }

@@ -41,8 +41,13 @@ export function apply(ctx) {
     interpolate: false,
     text: (context) => {
       try {
-        const model = context && context.agent && context.agent.options && context.agent.options.model
-        return buildPersonaPrompt(store.get(), model)
+        const agent = context && context.agent
+        const model = agent && agent.options && agent.options.model
+        // cwd 给记忆相关性选择用（tag 命中当前项目目录的条目优先注入）
+        const cwd = (agent && agent.session && agent.session.header && agent.session.header.cwd)
+          || (agent && agent.session && agent.session.cwd)
+          || (agent && agent.options && agent.options.cwd)
+        return buildPersonaPrompt(store.get(), model, cwd)
       } catch {
         return ''
       }
