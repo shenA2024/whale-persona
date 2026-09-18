@@ -1,6 +1,7 @@
 // 形象 / 语气测试（0.9.0 新增：按模型设定形象与回复语气，两者都是 opt-in）
 // 断言强制：任一 false 即非零退出
 import { mkdtempSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 
@@ -122,6 +123,17 @@ recordModel(123)
 t('L3 空值/非字符串不覆盖已有记录', readLastModel() === 'deepseek-flash')
 recordModel('Pro/deepseek/deepseek-v4.1-flash')
 t('L4 换模型会更新', readLastModel() === 'Pro/deepseek/deepseek-v4.1-flash')
+t('L6 关闭开关后不写盘', (() => {
+  const file = path.join(home, 'whale-persona', 'last-model.json')
+  const before = readFileSync(file, 'utf8')
+  const out = spawnSync(process.execPath, ['--input-type=module', '-e',
+    "process.env.DSH_WHALE_LAST_MODEL='off';"
+    + "const m = await import('file:///' + process.env.SPEC.replace(/\\\\/g,'/'))"
+    + ".then(m => m);const r = m.recordModel('别的模型');const t = m.readLastModel();"
+    + "console.log(JSON.stringify({r: String(r), t}))"],
+  { env: { ...process.env, DSH_HOME: home, DSH_WHALE_CONFIG: path.join(home, 'whale-persona', 'config.json'), SPEC: path.join(process.cwd(), 'core', 'lastModel.js') }, encoding: 'utf8' })
+  return out.status === 0 && readFileSync(file, 'utf8') === before
+})())
 t('L5 记录的 id 能被 byModel 子串命中', render({ appearance: { enabled: true, text: '', byModel: { 'deepseek-v4.1-flash': '命中。' } } }, readLastModel()).indexOf('命中。') >= 0)
 
 // ⑭ 端到端：buildPersonaPrompt 真的按模型选形象

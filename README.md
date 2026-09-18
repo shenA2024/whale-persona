@@ -237,6 +237,9 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
    { "model": "deepseek-flash", "at": "2026-09-18T16:23:23.617Z" }
    ```
 
+   > 这个文件是**纯本机元数据**（只有 `model` 与写入时间，不联网、不含人设正文），可以随手删 —— 下次段求值会自动重建。
+   > 不想让它写：设环境变量 `DSH_WHALE_LAST_MODEL=off`（1/true/yes 之外的写法都当没设）。代价只是面板不再提示真实 id。
+
    它由 DSH 适配器在**段求值**时写入（`core/lastModel.js` 的 `recordModel`），所以**先跑过一轮对话才有值**；
    值没变不重写盘，一轮会话只写一次。
 3. **拿不准就先兜底**：把通用 `text` 填上 —— 填了 `text` 至少有东西注入；

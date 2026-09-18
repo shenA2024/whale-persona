@@ -16,11 +16,21 @@ import { configPath } from './store.js'
 
 const FILE = () => path.join(path.dirname(configPath()), 'last-model.json')
 
+/**
+ * 硬开关（2026-09-19 加，回应外部审查的那条提醒）：
+ * 这个文件是纯本机元数据（只有 `{model, at}`，不联网、不含人设正文），
+ * 但它在**配置目录**里 —— 谁把配置目录整体同步/备份，就会把本机模型 id 一起带走。
+ * 介意的人设 `DSH_WHALE_LAST_MODEL=off` 即彻底不写（读也不写、不报错；面板那行提示自然消失）。
+ * 不设 = 默认行为。任何取值异常都不影响人设渲染。
+ */
+const DISABLED = ['off', '0', 'false', 'no'].includes(String(process.env.DSH_WHALE_LAST_MODEL || '').trim().toLowerCase())
+
 /** 进程内缓存：同一会话每一步都会求值一次段文本，不能每步都读盘 */
 let cache = ''
 
 export function recordModel(model) {
   try {
+    if (DISABLED) return
     const id = typeof model === 'string' ? model.trim() : ''
     if (!id) return
     if (!cache) {
