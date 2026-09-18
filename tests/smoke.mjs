@@ -72,3 +72,38 @@ t('SEC5c 纯默认suffix段为空(零观点口径):', suffix.text({}) === '')
 t('SEC7 master-off 渲染为空:', renderPersona(mergeConfig({ enabled: false }), 'flash') === '')
 t('SEC7 persona-off 渲染为空:', renderPersona(mergeConfig({ persona: { enabled: false } }), 'flash') === '')
 t('SEC10 dispose:', typeof dispose === 'function')
+
+// SEC11 收口开关：默认按需（会话级）／开了才生效／always 是旧行为
+{
+  const { captureActive, setOn, isOn } = await import('../core/capture.js')
+  const a = { options: { model: 'flash' }, session: { header: { id: 's-smoke' } } }
+  const onDemand = mergeConfig({ memory: { enabled: true, inbox: true } })
+  t('SEC11 默认模式 on-demand:', DEFAULTS.memory.capture === 'on-demand')
+  t('SEC11 默认关:', captureActive(onDemand, a) === false && isOn(a) === false)
+  setOn(a, true)
+  t('SEC11 开关打开后生效:', captureActive(onDemand, a) === true)
+  t('SEC11 always 模式:', captureActive(mergeConfig({ memory: { enabled: true, inbox: true, capture: 'always' } }), a) === true)
+  t('SEC11 inbox 关则不开:', captureActive(mergeConfig({ memory: { enabled: true, inbox: false, capture: 'always' } }), a) === false)
+  t('SEC11 memory 关则不开:', captureActive(mergeConfig({ memory: { enabled: false, capture: 'always' } }), a) === false)
+}
+// SEC12 /memory 命令注册：拿到 commands 服务就注册；没拿到只影响命令，人设照常
+{
+  const regs = []
+  const fibers = []
+  const fakeCtx = {
+    systemPrompt: { section: () => () => {} },
+    inject: (deps, cb) => {
+      cb({ commands: { register: (def) => { regs.push(def); return () => {} } } })
+      const f = { dispose() {} }
+      fibers.push(f)
+      return f
+    },
+  }
+  const d = apply(fakeCtx)
+  const cmd = regs.find((r) => r.name === 'memory')
+  t('SEC12 /memory 注册:', !!cmd && typeof cmd.handler === 'function' && typeof d === 'function')
+  const res = cmd.handler({ agent: { session: { header: { id: 'cmd-session' } } }, rawInput: 'status' })
+  t('SEC12 处理器可执行:', !!res && typeof res.kind === 'string' && typeof res.text === 'string')
+  d()
+  t('SEC12 dispose 不抛错:', true)
+}

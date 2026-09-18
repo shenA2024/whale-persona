@@ -18,7 +18,7 @@
         "en": "Persona engine (ZCode adapter): injects persona, work contracts and long-term memory every turn via the UserPromptSubmit hook; plus a config-management skill.",
         "zh-CN": "人设引擎（ZCode 版）：UserPromptSubmit hook 每轮注入人设、工作契约与长期记忆，另带一个配置管理技能。"
       },
-      "version": "0.1.1",
+      "version": "0.2.0",
       "category": "productivity",
       "keywords": [
         "persona",

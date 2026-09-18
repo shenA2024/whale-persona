@@ -39,6 +39,11 @@ export const DEFAULTS = {
     entries: [],
     /** 收件箱（AI 阶段收口提议 → 用户确认 → 只追加式入库；[更新]/[删去]以 supersede/drop 操作行落地，参考层） */
     inbox: true,
+    /**
+     * 收口模式：'on-demand'（默认）—— 会话内 /memory on 才注入收件箱与入库纪律；
+     * 'always' —— 旧行为，每轮都注入。手工条目不受它控制。
+     */
+    capture: 'on-demand',
     /** 注入上限（收件箱；当前项目 tag 命中优先，其次全局，超出保新弃旧） */
     maxEntries: 30,
     /** 收件箱文件路径；空 = 配置目录下的 memory-inbox.jsonl（见 store.js 的 configDir()） */
@@ -70,6 +75,7 @@ export function mergeConfig(user) {
     memory: {
       enabled: m.enabled !== undefined ? !!m.enabled : d.memory.enabled,
       inbox: m.inbox !== undefined ? !!m.inbox : d.memory.inbox,
+      capture: typeof m.capture === 'string' ? m.capture : d.memory.capture,
       maxEntries: Number(m.maxEntries) > 0 ? Number(m.maxEntries) : d.memory.maxEntries,
       inboxPath: typeof m.inboxPath === 'string' ? m.inboxPath : '',
       entries: Array.isArray(m.entries) ? m.entries : d.memory.entries,
