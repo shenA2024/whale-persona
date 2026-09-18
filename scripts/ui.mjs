@@ -52,6 +52,24 @@ function json(res, code, payload) {
   res.end(JSON.stringify(payload))
 }
 
+/**
+ * 模板填充：**只做纯字符串替换**，不拿正则去碰 HTML。
+ * 为什么：① 正则匹配 `<script>` 这类形态会被静态扫描当成"HTML 过滤"（js/bad-tag-filter）——
+ * 我们这里根本不是过滤，只是给自己的模板塞 nonce，没必要留这种形态；
+ * ② 标签一旦带上属性（`<script defer>`）正则就漏，占位符写法不会。
+ * 占位符缺了就抛错（宁可起不来，也不要发一个 CSP 全被封掉的空页面）。
+ */
+function renderPage(nonce, csp) {
+  const tpl = readFileSync(PAGE, 'utf8')
+  for (const ph of ['%NONCE%', '%CSP%']) {
+    if (!tpl.includes(ph)) throw new Error('ui.html 模板缺少占位符 ' + ph)
+  }
+  return tpl
+    .split('%NONCE%').join(nonce)
+    .split('%CSP%').join(csp)
+    .split('%PORT%').join(String(PORT))
+}
+
 /** 一次性 nonce 的 CSP：本页只用内联 script/style，所以把权限精确收到这一次响应的 nonce 上 */
 function cspFor(nonce) {
   return [
@@ -88,11 +106,7 @@ const server = createServer(async (req, res) => {
     if (p === '/' && req.method === 'GET') {
       const nonce = randomBytes(16).toString('base64')
       const csp = cspFor(nonce)
-      const html = readFileSync(PAGE, 'utf8')
-        .replace('%PORT%', String(PORT))
-        .replace(/%CSP%/g, csp) // 全局替换：占位符出现两次也只换一次是不够的
-        .replace(/<style>/g, '<style nonce="' + nonce + '">')
-        .replace(/<script>/g, '<script nonce="' + nonce + '">')
+      const html = renderPage(nonce, csp)
       res.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'content-security-policy': csp,
@@ -129,7 +143,10 @@ const server = createServer(async (req, res) => {
     }
     return json(res, 404, { ok: false, error: 'not found' })
   } catch (e) {
-    return json(res, 500, { ok: false, error: String((e && e.message) || e) })
+    // 不回传异常原文（静态扫描 js/stack-trace-exposure）：细节写进跑 ui.mjs 的那个终端，
+    // 客户端只拿到一句固定文案 —— 这是本机工具，但堆栈里可能带路径与配置片段，没必要过网络。
+    console.error('[whale-persona ui] 请求处理失败：', e)
+    return json(res, 500, { ok: false, error: '服务器内部错误（细节见运行 ui.mjs 的终端）' })
   }
 })
 

@@ -7,7 +7,7 @@
      本页是服务端渲染的单文件模板，直接 file:// 打开时占位符不会被替换 —— 请走 node scripts/ui.mjs。 -->
 <meta http-equiv="Content-Security-Policy" content="%CSP%">
 <title>whale-persona · 配置编辑器</title>
-<style>
+<style nonce="%NONCE%">
   :root{--t1:#e8ecf2;--t2:#98a2ae;--line:rgba(255,255,255,.10);--accent:#4c8dff;--ok:#3fb950;--warn:#e5a03c}
   *{box-sizing:border-box}
   body{margin:0;color:var(--t1);font:13px/1.65 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
@@ -108,7 +108,7 @@
   </div>
 </section>
 </main>
-<script>
+<script nonce="%NONCE%">
 var CFG = { enabled: true, thinkingLanguage: "off", persona: {}, memory: {} };
 var LANGS = ["off","zh-CN","zh-TW","en","ja","ko"];
 var dirty = false;
