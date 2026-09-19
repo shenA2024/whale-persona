@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * 安全探针（纯 node，零第三方依赖）——把 qa/security-审查.md 里可自动化的检查工具化。
- * 做法对齐 D:/external-review/qa（安全审查部门）：分组断言 -> PASS <true|false> DETAIL <json> + 退出码；
+ * 做法对齐一套既有的安全审查部门流程（探针脚本 + 人工台账 + 每班结论与交接点）：
+ * 分组断言 -> PASS <true|false> DETAIL <json> + 退出码；
  * 只读、不改仓库、不联网、不装包。任一组自身抛错时降级为 SEC_SKIP，不拖垮整轮。
  *
  * 用法:
