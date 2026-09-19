@@ -362,3 +362,91 @@ t('N10 保存按钮：有配置文件且无改动才禁用；没配置文件时�
   && tbSave({ dirty: true, hasConfig: false }).props.disabled === false
   && tbSave({ dirty: true, hasConfig: true }).props.disabled === false)
 
+
+/* ─────────── 2026-09-19 追加：人设预设库（0.10.0）───────────────────────────
+ * 触发来源：用户「预设库我觉得可以做进开源的插件里」+「想做酒馆」。
+ * 宿主路由与面板卡一起钉：路由能被面板之外的东西调用（CLI 走同一批函数），卡只负责展示。
+ */
+t('PR0 整页渲染出「人设预设」组与两个入口:', wholeText.indexOf('人设预设') >= 0
+  && wholeText.indexOf('存为预设') >= 0 && wholeText.indexOf('酒馆角色卡') >= 0)
+// 桩 React 的 useEffect 不跑（面板拿不到列表）：行渲染单独用真数据钉一遍
+const presetCardText = flatText(H.PresetCard({
+  presets: [{ id: 'starter', label: '起步', contracts: 5, hasCharacter: false, hasTone: false, hasAppearance: false, author: 'x' }],
+  onApplied: noop,
+}))
+t('PR0b 预设行渲染：标签 / 四颗按钮 / 目录行都在:', presetCardText.indexOf('起步') >= 0
+  && presetCardText.indexOf('应用') >= 0 && presetCardText.indexOf('导出卡') >= 0
+  && presetCardText.indexOf('导出') >= 0 && presetCardText.indexOf('删除') >= 0)
+t('PR0b 边界写清楚了:', presetCardText.indexOf('不含长期记忆') >= 0 && presetCardText.indexOf('不会自动启用') >= 0
+  && presetCardText.indexOf('不支持 PNG 卡') >= 0)
+
+// 先让配置回到合法状态（前面的坏 JSON 用例可能把它写坏了）
+writeFileSync(CFG, JSON.stringify({
+  enabled: true, thinkingLanguage: 'zh-CN',
+  persona: { enabled: true, selfNameFlash: '小助手', userName: '小林', character: '你是{selfName}。', contracts: [{ id: 'c1', text: '先给结论。', on: true }] },
+  context: { root: 'D:/somewhere' },
+}), 'utf8')
+
+const pr0 = await call('/whale-persona/api/presets')
+t('PR1 预设列表:', pr0.code === 200 && !!pr0.json && pr0.json.ok === true
+  && Array.isArray(pr0.json.presets) && typeof pr0.json.dir === 'string' && pr0.json.presets.some((p) => p.id === 'starter'))
+
+const prSv = await call('/whale-persona/api/presets/save', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ id: 'panel-snap', label: '面板快照' }),
+})
+t('PR2 存为预设:', prSv.code === 200 && prSv.json.ok === true && prSv.json.presets.some((p) => p.id === 'panel-snap'))
+t('PR2 越界 id 拒:', (await call('/whale-persona/api/presets/save', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: '../evil' }),
+})).code === 400)
+
+const prAp = await call('/whale-persona/api/presets/apply', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'panel-snap' }),
+})
+t('PR3 应用预设:', prAp.code === 200 && prAp.json.ok === true && prAp.json.applied === 'panel-snap')
+t('PR3 应用后回读配置:', !!prAp.json.config && !!prAp.json.config.persona && prAp.json.config.persona.character === '你是{selfName}。')
+t('PR3 别的段没被裁:', !!prAp.json.config.context && prAp.json.config.context.root === 'D:/somewhere')
+
+const prTavern = {
+  spec: 'chara_card_v2', spec_version: '2.0',
+  data: {
+    name: 'Panel Card', description: '一位档案管理员。', personality: '谨慎。',
+    system_prompt: '- 契约一\n- 契约二', post_history_instructions: '不要反问。',
+    first_mes: '你好', mes_example: 'x', character_book: { entries: [] }, tags: ['t'], creator: 'c',
+  },
+}
+const prIm = await call('/whale-persona/api/presets/import', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ json: JSON.stringify(prTavern) }),
+})
+t('PR4 导入酒馆卡:', prIm.code === 200 && prIm.json.ok === true && prIm.json.id === 'panel-card')
+t('PR4 不承接的字段点名:', Array.isArray(prIm.json.report.unmapped) && prIm.json.report.unmapped.indexOf('data.first_mes') >= 0
+  && prIm.json.report.unmapped.indexOf('data.character_book') >= 0)
+t('PR4 导入后进列表:', prIm.json.presets.some((p) => p.id === 'panel-card'))
+t('PR4 认不出的卡 400:', (await call('/whale-persona/api/presets/import', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ json: { a: 1 } }),
+})).code === 400)
+t('PR4 坏 JSON 400:', (await call('/whale-persona/api/presets/import', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ json: '{ not json' }),
+})).code === 400)
+
+const prExT = await call('/whale-persona/api/presets/export?id=panel-card&format=tavern')
+t('PR5 导出酒馆卡:', prExT.code === 200 && prExT.json.json.spec === 'chara_card_v2' && prExT.json.json.data.name === 'Panel Card')
+const prExW = await call('/whale-persona/api/presets/export?id=panel-card')
+t('PR5 导出本引擎预设:', prExW.code === 200 && prExW.json.json.spec === 'whale-persona-preset/1' && !!prExW.json.json.persona)
+
+t('PR6 未知 id 404:', (await call('/whale-persona/api/presets/export?id=nope')).code === 404)
+t('PR6 越界 id 404:', (await call('/whale-persona/api/presets/apply', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: '../evil' }),
+})).code === 404)
+t('PR6 非 JSON content-type 415:', (await call('/whale-persona/api/presets/import', {
+  method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}',
+})).code === 415)
+t('PR6 非 loopback host 403:', (await call('/whale-persona/api/presets', { host: 'evil.example.com:3081' })).code === 403)
+
+const prDl = await call('/whale-persona/api/presets/delete', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'panel-card' }),
+})
+t('PR7 删除预设:', prDl.code === 200 && prDl.json.deleted === true && !prDl.json.presets.some((p) => p.id === 'panel-card'))
+t('PR7 删除不存在的返回 deleted=false:', (await call('/whale-persona/api/presets/delete', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'nope' }),
+})).json.deleted === false)
