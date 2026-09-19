@@ -1,0 +1,35 @@
+name: 功能建议
+description: 想要的新能力或改进
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你想解决什么
+      description: 先说场景与痛点，再说你想要的方案；两者分开写
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你设想的做法
+    validations:
+      required: false
+  - type: dropdown
+    id: surface
+    attributes:
+      label: 涉及哪一面
+      options:
+        - 注入文本（人设 / 契约 / 形象 / 语气 / 记忆）
+        - DSH 设置面板
+        - 本地编辑器（scripts/ui.mjs）
+        - 安装器 / 仓库工具
+        - ZCode 适配器（已冻结，仅收极简修复）
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        倾向讨论式交流的话，[Discussions](https://github.com/shenA2024/whale-persona/discussions) 更合适；
+        要动代码的建议再开 Issue。
