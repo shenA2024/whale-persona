@@ -63,7 +63,9 @@ if (opts.base !== 'auto' && !ID_RE.test(opts.base)) { console.error(SELF + ' 非
 const HOME = path.resolve(opts.home || process.env.DSH_HOME || path.join(os.homedir(), '.dsh'))
 const PROFILE_DIR = path.join(HOME, 'profiles', opts.profile)
 const TARGET = opts.link ? opts.source : path.join(HOME, 'plugins', PRESET_ID)
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', '.tmp', 'research', '.github', '.inbox'])
+// data/ 是 .gitignore 掉的开发脚手架（演示 home、宣传截图、评测脚本），用户 clone 里没有；
+// 2026-09-19 实测：它里面的 junction 让 cpSync 抛 EPERM，整个安装中断在复制那一步 —— 一并跳过。
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'out', 'dist', 'build', '.tmp', 'research', '.github', '.inbox', 'data'])
 
 const log = (m) => console.log(SELF + ' ' + m)
 const warn = (m) => console.warn(SELF + ' ! ' + m)
