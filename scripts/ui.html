@@ -8,7 +8,8 @@
 <meta http-equiv="Content-Security-Policy" content="%CSP%">
 <title>whale-persona · 配置编辑器</title>
 <style nonce="%NONCE%">
-  :root{--t1:#e8ecf2;--t2:#98a2ae;--line:rgba(255,255,255,.10);--accent:#4c8dff;--ok:#3fb950;--warn:#e5a03c}
+  :root{--t1:#e8ecf2;--t2:#98a2ae;--t3:#7d8794;--line:rgba(255,255,255,.10);--line2:rgba(255,255,255,.06);
+        --accent:#4c8dff;--ok:#3fb950;--warn:#e5a03c;--radius:12px;--radius-ctl:8px;--h:30px}
   *{box-sizing:border-box}
   body{margin:0;color:var(--t1);font:13px/1.65 "Segoe UI","Microsoft YaHei",system-ui,sans-serif;
        background:radial-gradient(1100px 520px at 8% -12%,#1c2432 0%,#12161d 46%,#0c0e12 100%);min-height:100vh}
@@ -19,30 +20,44 @@
   .grow{flex:1}
   .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 3px rgba(63,185,80,.16)}
   .dot.dirty{background:var(--warn);box-shadow:0 0 0 3px rgba(229,160,60,.18)}
-  button{font:inherit;font-size:12px;height:28px;padding:0 12px;border-radius:9px;cursor:pointer;color:var(--t1);
-         border:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.02))}
-  button:hover{border-color:rgba(255,255,255,.22);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.05))}
-  button.primary{border-color:rgba(140,180,255,.45);background:radial-gradient(120% 120% at 50% 0%,rgba(120,175,255,.42),rgba(46,110,220,.5) 70%);color:#f2f7ff}
+  button{font:inherit;font-size:12px;height:var(--h);padding:0 12px;border-radius:var(--radius-ctl);cursor:pointer;color:var(--t1);
+         border:1px solid var(--line);background:rgba(255,255,255,.04)}
+  button:hover{border-color:var(--line);background:rgba(255,255,255,.09)}
+  button.primary{border-color:var(--accent);background:rgba(76,141,255,.18);color:#f2f7ff}
   main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,520px);gap:16px;padding:16px 20px 60px;align-items:start}
   @media (max-width:1100px){main{grid-template-columns:1fr}}
-  .card{border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.022);padding:12px 14px;margin-bottom:14px;
-        backdrop-filter:blur(4px)}
-  .card h2{font-size:12px;font-weight:600;margin:0 0 10px;color:var(--t1)}
-  .row{display:flex;align-items:center;gap:8px;margin:6px 0}
-  .row>label{flex:0 0 150px;color:var(--t2)}
+  /* 分组标题：轻量一行；组间距 > 组内卡片间距 */
+  .grp{display:flex;align-items:baseline;gap:8px;margin:18px 0 6px;font-size:12px;font-weight:600;color:var(--t1)}
+  .grp:first-child{margin-top:0}
+  .grp .grphint{font-weight:400;color:var(--t3)}
+  .card{border:1px solid var(--line);border-radius:var(--radius);background:rgba(255,255,255,.022);padding:12px 14px;margin:8px 0}
+  .card h2{font-size:12px;font-weight:600;margin:0 0 8px;color:var(--t1)}
+  .card h3{font-size:12px;font-weight:600;margin:12px 0 6px;color:var(--t2)}
+  /* 设置项：label 列（固定宽、右对齐）+ 控件列；控件高度统一 --h */
+  .row{display:flex;align-items:center;gap:10px;margin:6px 0}
+  .row>label{flex:0 0 112px;text-align:right;color:var(--t2);font-size:12px;line-height:var(--h)}
   input[type=text],input[type=number],select,textarea{flex:1;min-width:0;font:inherit;font-size:12px;color:var(--t1);
-        background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:4px 8px}
-  input[type=checkbox]{accent-color:var(--accent);width:15px;height:15px}
-  textarea{min-height:74px;resize:vertical;line-height:1.6}
-  .hint{color:var(--t2);font-size:11px;margin:4px 0 0 158px}
+        background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:var(--radius-ctl)}
+  input[type=text],input[type=number],select{height:var(--h);padding:0 8px}
+  textarea{padding:6px 8px;min-height:76px;resize:vertical;line-height:1.6}
+  input[type=checkbox]{accent-color:var(--accent);width:14px;height:14px;margin:0}
+  .hint{color:var(--t3);font-size:12px;margin:6px 0 0}
+  .row .hint{margin-left:122px}
+  /* 折叠块：说明一律收进这里，默认收起（原生 details，键盘可操作） */
+  details.fold{margin:8px 0 0}
+  details.fold>summary{cursor:pointer;color:var(--t3);font-size:12px;list-style:none}
+  details.fold>summary::-webkit-details-marker{display:none}
+  details.fold>summary::before{content:"▸";font-size:10px;margin-right:6px;opacity:.8}
+  details.fold[open]>summary::before{content:"▾"}
+  details.fold>summary:hover{color:var(--t1)}
+  details.fold>*:not(summary){margin-left:0}
   .contract{display:flex;gap:8px;align-items:center;margin:6px 0}
   .contract input[type=text]{flex:1}
-  .contract button{height:26px;padding:0 9px}
-  .pre{border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.28);padding:10px 12px;margin:0 0 10px}
+  .pre{border:1px solid var(--line);border-radius:var(--radius-ctl);background:rgba(0,0,0,.28);padding:10px 12px;margin:0 0 10px}
   .pre h3{font-size:11.5px;margin:0 0 6px;color:var(--t2);font-weight:600}
   .pre pre{margin:0;white-space:pre-wrap;word-break:break-word;font:11.5px/1.6 ui-monospace,Consolas,monospace;color:#cfe0ff;max-height:280px;overflow:auto}
-  .empty{color:var(--t2);font-style:italic}
-  .warn{font-size:11.5px;color:#e5a03c;border:1px solid rgba(229,160,60,.35);border-radius:10px;background:rgba(229,160,60,.08);padding:6px 9px;margin:0 0 8px}
+  .empty{color:var(--t3);font-style:italic}
+  .warn{font-size:11.5px;color:var(--warn);border:1px solid rgba(229,160,60,.35);border-radius:var(--radius-ctl);background:rgba(229,160,60,.08);padding:6px 9px;margin:0 0 8px}
   .status{font-size:11.5px;color:var(--t2)}
   .status.ok{color:var(--ok)}
   .status.err{color:#e5534b}
@@ -51,13 +66,10 @@
   .mt10{margin-top:10px}
   .shrink0{flex:0 0 auto}
   .ml0{margin-left:0}
-  .sub{margin:10px 0 4px;font-size:12px;font-weight:600}
   .kv{display:flex;gap:8px;align-items:center;margin:6px 0}
   .kv input.k{flex:0 0 160px}
   .kv input.v{flex:1}
-  .kv button{height:26px;padding:0 9px}
   .presets{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
-  .presets button{height:26px;padding:0 10px}
 </style>
 </head>
 <body>
@@ -71,41 +83,59 @@
 </header>
 <main>
 <section id="form">
-  <div class="card"><h2>总开关</h2>
+  <!-- 状态条：总开关 / 思维链语言（与设置面板的顺序一致） -->
+  <div class="card">
     <div class="row"><label>启用本插件人设</label><input type="checkbox" data-k="enabled" id="enabled"></div>
     <div class="row"><label>思维链语言</label><select data-k="thinkingLanguage" id="thinkingLanguage"></select></div>
-    <p class="hint">关掉总开关 = 完全没有人设（不是回到宿主默认人设）；卸载插件才是回到默认。</p>
+    <details class="fold"><summary>说明：这两个开关各管什么</summary>
+      <p class="hint ml0">关掉总开关 = 完全没有人设（不是回到宿主默认人设）；卸载插件才是回到默认。思维链语言 off = 不干预（跟随模型）。本页是自己的一套颜色，不依赖也不覆盖别的插件。</p></details>
   </div>
-  <div class="card"><h2>人设与称呼</h2>
+
+  <p class="grp">我是谁<span class="grphint">自称 · 称呼 · 立场</span></p>
+  <div class="card"><h2>称呼与自称</h2>
     <div class="row"><label>启用 persona 段</label><input type="checkbox" data-p="enabled" id="pEnabled"></div>
-    <div class="row"><label>自称（flash 档）</label><input type="text" data-p="selfNameFlash" id="selfNameFlash"></div>
-    <div class="row"><label>自称（pro 档）</label><input type="text" data-p="selfNamePro" id="selfNamePro"></div>
+    <div class="row"><label>自称 · flash 档</label><input type="text" data-p="selfNameFlash" id="selfNameFlash"></div>
+    <div class="row"><label>自称 · pro 档</label><input type="text" data-p="selfNamePro" id="selfNamePro"></div>
     <div class="row"><label>它怎么称呼你</label><input type="text" data-p="userName" id="userName"></div>
-    <div class="row"><label>关系立场（一句话）</label><input type="text" data-p="stance" id="stance"></div>
-    <div class="row"><label>立场正文</label><textarea data-p="character" id="character"></textarea></div>
-    <p class="hint">自称通过 <b>{selfName}</b> 占位符生效：写进「立场正文」或任一条契约里才会出现在提示词中；同理称呼用 {userName}。</p>
-    <div class="row"><label>末尾追加句</label><input type="text" data-p="suffix" id="suffix"></div>
-    <p class="hint">末尾句支持 {{cwd}}（会替换成当前工作目录）。</p>
+    <details class="fold"><summary>说明：自称与称呼怎么进提示词</summary>
+      <p class="hint ml0">自称通过 <b>{selfName}</b> 占位符生效：写进「立场正文」或任一条契约里才会出现在提示词中；同理称呼用 <b>{userName}</b>。</p></details>
   </div>
-  <div class="card"><h2>形象 / 语气</h2>
-    <div class="sub">形象：把「你是谁、长什么样」当既定事实注入（默认关，属于 opt-in）</div>
+  <div class="card"><h2>立场与后缀</h2>
+    <div class="row"><label>立场（一句话）</label><input type="text" data-p="stance" id="stance"></div>
+    <div class="row"><label>立场正文</label><textarea data-p="character" id="character" placeholder="整段自定义，支持 {selfName} / {userName}"></textarea></div>
+    <div class="row"><label>后缀</label><input type="text" data-p="suffix" id="suffix" placeholder="追加在提示词末尾的一句，支持 {{cwd}}"></div>
+    <details class="fold"><summary>说明：{{cwd}} 与其它变量</summary>
+      <p class="hint ml0">末尾句支持 {{cwd}}（会替换成当前工作目录）；其余 {{变量}} 原样保留不解析。</p></details>
+  </div>
+
+  <p class="grp">我怎么说话<span class="grphint">形象 / 语气 · 都是 opt-in</span></p>
+  <div class="card"><h2>形象与语气</h2>
+    <p class="hint ml0">两段都是 opt-in（默认关），注入在「立场正文」之后、「工作契约」之前；按模型覆盖命中优先，没命中回落通用文本。</p>
+    <h3>形象（appearance）</h3>
     <div class="row"><label>启用形象</label><input type="checkbox" id="aEnabled"></div>
     <div class="row"><label>通用形象</label><textarea id="aText" placeholder="例：你是一位 20 岁的女性，身高 1.75 m。支持 {selfName} / {userName} 占位符"></textarea></div>
     <div id="aRows"></div>
     <button id="aAdd" class="mt8">+ 加一条（按模型覆盖）</button>
-    <p class="hint ml0">匹配：先精确（忽略大小写）、再最长子串，都没中才回落「通用形象」；关键词或文本为空的行保存时丢弃。</p>
-    <div class="sub mt10">语气：只改措辞与节奏，不改结论、证据标准与工作契约（默认关，属于 opt-in）</div>
+    <details class="fold"><summary>说明：形象怎么注入</summary>
+      <p class="hint ml0">形象是「你是谁、长什么样」的既定事实：不必解释、不要否认，也不要反复强调或拿它加戏。开关关着时这一段完全不出现。关键词或文本为空的行保存时丢弃。</p></details>
+    <h3 class="mt10">回复语气（tone）</h3>
     <div class="row"><label>启用语气</label><input type="checkbox" id="tEnabled"></div>
     <div class="row"><label>通用语气</label><textarea id="tText" placeholder="例：语气干脆利落，短句为主、能列点就不写散文。支持 {selfName} / {userName} 占位符"></textarea></div>
     <div class="presets" id="tPresets"></div>
     <div id="tRows"></div>
     <button id="tAdd" class="mt8">+ 加一条（按模型覆盖）</button>
-    <p class="hint ml0">预设只是现成文案：点一下填进上面的「通用语气」，填完随便改；不用预设也完全可以。两段都在「立场正文」之后、「工作契约」之前注入。</p>
+    <details class="fold"><summary>说明：预设与语气边界</summary>
+      <p class="hint ml0">预设只是现成文案：点一下填进上面的「通用语气」，填完随便改；不用预设也完全可以。语气只改措辞与节奏，不改结论、证据标准与工作契约。</p></details>
   </div>
+
+  <p class="grp">我的硬约束<span class="grphint">逐条可勾选</span></p>
   <div class="card"><h2>工作契约</h2><div id="contracts"></div>
     <button id="addContract" class="mt8">+ 新增契约</button>
-    <p class="hint">写得具体可验证才有效：「结尾不要出现征询式问句」✅；「高质量」❌。5–10 条为宜。</p>
+    <details class="fold"><summary>说明：契约怎么才有效</summary>
+      <p class="hint ml0">写得具体可验证才有效：「结尾不要出现征询式问句」✅；「高质量」❌。5–10 条为宜；关掉的条目仍可编辑，只是不注入。</p></details>
   </div>
+
+  <p class="grp">我记住什么<span class="grphint">长期记忆 · 默认关</span></p>
   <div class="card"><h2>长期记忆</h2>
     <div class="row"><label>启用长期记忆</label><input type="checkbox" data-m="enabled" id="mEnabled"></div>
     <div class="row"><label>收件箱确认流</label><input type="checkbox" data-m="inbox" id="mInbox"></div>
@@ -116,13 +146,16 @@
     <div class="row"><label>收件箱路径</label><input type="text" data-m="inboxPath" id="mInboxPath" placeholder="空 = 配置目录下的 memory-inbox.jsonl"></div>
     <div class="mt10" id="entries"></div>
     <button id="addEntry" class="mt8">+ 新增手工条目</button>
-    <p class="hint">手工条目＝你明确要求记住的（进准则块）；收件箱＝AI 提议、你确认后追加的流水。</p>
+    <details class="fold"><summary>说明：手工条目与收件箱的分工</summary>
+      <p class="hint ml0">手工条目＝你明确要求记住的（进准则块，权威层）；收件箱＝AI 提议、你确认后追加的流水（参考层）。默认关：不开就不读不写，装上零行为改变。</p></details>
   </div>
 </section>
 <section>
+  <p class="grp">此刻注入什么<span class="grphint">与运行期同一套渲染</span></p>
   <div class="card"><h2>实际注入的三段文本（实时预览）</h2>
-    <div class="row"><label class="shrink0">预览时视为收口开关已打开</label><input type="checkbox" id="previewCapture" checked></div>
-    <p class="hint ml0">预览不写盘，用同一套 core/ 渲染 —— 与运行期逐字一致。</p>
+    <div class="row"><label class="shrink0 ml0">预览时视为收口开关已打开</label><input type="checkbox" id="previewCapture" checked></div>
+    <details class="fold" open><summary>说明：预览不写盘</summary>
+      <p class="hint ml0">预览不写盘，用同一套 core/ 渲染 —— 与运行期逐字一致。</p></details>
     <div id="warnings"></div>
     <div class="pre"><h3>deployment:persona-prefix</h3><pre id="pvPrefix"></pre></div>
     <div class="pre"><h3>whale:thinking-language</h3><pre id="pvThinking"></pre></div>

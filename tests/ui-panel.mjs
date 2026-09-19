@@ -260,3 +260,90 @@ t('N4 渲染：自称卡文案逐字未退化 + 形象 / 语气卡要件齐全�
     '通用文本', '按模型覆盖', '+ 加一条', '匹配顺序'].every((x) => appearanceCard.indexOf(x) >= 0)
   && ['回复语气（tone）', '关（默认关 · opt-in）', '启用回复语气', '预设', '严肃', '温柔', '关着的时候，下面填了内容也不会注入']
     .every((x) => toneCard.indexOf(x) >= 0))
+
+/* ─────────── 0.9.1 追加：折叠默认收起（样式只一层的门在 tests/ui-css-scope.mjs 的 C1–C11）───
+ * 这一段的断言全部「挂结构」：找 <details> 的 open 属性、看选择器形状 —— 不看具体像素，
+ * 所以 CSS 怎么调都不会误报，但「默认收起 ≠ 删功能」这条线永远钉着。
+ */
+
+// 折叠：默认收起 = details 没有 open 属性；内容仍在渲染树里（否则「收起」等于把功能删了）
+function nodesOf(node, out) {
+  const acc = out || []
+  if (!node || typeof node !== 'object') return acc
+  if (Array.isArray(node)) { node.forEach((n) => nodesOf(n, acc)); return acc }
+  if (typeof node.type === 'function') { nodesOf(node.type(node.props || {}), acc); return acc }
+  acc.push(node)
+  nodesOf(node.props ? node.props.children : null, acc)
+  return acc
+}
+const detailsOf = (tree) => nodesOf(tree).filter((n) => n.type === 'details')
+const textOf = (n) => flatText(n)
+const disc = H.Disclosure({ summary: '摘要', children: '内容' })
+const edTree = H.EditorCard({ editor: { url: 'http://127.0.0.1:8787', port: 8787, running: false } })
+const edDetails = detailsOf(edTree)
+const ccTree = H.ContractsCard({ value: [], disabled: false, onPatch: noop, onRemove: noop, onAdd: noop })
+const ccDetails = detailsOf(ccTree)
+const ccNodes = nodesOf(ccTree)
+t('N6 折叠默认收起（details 一律没有 open），且内容仍在渲染树里',
+  disc.type === 'details' && disc.props.open === undefined
+  && edDetails.length >= 1 && edDetails.every((n) => n.props.open !== true)
+  && ccDetails.length >= 1 && ccDetails.every((n) => n.props.open !== true)
+  && textOf(disc).indexOf('内容') >= 0)
+t('N6b 本地编辑器噪声块默认收起、要用的按钮留在折外',
+  textOf(edDetails[0]).indexOf('它是本仓自带的独立本地面板') >= 0
+  && textOf(edDetails[0]).indexOf('node scripts/ui.mjs --port 8787') >= 0
+  && ccNodes.some((n) => typeof n.type === 'string' && n.type === 'button' && textOf(n).indexOf('+ 加一条契约') >= 0))
+
+// 基础层 CSS 的硬纪律：不碰宿主全局、不覆盖宿主变量、没有裸元素选择器与 !important、颜色只走宿主变量
+const cssSel = (H.css || '').split('}').filter((r) => r.indexOf('{') >= 0).map((r) => r.slice(0, r.indexOf('{')).trim())
+const selParts = cssSel.join(',').split(',').map((s) => s.trim()).filter(Boolean)
+const cssNoVar = (H.css || '').replace(/var\([^)]*\)/g, '')
+t('N7 基础层 CSS 只作用于 .wpr-*、不碰 :root/html/body、无 !important',
+  selParts.length > 40
+  && selParts.every((s) => s.indexOf('.wpr-') >= 0)
+  && !/:root|\bhtml\b|\bbody\b/.test(H.css)
+  && H.css.indexOf('!important') < 0)
+t('N7b 基础层颜色只用宿主变量（去掉 var() 后没有色值）',
+  !/#[0-9a-fA-F]{3}|rgba?\(|hsla?\(/.test(cssNoVar)
+  && (H.css.match(/--dsw-alias-[a-z0-9-]+/g) || []).length >= 10)
+
+// 自带外观已经砍掉（2026-09-19 收口）：面板不再生成 ui 段；磁盘上若残留一段（上一版或别的工具写的），
+// 也不许被裁掉 —— 这就是 core/edit.js「只替换已知段、未知键原样保留」那条纪律。
+const beforeStale = JSON.parse(readFileSync(CFG, 'utf8'))
+writeFileSync(CFG, JSON.stringify(Object.assign({}, beforeStale, { ui: { theme: 'brand', kept: 1 } }), null, 2), 'utf8')
+const wStale = await call('/whale-persona/api/config', {
+  method: 'POST', headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ config: stylePatch }),
+})
+const diskStale = JSON.parse(readFileSync(CFG, 'utf8'))
+t('N8 面板不再写 ui 段；磁盘上残留的 ui 段原样保留（未知键纪律）',
+  wStale.code === 200 && H.buildPatch(f, view).ui === undefined
+  && !!diskStale.ui && diskStale.ui.theme === 'brand' && diskStale.ui.kept === 1
+  && !!diskStale.persona.appearance && diskStale.persona.appearance.futureKey === '别的工具写的未知子键')
+// 三段预览同样默认收起：正文不在默认视图里，摘要（标题 + 字符数）仍在 —— 想看就点开
+const secTree = H.SectionsCard({
+  sections: { prefix: 'PREFIX-BODY', thinking: 'THINK-BODY', suffix: 'SUFFIX-BODY' },
+  warnings: [], tier: 'flash', fromSave: false,
+})
+const secText = textOf(secTree)
+t('N6c 三段预览默认收起（正文不渲染、摘要与字符数在）',
+  secText.indexOf('prefix（人设前缀 · 遮蔽部署级默认）') >= 0 && secText.indexOf('PREFIX-BODY') < 0
+  && secText.indexOf('thinking（思维链语言段 · whale:thinking-language）') >= 0 && secText.indexOf('THINK-BODY') < 0
+  && secText.indexOf('11 字符') >= 0)
+
+// 整页渲染门：把 panelView 的整棵树**走一遍**（flatText 会真的调用每个函数组件）——
+// 单个组件测试抓不到「父级把 props 传错/传漏」，整页走一遍才会当场抛。
+const wholeData = H.normalize(s2.json, 'flash')
+const wholeForm = H.formFrom(wholeData)
+const wholeText = flatText(H.panelView({
+  data: wholeData, form: wholeForm, disabled: false, tier: 'flash',
+  status: { saving: false, saved: false, savedAt: '', error: '' },
+  savedPreview: null, loading: false, dirty: false,
+  handlers: {
+    patchForm: noop, patchAt: noop, removeAt: noop, addAt: noop,
+    onPickTier: noop, onRefresh: noop, onSave: noop, onRetry: noop,
+  },
+}))
+t('N9 整页渲染门：五组标题、状态条、折叠与本地编辑器都在（组件参数传错会当场抛）',
+  ['已启用', '配置', '思维链', '我是谁', '我怎么说话', '我的硬约束', '我记住什么', '此刻注入什么',
+    '本地编辑器（可选）', '形象与语气', '称呼与自称', '立场与后缀'].every((x) => wholeText.indexOf(x) >= 0))

@@ -60,77 +60,139 @@ window.__ModuleLoader__.load({
      * 样式：自己注入、自己的 wpr- 前缀、跟随宿主深色底（rgba 半透明 + 宿主 CSS 变量），
      * 不写死白底黑字；清理函数里 style.remove()。
      * ══════════════════════════════════════════════════════════════════════ */
-    var CSS = [
-      '.wpr-wrap{padding:18px 22px 40px;max-width:860px;color:var(--dsw-alias-text-1,#e6e6e6);font-size:13px;line-height:1.65}',
-      '.wpr-head{display:flex;align-items:center;gap:8px}',
-      '.wpr-h1{font-size:16px;font-weight:600;margin:0}',
-      '.wpr-spacer{margin-left:auto}',
-      '.wpr-sub{color:var(--dsw-alias-text-2,#9aa0a6);font-size:12px}',
-      '.wpr-btn{background:transparent;border:1px solid var(--dsw-alias-border-1,rgba(127,127,127,.3));color:inherit;',
-      'border-radius:6px;padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;transition:border-color .16s ease,background .16s ease}',
-      '.wpr-btn:hover:not([disabled]){border-color:rgba(127,127,127,.55);background:rgba(127,127,127,.10)}',
-      '.wpr-btn[disabled]{opacity:.42;cursor:default}',
-      '.wpr-btn.wpr-primary{border-color:rgba(76,141,255,.5);background:rgba(76,141,255,.14);color:#eaf2ff}',
-      '.wpr-btn.wpr-primary:hover:not([disabled]){background:rgba(76,141,255,.22)}',
-      '.wpr-btn.wpr-dirty{border-color:rgba(76,141,255,.85);background:rgba(76,141,255,.30);color:#fff;font-weight:600}',
-      '.wpr-btn.wpr-primary.wpr-dirty:hover:not([disabled]){background:rgba(76,141,255,.42)}',
-      '.wpr-btn.wpr-icon{padding:1px 7px;line-height:16px}',
-      '.wpr-card{border:1px solid var(--dsw-alias-border-1,rgba(127,127,127,.28));border-radius:8px;',
-      'background:var(--dsw-alias-bg-2,rgba(127,127,127,.07));padding:12px 14px;margin:12px 0}',
-      '.wpr-cardhead{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}',
-      '.wpr-title{font-weight:600;font-size:13px}',
-      '.wpr-row{display:flex;align-items:baseline;gap:8px;margin:4px 0;flex-wrap:wrap}',
-      '.wpr-k{color:var(--dsw-alias-text-2,#9aa0a6);flex:0 0 auto;min-width:84px}',
-      '.wpr-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;',
-      'word-break:break-all;user-select:text;-webkit-user-select:text}',
-      '.wpr-badge{display:inline-block;border:1px solid rgba(127,127,127,.35);border-radius:999px;padding:0 8px;',
-      'font-size:11px;line-height:18px;color:var(--dsw-alias-text-2,#9aa0a6);white-space:nowrap}',
-      '.wpr-badge.wpr-on{color:#8fe3ad;border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.12)}',
-      '.wpr-badge.wpr-off{color:#e8b071;border-color:rgba(229,160,75,.45);background:rgba(229,160,75,.12)}',
-      '.wpr-alert{border:1px solid rgba(229,160,75,.45);background:rgba(229,160,75,.12);color:#e8b071;border-radius:6px;padding:6px 10px;margin:8px 0}',
-      '.wpr-alert.wpr-bad{border-color:rgba(229,83,75,.5);background:rgba(229,83,75,.12);color:#f08a84}',
-      '.wpr-alert.wpr-ok{border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.12);color:#8fe3ad}',
-      '.wpr-tier{display:inline-flex;border:1px solid rgba(127,127,127,.3);border-radius:999px;overflow:hidden;background:rgba(127,127,127,.06)}',
-      '.wpr-tier button{background:transparent;border:0;color:inherit;font:inherit;font-size:12px;padding:2px 12px;cursor:pointer}',
-      '.wpr-tier button.wpr-active{background:rgba(76,141,255,.22);color:#eaf2ff}',
-      '.wpr-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:2;',
-      'padding:8px 0;background:var(--dsw-alias-bg-1,rgba(20,20,22,.92));border-bottom:1px solid rgba(127,127,127,.2)}',
-      '.wpr-field{display:flex;gap:10px;align-items:flex-start;margin:8px 0}',
-      '.wpr-flabel{flex:0 0 132px;color:var(--dsw-alias-text-2,#9aa0a6);font-size:12px;padding-top:4px}',
-      '.wpr-fbody{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}',
-      '.wpr-in,.wpr-ta,.wpr-sel{width:100%;box-sizing:border-box;background:rgba(127,127,127,.10);color:inherit;font:inherit;',
-      'font-size:12px;border:1px solid rgba(127,127,127,.34);border-radius:6px;padding:4px 8px;outline:none}',
-      '.wpr-in:focus,.wpr-ta:focus,.wpr-sel:focus{border-color:rgba(76,141,255,.7)}',
-      '.wpr-ta{min-height:96px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;line-height:1.6}',
-      '.wpr-in:disabled,.wpr-ta:disabled,.wpr-sel:disabled{opacity:.5;cursor:not-allowed}',
-      '.wpr-hint{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px}',
-      '.wpr-warn{color:#e8b071;font-size:11px}',
-      '.wpr-chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}',
-      '.wpr-map-row{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid rgba(127,127,127,.22)}',
-      '.wpr-map-row:first-of-type{border-top:0}',
-      '.wpr-map-row .wpr-in{flex:1 1 0;min-width:0}',
-      '.wpr-arrow{color:var(--dsw-alias-text-2,#9aa0a6);flex:0 0 auto}',
-      '.wpr-contract{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(127,127,127,.22)}',
-      '.wpr-contract:first-of-type{border-top:0}',
-      '.wpr-ctext{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}',
-      '.wpr-strike{opacity:.62}',
-      '.wpr-dimnote{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px;white-space:nowrap}',
-      '.wpr-note{color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px;margin:6px 0 2px}',
-      '.wpr-quote{border-left:2px solid rgba(127,127,127,.38);padding:2px 0 2px 8px;margin:4px 0;',
-      'color:var(--dsw-alias-text-2,#9aa0a6);white-space:pre-wrap;word-break:break-word}',
-      '.wpr-cmd{display:inline-flex;align-items:center;gap:8px;margin-top:8px;padding:4px 10px;border:1px dashed rgba(127,127,127,.42);border-radius:6px}',
-      '.wpr-seg{border:1px solid rgba(127,127,127,.25);border-radius:6px;margin:8px 0;overflow:hidden;background:rgba(127,127,127,.05)}',
-      '.wpr-seghead{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;text-align:left}',
-      '.wpr-seghead:hover{background:rgba(127,127,127,.10)}',
-      '.wpr-caret{font-size:9px;opacity:.7;width:10px;flex:none}',
-      '.wpr-pre{margin:0;padding:8px 10px;border-top:1px solid rgba(127,127,127,.25);max-height:280px;overflow:auto;',
-      'white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;',
-      'font-size:12px;line-height:1.6;user-select:text;-webkit-user-select:text}',
-      '.wpr-empty{color:var(--dsw-alias-text-2,#9aa0a6);font-style:italic}',
-      '.wpr-off{opacity:.62}',
-      '.wpr-footline{margin-top:14px;color:var(--dsw-alias-text-2,#9aa0a6);font-size:11px}',
-    ].join('');
+    /* ══════════════════════════════════════════════════════════════════════
+     * 样式：**只有一层**（2026-09-19 收口：按用户要求只留一层，不留任何自带外观开关）。
+     * 全部选择器落在 .wpr-* 作用域内，颜色只用宿主变量 var(--dsw-alias-*, 兜底值)。
+     * 硬纪律：**不覆盖任何颜色**、不碰 :root / html / body、不覆盖 --dsw-* 宿主变量、
+     * 没有裸元素选择器、没有 !important —— 装上它 + 任何第三方美化插件 = 互不干扰。
+     * 宿主 token 名取自 DSH 前端产物实测（dsh-client-ui-theme 的 body[data-ds-dark-theme] 一段）：
+     *   --dsw-alias-label-primary / -secondary / -tertiary / -dimmed
+     *   --dsw-alias-border-l1..l4、--dsw-alias-bg-base / bg-layer-1 / bg-layer-2
+     *   --dsw-alias-brand-primary、-button-primary-fill / -hover、-interactive-bg-hover
+     *   --dsw-alias-state-success-primary / -tertiary、-warn-label / -tertiary、-error-primary …
+     * ══════════════════════════════════════════════════════════════════════ */
+    var BASE_TAG = 'dsh-whale-persona-ui';
 
+    var CSS = [
+      // 作用域内自己的变量（不是宿主变量、也不改宿主变量）：圆角/密度/颜色都从这里取
+      '.wpr-wrap{--wpr-r:12px;--wpr-r-ctl:8px;--wpr-h:30px;--wpr-gap:12px;',
+      '--wpr-line:var(--dsw-alias-border-l2,rgba(127,127,127,.28));',
+      '--wpr-line-soft:var(--dsw-alias-border-l1,rgba(127,127,127,.18));',
+      '--wpr-card-bg:var(--dsw-alias-bg-layer-1,rgba(127,127,127,.06));',
+      '--wpr-inset-bg:var(--dsw-alias-bg-layer-2,rgba(127,127,127,.03));',
+      '--wpr-t1:var(--dsw-alias-label-primary,#e6e6e6);',
+      '--wpr-t2:var(--dsw-alias-label-secondary,#9aa0a6);',
+      '--wpr-t3:var(--dsw-alias-label-tertiary,#8b9198);',
+      '--wpr-accent:var(--dsw-alias-brand-primary,#4c8dff);',
+      // 主按钮的**前景色**：宿主在深色下 brand-primary 是浅色（#f9fafb），不取 label-primary-foreground 就会变成白底白字（本机实测过）
+      '--wpr-accent-ink:var(--dsw-alias-label-primary-foreground,#0b0b0d);',
+      '--wpr-accent-fill:var(--dsw-alias-button-primary-fill,rgba(76,141,255,.16));',
+      '--wpr-accent-hover:var(--dsw-alias-button-primary-hover,rgba(76,141,255,.26));',
+      '--wpr-hover:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.10));',
+      '--wpr-ok:var(--dsw-alias-state-success-primary,#3fb950);',
+      '--wpr-ok-bg:var(--dsw-alias-state-success-tertiary,rgba(63,185,80,.12));',
+      '--wpr-warn:var(--dsw-alias-state-warn-label,#e5a03c);',
+      '--wpr-warn-bg:var(--dsw-alias-state-warn-tertiary,rgba(229,160,75,.12));',
+      '--wpr-err:var(--dsw-alias-state-error-primary,#e5534b);',
+      '--wpr-err-bg:var(--dsw-alias-state-error-tertiary,rgba(229,83,75,.12));',
+      'padding:16px 20px 40px;max-width:820px;color:var(--wpr-t1);font-size:13px;line-height:1.6;',
+      'font-family:var(--dsw-font-family,"Segoe UI","Microsoft YaHei",system-ui,sans-serif)}',
+      // 页头 / 工具栏
+      '.wpr-head{display:flex;align-items:center;gap:8px}',
+      '.wpr-h1{font-size:14px;font-weight:600;margin:0}',
+      '.wpr-spacer{margin-left:auto}',
+      '.wpr-sub{color:var(--wpr-t2);font-size:12px}',
+      '.wpr-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:2;',
+      'padding:8px 0;background:var(--dsw-alias-bg-base,#141416);border-bottom:1px solid var(--wpr-line-soft)}',
+      '.wpr-tier{display:inline-flex;border:1px solid var(--wpr-line);border-radius:var(--wpr-r-ctl);overflow:hidden;background:var(--wpr-inset-bg)}',
+      '.wpr-tier button{background:transparent;border:0;color:inherit;font:inherit;font-size:12px;height:26px;padding:0 12px;cursor:pointer}',
+      '.wpr-tier button.wpr-active{background:var(--wpr-hover);color:var(--wpr-t1)}',
+      // 分组标题：轻量一行；组间距（20px）> 组内卡片间距（8px），层级靠间距不靠色块
+      '.wpr-group{display:flex;align-items:baseline;gap:8px;margin:20px 0 4px;font-size:12px;font-weight:600;color:var(--wpr-t1)}',
+      '.wpr-group:first-child{margin-top:4px}',
+      '.wpr-group .wpr-sub{font-weight:400}',
+      // 卡片：1px 边框、无阴影、圆角统一
+      '.wpr-card{border:1px solid var(--wpr-line);border-radius:var(--wpr-r);background:var(--wpr-card-bg);padding:12px 14px;margin:8px 0}',
+      '.wpr-card-lite{padding:8px 14px}',
+      '.wpr-cardhead{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}',
+      '.wpr-title{font-weight:600;font-size:12px}',
+      // 设置项：label 列（固定宽、右对齐）+ 控件列；控件高度统一 --wpr-h
+      '.wpr-field{display:flex;gap:10px;align-items:flex-start;margin:6px 0}',
+      '.wpr-flabel{flex:0 0 112px;text-align:right;color:var(--wpr-t2);font-size:12px;line-height:var(--wpr-h);min-height:var(--wpr-h)}',
+      '.wpr-fbody{flex:1 1 auto;min-width:0}',
+      '.wpr-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:var(--wpr-h)}',
+      '.wpr-row-tight{min-height:0;margin:2px 0}',
+      '.wpr-in,.wpr-sel{width:100%;box-sizing:border-box;height:var(--wpr-h);background:var(--wpr-inset-bg);color:inherit;',
+      'font:inherit;font-size:12px;border:1px solid var(--wpr-line);border-radius:var(--wpr-r-ctl);padding:0 8px;outline:none}',
+      '.wpr-sel{width:auto;max-width:100%}',
+      '.wpr-in:focus,.wpr-ta:focus,.wpr-sel:focus{border-color:var(--wpr-accent)}',
+      '.wpr-ta{width:100%;box-sizing:border-box;min-height:76px;resize:vertical;font-size:12px;line-height:1.6;',
+      'background:var(--wpr-inset-bg);color:inherit;border:1px solid var(--wpr-line);border-radius:var(--wpr-r-ctl);padding:6px 8px;outline:none;',
+      'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}',
+      '.wpr-in:disabled,.wpr-ta:disabled,.wpr-sel:disabled{opacity:.5;cursor:not-allowed}',
+      '.wpr-btn{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;height:var(--wpr-h);',
+      'background:transparent;border:1px solid var(--wpr-line);color:inherit;border-radius:var(--wpr-r-ctl);',
+      'padding:0 12px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}',
+      '.wpr-btn:hover:not([disabled]){background:var(--wpr-hover)}',
+      '.wpr-btn[disabled]{opacity:.45;cursor:default}',
+      '.wpr-btn.wpr-primary{border-color:var(--wpr-accent);background:var(--wpr-accent-fill);color:var(--wpr-accent-ink)}',
+      '.wpr-btn.wpr-primary:hover:not([disabled]){background:var(--wpr-accent-hover)}',
+      '.wpr-btn.wpr-dirty{border-color:var(--wpr-accent);font-weight:600}',
+      '.wpr-btn.wpr-icon{padding:0 8px}',
+      '.wpr-chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12px}',
+      '.wpr-chk input{width:14px;height:14px;margin:0;accent-color:var(--wpr-accent)}',
+      '.wpr-hint{color:var(--wpr-t3);font-size:12px;margin:2px 0 0}',
+      '.wpr-note{color:var(--wpr-t3);font-size:12px;margin:4px 0 0}',
+      '.wpr-warn{color:var(--wpr-warn);font-size:12px}',
+      '.wpr-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;word-break:break-all;user-select:text;-webkit-user-select:text}',
+      '.wpr-dimnote{color:var(--wpr-t3);font-size:12px;white-space:nowrap}',
+      '.wpr-mt8{margin-top:8px}',
+      '.wpr-mt6{margin-top:6px}',
+      '.wpr-mt4{margin-top:4px}',
+      // 徽标 / 提示条 / 状态条
+      '.wpr-badge{display:inline-block;border:1px solid var(--wpr-line);border-radius:999px;padding:0 8px;font-size:11px;line-height:18px;',
+      'color:var(--wpr-t2);white-space:nowrap}',
+      '.wpr-badge.wpr-on{color:var(--wpr-ok);border-color:var(--wpr-ok);background:var(--wpr-ok-bg)}',
+      '.wpr-badge.wpr-off{color:var(--wpr-warn);border-color:var(--wpr-warn);background:var(--wpr-warn-bg)}',
+      '.wpr-status{padding:10px 14px}',
+      '.wpr-statusline{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:var(--wpr-h)}',
+      '.wpr-dot{color:var(--wpr-err);font-size:11px}',
+      '.wpr-dot.wpr-dot-on{color:var(--wpr-ok)}',
+      '.wpr-sep{color:var(--wpr-t3)}',
+      '.wpr-inline{width:132px;flex:0 0 auto}',
+      '.wpr-alert{border:1px solid var(--wpr-warn);background:var(--wpr-warn-bg);color:var(--wpr-warn);border-radius:var(--wpr-r-ctl);',
+      'padding:6px 10px;margin:8px 0;font-size:12px}',
+      '.wpr-alert.wpr-bad{border-color:var(--wpr-err);background:var(--wpr-err-bg);color:var(--wpr-err)}',
+      '.wpr-alert.wpr-ok{border-color:var(--wpr-ok);background:var(--wpr-ok-bg);color:var(--wpr-ok)}',
+      '.wpr-alert .wpr-sub{color:inherit;opacity:.85}',
+      // 折叠块（说明 / 按模型 / 本地编辑器一律走它，默认收起）
+      '.wpr-disc{margin:6px 0 0}',
+      '.wpr-discsum{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--wpr-t3);font-size:12px;list-style:none;padding:2px 0}',
+      '.wpr-discsum:hover{color:var(--wpr-t1)}',
+      '.wpr-discsum::before{content:"▸";font-size:10px;opacity:.8}',
+      '.wpr-disc[open]>.wpr-discsum::before{content:"▾"}',
+      '.wpr-discbody{padding:4px 0 2px}',
+      '.wpr-subsec{margin:4px 0 0}',
+      // 行表（契约 / 手工条目 / 按模型覆盖）
+      '.wpr-contract,.wpr-map-row{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--wpr-line-soft)}',
+      '.wpr-contract:first-child,.wpr-map-row:first-child{border-top:0}',
+      '.wpr-contract .wpr-in,.wpr-map-row .wpr-in{flex:1 1 0;min-width:0}',
+      '.wpr-arrow{color:var(--wpr-t3);flex:0 0 auto}',
+      '.wpr-ctext{flex:1;min-width:0;white-space:pre-wrap;word-break:break-word}',
+      '.wpr-strike{opacity:.6}',
+      '.wpr-quote{border-left:2px solid var(--wpr-line);padding:2px 0 2px 8px;margin:4px 0;color:var(--wpr-t2);white-space:pre-wrap;word-break:break-word}',
+      '.wpr-cmd{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px dashed var(--wpr-line);border-radius:var(--wpr-r-ctl);background:var(--wpr-inset-bg)}',
+      // 三段预览
+      '.wpr-seg{border:1px solid var(--wpr-line);border-radius:var(--wpr-r-ctl);margin:6px 0;overflow:hidden;background:var(--wpr-inset-bg)}',
+      '.wpr-seghead{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;text-align:left}',
+      '.wpr-seghead:hover{background:var(--wpr-hover)}',
+      '.wpr-caret{font-size:9px;opacity:.7;width:10px;flex:none}',
+      '.wpr-pre{margin:0;padding:8px 10px;border-top:1px solid var(--wpr-line-soft);max-height:280px;overflow:auto;white-space:pre-wrap;',
+      'word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;user-select:text;-webkit-user-select:text}',
+      '.wpr-empty{color:var(--wpr-t3);font-style:italic}',
+      '.wpr-off{opacity:.6}',
+      '.wpr-footline{margin-top:10px;color:var(--wpr-t3);font-size:12px}',
+    ].join('');
     /* ── 取数 ───────────────────────────────────────────────────────────── */
 
     function messageOf(e) {
@@ -307,6 +369,7 @@ window.__ModuleLoader__.load({
         // 注意：raw:null 与 configValid:false 是两件事 —— 老宿主（没这个字段）＝ raw 缺失、
         // configValid 缺省 true；磁盘坏 JSON ＝ configValid 显式 false。两者都禁用保存。
         configValid: d && d.configValid !== undefined ? d.configValid !== false : true,
+
         editor: { url: url, port: numOf(ed.port) || portOf(url), running: ed.running === true },
       };
     }
@@ -382,7 +445,7 @@ window.__ModuleLoader__.load({
         toneEnabled: tone.enabled,
         toneText: tone.text,
         toneRows: tone.rows,
-        toneKeep: tone.keep,
+
         memoryEnabled: rm.enabled !== undefined ? rm.enabled === true : dm.enabled === true,
         memoryCapture: strOf(rm.capture !== undefined ? rm.capture : dm.capture) || 'on-demand',
         entries: entries,
@@ -585,6 +648,34 @@ window.__ModuleLoader__.load({
 
     /* ── 小组件（全部 h() 挂载：条件渲染里直接调函数会改 hook 顺序） ─────── */
 
+    /**
+     * 折叠块（2026-09-19 新增，零依赖）：原生 <details>/<summary> —— 键盘可操作、屏幕阅读器认得，
+     * 内容默认仍在渲染树/DOM 里（只是不显示），所以「默认收起」不会把内容从树上删掉（机检断言靠这条）。
+     * 默认关闭：只有显式 open:true 才带 open 属性。
+     */
+    function Disclosure(props) {
+      var attrs = { className: 'wpr-disc' + (props.className ? ' ' + props.className : '') };
+      if (props.open === true) attrs.open = true;
+      return h('details', attrs,
+        h('summary', { className: 'wpr-discsum' }, props.summary),
+        h('div', { className: 'wpr-discbody' }, props.children));
+    }
+
+    /** 分组小标题：轻量一行（组间距 > 组内卡片间距，层级靠间距不靠色块） */
+    function GroupTitle(props) {
+      return h('div', { className: 'wpr-group' },
+        h('span', null, props.text),
+        props.hint ? h('span', { className: 'wpr-sub' }, props.hint) : null);
+    }
+
+    /** 卡片头：标题 + 可选徽标/副文本（三张卡共用一行形态） */
+    function CardHead(props) {
+      return h('div', { className: 'wpr-cardhead' },
+        h('div', { className: 'wpr-title' }, props.title),
+        props.badge || null,
+        props.sub ? h('span', { className: 'wpr-sub' }, props.sub) : null,
+        props.right || null);
+    }
     function badge(on, textOn, textOff) {
       return h('span', { className: 'wpr-badge ' + (on ? 'wpr-on' : 'wpr-off') }, on ? textOn : textOff);
     }
@@ -642,13 +733,14 @@ window.__ModuleLoader__.load({
       }, [props.listId]);
       function change(ev) { props.onChange(strOf(ev && ev.target && ev.target.value)); }
       return h('input', {
-        ref: ref, className: 'wpr-in', type: 'text', value: props.value, disabled: !!props.disabled,
+        ref: ref, className: props.className || 'wpr-in', type: 'text', value: props.value, disabled: !!props.disabled,
         spellCheck: false, placeholder: props.placeholder || '', onChange: change,
       });
     }
 
     function Seg(props) {
-      var o = useState(true);
+      // 默认收起（2026-09-19）：三段正文在默认视图里不占屏，摘要行仍然给出字符数 ——
+      var o = useState(false);
       var open = o[0];
       var setOpen = o[1];
       var text = strOf(props.text);
@@ -664,29 +756,52 @@ window.__ModuleLoader__.load({
         open ? h('pre', { className: 'wpr-pre' + (text ? '' : ' wpr-empty') }, text ? text : EMPTY_SEG) : null);
     }
 
-    function StateCard(props) {
+    /**
+     * 顶部状态条（2026-09-19 重排）：原来是一张占半屏的「状态」大卡，现在压成两行 ——
+     * ①「[✓] ● 已启用 · flash 档 · 思维链 [off]」：勾选框就长在状态上（开关状态全页只出现这一处）
+     * ②「配置：<路径> [复制路径]」
+     * 「还没写配置 = 装上零行为改变」只在文件不存在时多一行；档位判定规则等说明收进折叠。
+     * 样式只有一层、永远跟随宿主（2026-09-19 收口：不留任何自带外观开关）。
+     */
+    function StatusStrip(props) {
       var d = props.data;
-      var tl = props.thinkingLanguage;
-      var tlText = tl === 'off' ? 'off（不改思维链语言）' : tl;
       var st = d.configState || {};
       var label = strOf(d.tierLabel) || (d.tier + ' 档');   // 老宿主没这个字段时用档位 id 兜底，仍然不显示模型 id
-      var size = st.exists ? (st.bytes + ' 字节') : '文件不存在（装上零行为改变）';
-      return h('div', { className: 'wpr-card' },
-        h('div', { className: 'wpr-cardhead' },
-          h('div', { className: 'wpr-title' }, '状态'),
-          badge(props.enabled, '已启用', '已停用'),
-          // 只显示档位标签（summary.tierLabel），不显示具体模型 id
-          h('span', { className: 'wpr-sub' }, '档位：' + label)),
-        props.enabled ? null : h('div', { className: 'wpr-alert' }, '⚠ 当前无人设：enabled=false —— 这三段都不注入，系统提示词里没有人设内容。'),
-        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '思维链语言'), h('span', { className: 'wpr-mono' }, tlText)),
-        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '配置文件'),
+      return h('div', { className: 'wpr-card wpr-status' },
+        h('div', { className: 'wpr-statusline' },
+          h('label', { className: 'wpr-chk' },
+            h('input', {
+              type: 'checkbox', checked: !!props.enabled, disabled: !!props.disabled,
+              // 无可见标签（状态文字就在旁边），但读屏要有名字：沿用原来那句开关文案
+              'aria-label': '启用（关掉 = 三段都不注入）',
+              onChange: function (ev) { props.onToggleEnabled(!!(ev && ev.target && ev.target.checked)); },
+            })),
+          h('span', { className: 'wpr-dot' + (props.enabled ? ' wpr-dot-on' : '') }, '●'),
+          h('span', null, props.enabled ? '已启用' : '已停用'),
+          h('span', { className: 'wpr-sep' }, '·'),
+          h('span', null, label),
+          h('span', { className: 'wpr-sep' }, '·'),
+          h('span', null, '思维链'),
+          h(TextInputWithList, {
+            listId: 'wpr-thinking-langs', className: 'wpr-in wpr-inline', value: props.thinkingLanguage,
+            disabled: !!props.disabled, placeholder: 'off / zh-CN / en，也可自填', onChange: props.onThinking,
+          }),
+          h('datalist', { id: 'wpr-thinking-langs' }, THINKING_PRESETS.map(function (t) {
+            return h('option', { key: t, value: t });
+          }))),
+        h('div', { className: 'wpr-statusline' },
+          h('span', { className: 'wpr-dimnote' }, '配置'),
           h('span', { className: 'wpr-mono' }, d.configPath || '（宿主未返回 configPath）'),
           d.configPath ? h(CopyBtn, { key: 'cp', text: d.configPath, label: '复制路径' }) : null),
-        h('div', { className: 'wpr-row' }, h('span', { className: 'wpr-k' }, '文件'),
-          h('span', { className: 'wpr-sub' }, size)),
-        st.exists ? null : h('div', { className: 'wpr-alert' }, '还没写配置 = 装上零行为改变：不写文件就什么都不注入，不动你现有的人设。'));
+        st.exists ? null : h('div', { className: 'wpr-alert' }, '还没写配置 = 装上零行为改变：不写文件就什么都不注入，不动你现有的人设。'),
+        props.enabled ? null : h('div', { className: 'wpr-alert' }, '⚠ 当前无人设：enabled=false —— 这三段都不注入，系统提示词里没有人设内容。'),
+        h(Disclosure, { summary: '档位怎么判定 · 文件与生效时机' },
+          h('div', { className: 'wpr-note' }, strOf(d.tierRule) || '（宿主未返回档位判定规则）'),
+          h('div', { className: 'wpr-note' }, '配置文件' + (st.exists ? ('：' + st.bytes + ' 字节') : '：还没写（装上零行为改变）') + ' · 改配置下一步生效；改挂载行要新会话。'),
+          h('div', { className: 'wpr-note' }, '思维链语言：off = 不干预（跟随模型）；下拉是预设，也能直接敲别的值。'),
+),
+      );
     }
-
     function Toolbar(props) {
       var disabled = !!props.disabled;
       return h('div', { className: 'wpr-toolbar' },
@@ -737,7 +852,7 @@ window.__ModuleLoader__.load({
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '实际注入的三段'),
           h('span', { className: 'wpr-sub' },
-            props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '按模型档渲染 —— 换档重取')),
+            props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '与运行期同一套渲染 —— 展开逐段看原文')),
         h(Seg, { title: 'prefix（人设前缀 · 遮蔽部署级默认）', text: sec.prefix }),
         h(Seg, { title: 'thinking（思维链语言段 · whale:thinking-language）', text: sec.thinking }),
         h(Seg, { title: 'suffix（人设后缀）', text: sec.suffix }));
@@ -769,10 +884,11 @@ window.__ModuleLoader__.load({
           h('span', { className: 'wpr-sub' }, list.length + ' 条 · 关掉的不进提示词')),
         rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有契约 —— 点下面的按钮加一条）'),
         h('button', {
-          className: 'wpr-btn', type: 'button', disabled: !!props.disabled,
-          style: { marginTop: 8 }, onClick: props.onAdd,
+          className: 'wpr-btn wpr-mt8', type: 'button', disabled: !!props.disabled, onClick: props.onAdd,
         }, '+ 加一条契约'),
-        h('div', { className: 'wpr-note' }, '契约是逐条勾选生效的：关掉的条目仍可编辑，只是不注入。'));
+        h(Disclosure, { summary: '契约怎么才有效' },
+          h('div', { className: 'wpr-note' }, '契约是逐条勾选生效的：关掉的条目仍可编辑，只是不注入。'),
+          h('div', { className: 'wpr-note' }, '写得具体可验证才有效：「结尾不要出现征询式问句」✅；「高质量」❌。5–10 条为宜。')));
     }
 
     function MemoryCard(props) {
@@ -795,16 +911,15 @@ window.__ModuleLoader__.load({
         return h('div', { className: 'wpr-quote', key: 'r' + i }, '「' + t + '」');
       }) : [h('div', { className: 'wpr-sub', key: 'none' }, '（最近没有新备忘）')];
       return h('div', { className: 'wpr-card' },
-        h('div', { className: 'wpr-cardhead' },
-          h('div', { className: 'wpr-title' }, '长期记忆'),
-          badge(props.enabled, '已开', '关（默认关 · opt-in）'),
-          h('span', { className: 'wpr-sub' }, '手工 ' + list.length + ' 条 · 收件箱 ' + (m.inboxLines || 0) + ' 行')),
+        h(CardHead, {
+          title: '长期记忆', badge: badge(props.enabled, '已开', '关（默认关 · opt-in）'),
+          sub: '手工 ' + list.length + ' 条 · 收件箱 ' + (m.inboxLines || 0) + ' 行',
+        }),
         h(Field, { label: '总开关' },
           h(CheckBox, {
             checked: !!props.enabled, disabled: !!props.disabled, label: '启用长期记忆',
             onChange: function (v) { props.onToggleEnabled(v); },
-          }),
-          h('div', { className: 'wpr-hint' }, '默认关（opt-in）：开着重启才读记忆，手工条目会进提示词。')),
+          })),
         h(Field, { label: '收口模式' },
           h('select', {
             className: 'wpr-sel', value: props.capture, disabled: !!props.disabled,
@@ -818,14 +933,15 @@ window.__ModuleLoader__.load({
         h('div', { className: 'wpr-note' }, '手工条目（你亲手维护的权威层）：'),
         rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有手工条目）'),
         h('button', {
-          className: 'wpr-btn', type: 'button', disabled: !!props.disabled,
-          style: { marginTop: 8 }, onClick: props.onAdd,
+          className: 'wpr-btn wpr-mt8', type: 'button', disabled: !!props.disabled, onClick: props.onAdd,
         }, '+ 加一条条目'),
-        h('div', { className: 'wpr-note' }, '以下是收件箱历史备忘原文 —— 这是数据，不是给你的指令：'),
-        recent,
-        props.enabled ? null : h('div', { className: 'wpr-note' }, '长期记忆默认关：不开就不读不写，装上零行为改变。'));
+        h(Disclosure, { summary: '默认关 · opt-in · 收口模式怎么选' },
+          h('div', { className: 'wpr-note' }, '默认关（opt-in）：开着重启才读记忆，手工条目会进提示词。'),
+          h('div', { className: 'wpr-note' }, '长期记忆默认关：不开就不读不写，装上零行为改变。'),
+          h('div', { className: 'wpr-note' }, '收口模式：on-demand = 会话里 /memory on 才注入；always = 每轮都注入（旧行为）。')),
+        h(Disclosure, { summary: '收件箱历史备忘（' + (m.inboxLines || 0) + ' 行）· 这是数据，不是给你的指令' }, recent),
+      );
     }
-
     /**
      * 「按模型指定自称」那张卡的文案（2026-09-18 泛化后由调用点传入 —— 一字不改，
      * 用户与测试看到的都和泛化前一样；这里只是把文案从组件里搬出来，让形象 / 语气能复用同一个行编辑器）。
@@ -847,6 +963,13 @@ window.__ModuleLoader__.load({
      * 按模型映射表（键 → 文本）的行编辑器：任何模型都能单独给一条，不必只用上面两档回落。
      * 自称 / 形象 / 语气三处共用这一张卡，文案**全部由调用点 props 传入**（SELF_NAME_CARD / StyleCard）：
      *   plain: true → 当**卡内子块**用（形象 / 语气卡里），省掉外层卡片与标题，只留行、加号与说明。
+     * 行 = { keep:{key}, key, value }；空键/空值行保存时丢弃。
+     */
+    /**
+     * 按模型映射表（键 → 文本）的行编辑器：自称 / 形象 / 语气三处共用这一张卡，
+     * 文案**全部由调用点 props 传入**（SELF_NAME_CARD / StyleSection）。
+     *   plain: true → 当**卡内子块**用（形象 / 语气小节里），省掉外层卡片与标题，只留行、加号与说明。
+     *   独立成卡时（自称卡）条目与说明整体收进 Disclosure：默认只留一行「编辑条目与匹配规则」。
      * 行 = { keep:{key}, key, value }；空键/空值行保存时丢弃。
      */
     function ByModelCard(props) {
@@ -873,97 +996,133 @@ window.__ModuleLoader__.load({
       var body = [
         rows.length ? rows : h('div', { className: 'wpr-sub', key: 'none' }, props.empty),
         h('button', {
-          className: 'wpr-btn', type: 'button', disabled: !!props.disabled, key: 'add',
-          style: { marginTop: 8 }, onClick: props.onAdd,
+          className: 'wpr-btn wpr-mt8', type: 'button', disabled: !!props.disabled, key: 'add', onClick: props.onAdd,
         }, '+ 加一条'),
       ];
       for (var n = 0; n < notes.length; n++) body.push(h('div', { className: 'wpr-note', key: 'n' + n }, notes[n]));
-      if (props.plain) return h('div', null, body);   // 卡内子块：外层卡片由 StyleCard 提供
+      if (props.plain) return h('div', null, body);   // 卡内子块：外层卡片与折叠由 StyleSection 提供
       return h('div', { className: 'wpr-card' },
-        h('div', { className: 'wpr-cardhead' },
-          h('div', { className: 'wpr-title' }, props.title),
-          h('span', { className: 'wpr-sub' }, props.subtitle)),
-        body);
+        h(CardHead, { title: props.title, sub: props.subtitle }),
+        h(Disclosure, { summary: '编辑条目与匹配规则' }, body));
     }
-
     /**
      * 形象 / 语气卡（0.9.0）：两张卡同一套形状 —— 总开关 + 通用文本 + 按模型覆盖表。
      * 差别只有文案、占位符，以及语气多一排「预设」按钮（数据来自 summary.tonePresets，
      * 也就是 core/presets.js 唯一那份文案：点一下写进通用文本，用户还能继续手改）。
      * 「按模型覆盖表」是卡内子块（ByModelCard plain）：条目命中优先，没命中回落通用文本。
      */
-    function StyleCard(props) {
+    /**
+     * 形象 / 语气的小节（2026-09-19 合卡用）：摘要一行 = 开关 + 小节名 + 开/关徽标 + 覆盖率，
+     * 正文（通用文本 / 预设 / 按模型覆盖 / 说明）整体收进折叠 —— 关着的时候不再各占半屏。
+     * 开关放在 <summary> 里：点它只切开关（stopPropagation），点别处才展开。
+     */
+    function StyleSection(props) {
       var rows = arrOf(props.rows);
       var presets = arrOf(props.presets);
       var sub = rows.length
         ? (rows.length + ' 条按模型覆盖 · 未命中回落通用文本')
         : '没有按模型覆盖 · 只用通用文本';
-      return h('div', { className: 'wpr-card' },
-        h('div', { className: 'wpr-cardhead' },
-          h('div', { className: 'wpr-title' }, props.title),
+      return h('details', { className: 'wpr-disc wpr-subsec' },
+        h('summary', { className: 'wpr-discsum' },
+          h('label', {
+            className: 'wpr-chk',
+            onClick: function (ev) { if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation(); },
+          },
+            h('input', {
+              type: 'checkbox', checked: props.enabled === true, disabled: !!props.disabled,
+              onChange: function (ev) { props.onToggleEnabled(!!(ev && ev.target && ev.target.checked)); },
+            }),
+            h('span', null, props.switchLabel)),
+          h('span', { className: 'wpr-title' }, props.title),
           badge(props.enabled === true, '已启用', '关（默认关 · opt-in）'),
+          h('span', { className: 'wpr-spacer' }),
           h('span', { className: 'wpr-sub' }, sub)),
-        h(Field, { label: '总开关' },
-          h(CheckBox, {
-            checked: props.enabled === true, disabled: !!props.disabled, label: props.switchLabel,
-            onChange: function (v) { props.onToggleEnabled(v); },
+        h('div', { className: 'wpr-discbody' },
+          h('div', { className: 'wpr-hint' }, props.switchHint),
+          h(Field, { label: '通用文本' },
+            h(TextInput, {
+              multiline: true, value: props.text, disabled: !!props.disabled,
+              placeholder: props.placeholder, onChange: function (v) { props.onText(v); },
+            }),
+            h('div', { className: 'wpr-hint' }, '每行一条（注入时自动加「- 」）；支持 {selfName} / {userName} 占位符。')),
+          presets.length ? h(Field, { label: '预设' },
+            h('div', { className: 'wpr-row wpr-row-tight' }, presets.map(function (p) {
+              return h('button', {
+                className: 'wpr-btn', type: 'button', key: p.id, disabled: !!props.disabled, title: p.text,
+                onClick: function () { props.onUsePreset(p.text); },
+              }, p.label);
+            })),
+            h('div', { className: 'wpr-hint' },
+              '点一下把该预设的文案填进上面的「通用文本」，填完还能继续手改 —— 预设只是现成文案，不是枚举。')) : null,
+          h('div', { className: 'wpr-note' }, '按模型覆盖（命中优先，没命中回落上面的通用文本；空关键词或空文本的行保存时会丢弃）：'),
+          h(ByModelCard, {
+            plain: true, value: rows, disabled: props.disabled,
+            keyPlaceholder: props.keyPlaceholder, valuePlaceholder: props.valuePlaceholder,
+            empty: props.empty, notes: props.notes,
+            onPatch: props.onPatch, onRemove: props.onRemove, onAdd: props.onAdd,
           }),
-          h('div', { className: 'wpr-hint' }, props.switchHint)),
-        h(Field, { label: '通用文本' },
-          h(TextInput, {
-            multiline: true, value: props.text, disabled: !!props.disabled,
-            placeholder: props.placeholder, onChange: function (v) { props.onText(v); },
-          }),
-          h('div', { className: 'wpr-hint' }, '每行一条（注入时自动加「- 」）；支持 {selfName} / {userName} 占位符。')),
-        presets.length ? h(Field, { label: '预设' },
-          h('div', { className: 'wpr-row' }, presets.map(function (p) {
-            return h('button', {
-              className: 'wpr-btn', type: 'button', key: p.id, disabled: !!props.disabled, title: p.text,
-              style: { marginRight: 6 },
-              onClick: function () { props.onUsePreset(p.text); },
-            }, p.label);
-          })),
-          h('div', { className: 'wpr-hint' },
-            '点一下把该预设的文案填进上面的「通用文本」，填完还能继续手改 —— 预设只是现成文案，不是枚举。')) : null,
-        h('div', { className: 'wpr-note' }, '按模型覆盖（命中优先，没命中回落上面的通用文本；空关键词或空文本的行保存时会丢弃）：'),
-        h(ByModelCard, {
-          plain: true, value: rows, disabled: props.disabled,
-          keyPlaceholder: props.keyPlaceholder, valuePlaceholder: props.valuePlaceholder,
-          empty: props.empty, notes: props.notes,
-          onPatch: props.onPatch, onRemove: props.onRemove, onAdd: props.onAdd,
-        }),
-        h('div', { className: 'wpr-note' }, props.note));
+          h('div', { className: 'wpr-note' }, props.note)));
     }
 
+    /**
+     * 单段卡（0.9.0 的形态，测试钩子仍在用）：一段 = 一张卡。
+     * 面板里形象 / 语气已经合成一张 VoiceCard，这里保留同一个小节的卡壳。
+     */
+    function StyleCard(props) {
+      var rows = arrOf(props.rows);
+      var sub = rows.length
+        ? (rows.length + ' 条按模型覆盖 · 未命中回落通用文本')
+        : '没有按模型覆盖 · 只用通用文本';
+      return h('div', { className: 'wpr-card' },
+        h(CardHead, { title: props.title, badge: badge(props.enabled === true, '已启用', '关（默认关 · opt-in）'), sub: sub }),
+        h(Field, { label: '总开关' }, h(StyleSection, props)));
+    }
+
+    /**
+     * 「我怎么说话」组的合并卡：形象 + 语气两个可折叠小节，各自带开/关徽标与开关；
+     * 说明（switchHint / notes）跟着小节正文一起折叠，默认收起。
+     */
+    function VoiceCard(props) {
+      return h('div', { className: 'wpr-card' },
+        h(CardHead, {
+          title: '形象与语气',
+          sub: '两段都是 opt-in（默认关）· 注入在「立场正文」之后、「工作契约」之前',
+        }),
+        h(Field, { label: '总开关' },
+          h('div', { className: 'wpr-fbody' },
+            arrOf(props.sections).map(function (s) { return h(StyleSection, Object.assign({ key: s.key }, s)); }))));
+    }
     function EditorCard(props) {
       var ed = props.editor || {};
       var port = ed.port || portOf(ed.url);
       var cmd = 'node scripts/ui.mjs --port ' + port;
       // 2026-09-18 用户问「这张卡是不能改还是什么情况」：它不是开关或配置项，是**另一个进程**的入口。
       // DSH 只能探测它在不在跑、帮你打开，不能代你启动（宿主里起常驻子进程要自己扛端口冲突与退出清理）。
-      // 面板现在已能改全部字段，所以这张卡降级成"可选入口"，不再顶一个刺眼的"没在跑"徽标。
-      return h('div', { className: 'wpr-card' },
+      // 面板已能改全部字段，所以这张卡降级成一行入口（2026-09-19）：标题 + 打开/复制命令，其余收进折叠。
+      return h('div', { className: 'wpr-card wpr-card-lite' },
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '本地编辑器（可选）'),
-          ed.running ? badge(true, '在跑', '') : null),
-        h('div', { className: 'wpr-note' },
-          '它是本仓自带的独立本地面板（两个宿主共用、与上面这张面板同一套读写纪律），不是 DSH 插件：'
-          + '要你自己在终端起它一次，DSH 只能探测与打开。上面已经能改全部字段，这里留给不开 DSH 的场景与 ZCode 用户。'),
-        h('div', { className: 'wpr-cmd' },
-          h('span', { className: 'wpr-mono' }, cmd),
-          h(CopyBtn, { text: cmd, label: '复制命令' })),
-        h('div', { className: 'wpr-hint' }, '换端口：起的时候用 --port，或设环境变量 DSH_WHALE_UI_PORT（面板按它显示）。'),
-        ed.running
-          ? h('button', {
-            className: 'wpr-btn wpr-primary', type: 'button', style: { marginTop: 8 },
-            onClick: function () {
-              try { if (typeof window !== 'undefined' && typeof window.open === 'function') window.open(ed.url); } catch (e) { /* 被弹窗拦截：地址仍可复制 */ }
-            },
-          }, '打开本地编辑器（' + ed.url + '）')
-          : h('button', { className: 'wpr-btn', type: 'button', disabled: true, style: { marginTop: 8 } }, '打开本地编辑器（未运行）'),
-        h('div', { className: 'wpr-footline' }, '改配置下一步生效；改挂载行要新会话。'));
+          ed.running ? badge(true, '在跑', '') : null,
+          h('span', { className: 'wpr-spacer' }),
+          ed.running
+            ? h('button', {
+              className: 'wpr-btn', type: 'button',
+              onClick: function () {
+                try { if (typeof window !== 'undefined' && typeof window.open === 'function') window.open(ed.url); } catch (e) { /* 被弹窗拦截：地址仍可复制 */ }
+              },
+            }, '打开')
+            : h('button', { className: 'wpr-btn', type: 'button', disabled: true }, '打开（未运行）'),
+          h(CopyBtn, { key: 'cp', text: cmd, label: '复制命令' })),
+        h(Disclosure, { summary: '它是什么 · 怎么起 · 换端口 · ' + ed.url },
+          h('div', { className: 'wpr-note' },
+            '它是本仓自带的独立本地面板（两个宿主共用、与上面这张面板同一套读写纪律），不是 DSH 插件：'
+            + '要你自己在终端起它一次，DSH 只能探测与打开。上面已经能改全部字段，这里留给不开 DSH 的场景与 ZCode 用户。'),
+          h('div', { className: 'wpr-cmd' },
+            h('span', { className: 'wpr-mono' }, cmd),
+            h(CopyBtn, { key: 'cp2', text: cmd, label: '复制命令' })),
+          h('div', { className: 'wpr-hint' }, '换端口：起的时候用 --port，或设环境变量 DSH_WHALE_UI_PORT（面板按它显示）。'),
+          h('div', { className: 'wpr-footline' }, '改配置下一步生效；改挂载行要新会话。')));
     }
-
     /* ── 错误边界：渲染期抛错只吃掉这一块，不连累设置页 ─────────────────── */
 
     function Boundary(props) {
@@ -994,6 +1153,219 @@ window.__ModuleLoader__.load({
         if (!st.err && typeof setSt === 'function') setSt({ err: messageOf(e) });
         return h('div', { className: 'wpr-alert wpr-bad' }, '人设面板出错了（设置页其余部分不受影响）：' + messageOf(e));
       }
+    }
+
+    /**
+     * 面板正文（卡序）—— 抽成纯函数：设置页与机检静态预览页（data/ui-design/preview-panel.mjs）
+     * 共用同一份卡序，预览图因此不是手抄件。
+     * o = { data, form, disabled, status, savedPreview, error, loading, handlers }
+     * handlers = { patchForm, patchAt, removeAt, addAt, onRetry }：全是回调，纯渲染不碰状态。
+     */
+    function panelBody(o) {
+      var d = o.data;
+      var form = o.form;
+      var disabled = !!o.disabled;
+      var cb = o.handlers || {};
+      var body = [];
+      if (o.error) {
+        body.push(h('div', { className: 'wpr-alert wpr-bad', key: 'err' },
+          h('div', null, '读取失败：' + o.error),
+          h('div', { className: 'wpr-sub wpr-mt4' }, '面板只是看不见人设，人设本身不受影响。'),
+          h('button', { className: 'wpr-btn wpr-mt8', type: 'button', onClick: cb.onRetry }, '重试')));
+      }
+      if (!d && !o.error) {
+        body.push(h('div', { className: 'wpr-sub', key: 'loading' },
+          o.loading ? '正在读取人设…' : '没有数据 —— 点右上角「刷新」重试。'));
+      }
+      if (!d || !form) return body;
+
+      var notes = [];
+      if (!d.configValid) {
+        // 坏 JSON 是**磁盘状态**，与宿主版本无关：先说这句，别被「老宿主」的提示盖过去
+        notes.push('配置文件不是合法 JSON，设置面板不会覆盖它，请先手工修好。');
+        if (!d.hasRaw) notes.push('另外：' + NO_RAW_HINT + '。');
+      } else if (!d.hasRaw) {
+        notes.push('注意：' + NO_RAW_HINT + '。');
+      }
+      if (d.warnings && d.warnings.length) {
+        for (var wi = 0; wi < d.warnings.length; wi++) notes.push('⚠ ' + d.warnings[wi]);
+      }
+      var sv = o.status || { saving: false, saved: false, savedAt: '', error: '' };
+      var savedPreview = o.savedPreview || null;
+      var shown = savedPreview || { sections: d.sections, warnings: [] };
+      // 「按模型」条目的关键词到底该写什么：用宿主**真实**注入用的 id，
+      // 因为界面上的模型显示名（如「DeepSeek-V4.1-Flash High」）与 id（如 deepseek-flash）常常不是一回事。
+      var seenModel = strOf(d.seenModel);
+      var modelNotes = seenModel
+        ? ['宿主最近一次真实注入用的模型 id 是「' + seenModel + '」—— 关键词照它写即可（忽略大小写，写其中一段也能命中）。']
+        : [];
+
+      body.push(h(Banner, { key: 'banner', status: sv, notes: notes }));
+      // ① 顶部状态条（总开关 / 档位 / 思维链 / 配置路径都在这一张里，全页只出现一次）
+      body.push(h(StatusStrip, {
+        key: 'status', data: d, enabled: form.enabled, thinkingLanguage: form.thinkingLanguage, disabled: disabled,
+        onToggleEnabled: function (v) { cb.patchForm({ enabled: v }); },
+        onThinking: function (v) { cb.patchForm({ thinkingLanguage: v }); },
+      }));
+
+      // ② 我是谁 —— 自称两档 / 按模型指定自称 / 称呼 / 立场与后缀
+      body.push(h(GroupTitle, { key: 'g1', text: '我是谁', hint: '自称 · 称呼 · 立场' }));
+      body.push(h('div', { className: 'wpr-card', key: 'who' },
+        h(CardHead, { title: '称呼与自称', sub: '改动先落在本地，点「保存」才写入' }),
+        h(Field, { label: '自称 · flash 档' },
+          h(TextInput, { value: form.selfNameFlash, disabled: disabled, onChange: function (v) { cb.patchForm({ selfNameFlash: v }); } })),
+        h(Field, { label: '自称 · pro 档' },
+          h(TextInput, { value: form.selfNamePro, disabled: disabled, onChange: function (v) { cb.patchForm({ selfNamePro: v }); } })),
+        h(Field, { label: '它怎么称呼你' },
+          h(TextInput, { value: form.userName, disabled: disabled, onChange: function (v) { cb.patchForm({ userName: v }); } })),
+        h(Disclosure, { summary: '说明：自称与称呼怎么进提示词' },
+          h('div', { className: 'wpr-note' }, '自称只通过 {selfName} 占位符进提示词 —— 写进「立场正文」或任一条契约里才生效；称呼同理（{userName}）。'),
+          h('div', { className: 'wpr-note' }, '关掉总开关 = 三段都不注入，等于装上零行为改变（不是回到宿主的默认人设）。'))));
+      body.push(h(ByModelCard, {
+        key: 'bymodel', value: form.selfNameRows, disabled: disabled,
+        title: SELF_NAME_CARD.title,
+        subtitle: SELF_NAME_CARD.subtitle(form.selfNameRows.length),
+        empty: SELF_NAME_CARD.empty,
+        keyPlaceholder: SELF_NAME_CARD.keyPlaceholder,
+        valuePlaceholder: SELF_NAME_CARD.valuePlaceholder,
+        notes: SELF_NAME_CARD.notes.concat(modelNotes),
+        onPatch: function (i, f) { cb.patchAt('selfNameRows', i, f); },
+        onRemove: function (i) { cb.removeAt('selfNameRows', i); },
+        onAdd: function () { cb.addAt('selfNameRows', seenModel); },
+      }));
+      body.push(h('div', { className: 'wpr-card', key: 'stance' },
+        h(CardHead, { title: '立场与后缀' }),
+        h(Field, { label: '立场（一句话）' },
+          h(TextInput, { value: form.stance, disabled: disabled, onChange: function (v) { cb.patchForm({ stance: v }); } })),
+        h(Field, { label: '立场正文' },
+          h(TextInput, {
+            multiline: true, value: form.character, disabled: disabled,
+            placeholder: '整段自定义，支持 {selfName} / {userName}',
+            onChange: function (v) { cb.patchForm({ character: v }); },
+          })),
+        h(Field, { label: '后缀' },
+          h(TextInput, {
+            value: form.suffix, disabled: disabled, placeholder: '追加在提示词末尾的一句，支持 {{cwd}}',
+            onChange: function (v) { cb.patchForm({ suffix: v }); },
+          })),
+        h(Disclosure, { summary: '说明：{{cwd}} 与其它变量' },
+          h('div', { className: 'wpr-note' }, '支持 {{cwd}}（当前工作目录）；其余 {{变量}} 原样保留不解析。'))));
+
+      // ③ 我怎么说话 —— 形象 + 语气合成一张卡，两个可折叠小节
+      body.push(h(GroupTitle, { key: 'g2', text: '我怎么说话', hint: '形象 / 语气 · 都是 opt-in' }));
+      body.push(h(VoiceCard, {
+        key: 'voice',
+        sections: [
+          {
+            key: 'appearance',
+            title: '形象（appearance）',
+            switchLabel: '启用形象设定',
+            switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
+            enabled: form.appearanceEnabled,
+            text: form.appearanceText,
+            placeholder: '例：你是一位 20 岁的女性，身高 1.75 m。',
+            rows: form.appearanceRows,
+            keyPlaceholder: '模型关键词，如 deepseek-v4.1-flash',
+            valuePlaceholder: '这个模型下的形象，如 你是一位 20 岁的女性，身高 1.75 m。',
+            empty: '（没配就所有模型都用上面的通用文本）',
+            notes: [
+              '形象是「你是谁／长什么样」的既定事实：不必解释、不要否认，也不要反复强调或拿它加戏；被问到年龄/性别/长相时照它回答。',
+            ].concat(modelNotes),
+            note: '形象是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
+            disabled: disabled,
+            onToggleEnabled: function (v) { cb.patchForm({ appearanceEnabled: v }); },
+            onText: function (v) { cb.patchForm({ appearanceText: v }); },
+            onPatch: function (i, f) { cb.patchAt('appearanceRows', i, f); },
+            onRemove: function (i) { cb.removeAt('appearanceRows', i); },
+            onAdd: function () { cb.addAt('appearanceRows', seenModel); },
+          },
+          {
+            key: 'tone',
+            title: '回复语气（tone）',
+            switchLabel: '启用回复语气',
+            switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
+            enabled: form.toneEnabled,
+            text: form.toneText,
+            placeholder: '例：语气温柔有耐心：先接住对方的处境再给方案，但该说的问题照样直说。',
+            rows: form.toneRows,
+            keyPlaceholder: '模型关键词，如 glm-5.1',
+            valuePlaceholder: '这个模型下的语气，如 语气严肃克制：先摆结论和依据。',
+            empty: '（没配就所有模型都用上面的通用文本）',
+            presets: arrOf(d.tonePresets),
+            onUsePreset: function (text) { cb.patchForm({ toneText: text }); },
+            notes: [
+              '语气只改措辞与节奏：不改变结论、证据标准与工作契约。',
+            ].concat(modelNotes),
+            note: '语气是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
+            disabled: disabled,
+            onToggleEnabled: function (v) { cb.patchForm({ toneEnabled: v }); },
+            onText: function (v) { cb.patchForm({ toneText: v }); },
+            onPatch: function (i, f) { cb.patchAt('toneRows', i, f); },
+            onRemove: function (i) { cb.removeAt('toneRows', i); },
+            onAdd: function () { cb.addAt('toneRows', seenModel); },
+          },
+        ],
+      }));
+
+      // ④ 我的硬约束 —— 工作契约
+      body.push(h(GroupTitle, { key: 'g3', text: '我的硬约束', hint: '逐条可勾选' }));
+      body.push(h(ContractsCard, {
+        key: 'contracts', value: form.contracts, disabled: disabled,
+        onPatch: function (i, f) { cb.patchAt('contracts', i, f); },
+        onRemove: function (i) { cb.removeAt('contracts', i); },
+        onAdd: function () { cb.addAt('contracts'); },
+      }));
+
+      // ⑤ 我记住什么 —— 长期记忆（开关与条目在同一张卡里：原来拆两张既重复又不同步）
+      body.push(h(GroupTitle, { key: 'g4', text: '我记住什么', hint: '长期记忆 · 默认关' }));
+      body.push(h(MemoryCard, {
+        key: 'memory', mem: d.memory, value: form.entries,
+        enabled: form.memoryEnabled, capture: form.memoryCapture, disabled: disabled,
+        onToggleEnabled: function (v) { cb.patchForm({ memoryEnabled: v }); },
+        onCapture: function (v) { cb.patchForm({ memoryCapture: v }); },
+        onPatch: function (i, f) { cb.patchAt('entries', i, f); },
+        onRemove: function (i) { cb.removeAt('entries', i); },
+        onAdd: function () { cb.addAt('entries'); },
+      }));
+
+      // ⑥ 此刻注入什么 —— 三段预览
+      body.push(h(GroupTitle, {
+        key: 'g5', text: '此刻注入什么',
+        hint: (strOf(d.tierLabel) || (d.tier + ' 档')) + ' · 按模型档渲染，换档重取',
+      }));
+      body.push(h(SectionsCard, {
+        key: 'sections', sections: shown ? shown.sections : d.sections, warnings: shown ? shown.warnings : [],
+        tier: d.tier, fromSave: !!savedPreview,
+      }));
+      if (shown && shown.warnings && shown.warnings.length && savedPreview) {
+        for (var sj = 0; sj < shown.warnings.length; sj++) {
+          body.push(h('div', { className: 'wpr-alert', key: 'pw' + sj }, '⚠ ' + shown.warnings[sj]));
+        }
+      }
+      body.push(h(EditorCard, { key: 'editor', editor: d.editor }));
+      return body;      return body;
+    }
+
+    /** 面板整页（页头 + 工具栏 + 正文）：设置页与静态预览页共用，保证预览与真页面同构 */
+    function panelView(o) {
+      var d = o.data;
+      var form = o.form;
+      var cb = o.handlers || {};
+      return h('div', { className: 'wpr-wrap' },
+        h('div', { className: 'wpr-head' },
+          h('div', { className: 'wpr-h1' }, '人设 · whale-persona'),
+          h('span', { className: 'wpr-spacer' }),
+          h('span', { className: 'wpr-sub' }, '改配置下一步生效 · 改挂载行要新会话')),
+        d && form ? h(Toolbar, {
+          // 表单禁用时工具栏一起禁用（老宿主无 raw / 磁盘坏 JSON）：档位与保存都不该能点
+          disabled: !!o.disabled, loading: !!o.loading, saving: !!o.saving, dirty: !!o.dirty, tier: o.tier,
+          onPickTier: cb.onPickTier, onRefresh: cb.onRefresh, onSave: cb.onSave,
+        }) : null,
+        h('div', { className: 'wpr-sub wpr-mt6' },
+          o.savedPreview
+            ? '这里就是此刻会注入系统提示词的那几段（已按刚保存的配置就地更新，跟运行期同一套渲染）。'
+            : '这里显示的就是此刻真会注入系统提示词的那几段，跟运行期同一套渲染。'),
+        panelBody(o));
     }
 
     /* ── 根组件 ─────────────────────────────────────────────────────────── */
@@ -1037,6 +1409,7 @@ window.__ModuleLoader__.load({
           setSt({ loading: false, error: messageOf(err), data: null });
         });
       }, [tier, tick]);
+
 
       var d = st.data;
       var disabled = !!(d && (!d.hasRaw || !d.configValid));
@@ -1140,198 +1513,17 @@ window.__ModuleLoader__.load({
         });
       }, [form, d, disabled, sv.saving]);
 
-      var notes = [];
-      if (d && !d.configValid) {
-        // 坏 JSON 是**磁盘状态**，与宿主版本无关：先说这句，别被「老宿主」的提示盖过去
-        notes.push('配置文件不是合法 JSON，设置面板不会覆盖它，请先手工修好。');
-        if (!d.hasRaw) notes.push('另外：' + NO_RAW_HINT + '。');
-        // hasRaw 为真时只是文件坏了：本地编辑器仍能修（它读原文，不是读 raw）
-      } else if (d && !d.hasRaw) {
-        // 磁盘坏 JSON 时 raw 也是 null：这时两句提示都给（文件坏了 + 本版面板不能写），
-        // 优先级上「文件坏了」在前（那是磁盘状态，跟宿主版本无关）。
-        notes.push('注意：' + NO_RAW_HINT + '。');
-      }
-      if (d && d.warnings && d.warnings.length) {
-        for (var wi = 0; wi < d.warnings.length; wi++) notes.push('⚠ ' + d.warnings[wi]);
-      }
-
-      var shown = savedPreview || (d ? { sections: d.sections, warnings: [] } : null);
-      // 「按模型」条目的关键词到底该写什么：用宿主**真实**注入用的 id，
-      // 因为界面上的模型显示名（如「DeepSeek-V4.1-Flash High」）与 id（如 deepseek-flash）常常不是一回事。
-      var seenModel = strOf(d && d.seenModel);
-      var modelNotes = seenModel
-        ? ['宿主最近一次真实注入用的模型 id 是「' + seenModel + '」—— 关键词照它写即可（忽略大小写，写其中一段也能命中）。']
-        : [];
-
-      var body = [];
-      if (st.error) {
-        body.push(h('div', { className: 'wpr-alert wpr-bad', key: 'err' },
-          h('div', null, '读取失败：' + st.error),
-          h('div', { className: 'wpr-sub', style: { marginTop: 4 } }, '面板只是看不见人设，人设本身不受影响。'),
-          h('button', { className: 'wpr-btn', type: 'button', style: { marginTop: 8 }, onClick: function () { setTick(tick + 1); } }, '重试')));
-      }
-      if (!d && !st.error) {
-        body.push(h('div', { className: 'wpr-sub', key: 'loading' },
-          st.loading ? '正在读取人设…' : '没有数据 —— 点右上角「刷新」重试。'));
-      }
-      if (d && form) {
-        body.push(h(Banner, { key: 'banner', status: sv, notes: notes }));
-        body.push(h(StateCard, {
-          key: 'state', data: d, enabled: form.enabled, thinkingLanguage: form.thinkingLanguage,
-          tierLabel: strOf(d.tierLabel) || (d.tier + ' 档'),
-        }));
-        body.push(h('div', { className: 'wpr-card', key: 'basic' },
-          h('div', { className: 'wpr-cardhead' },
-            h('div', { className: 'wpr-title' }, '基本'),
-            h('span', { className: 'wpr-sub' }, '改动先落在本地，点「保存」才写入')),
-          h(Field, { label: '总开关' },
-            h(CheckBox, {
-              checked: form.enabled, disabled: disabled, label: '启用（关掉 = 三段都不注入）',
-              onChange: function (v) { patchForm({ enabled: v }); },
-            }),
-            h('div', { className: 'wpr-hint' }, '关掉后什么都不注入，等于装上零行为改变。')),
-          h(Field, { label: '思维链语言' },
-            h(TextInputWithList, {
-              listId: 'wpr-thinking-langs', value: form.thinkingLanguage, disabled: disabled,
-              placeholder: 'off / zh-CN / en，也可自填', onChange: function (v) { patchForm({ thinkingLanguage: v }); },
-            }),
-            h('datalist', { id: 'wpr-thinking-langs' }, THINKING_PRESETS.map(function (t) {
-              return h('option', { key: t, value: t });
-            })),
-            h('div', { className: 'wpr-hint' }, 'off = 不干预（跟随模型）；下拉是预设，也能直接敲别的值。')),
-          h(Field, { label: '自称 · flash 档模型时' },
-            h(TextInput, { value: form.selfNameFlash, disabled: disabled, onChange: function (v) { patchForm({ selfNameFlash: v }); } })),
-          h(Field, { label: '自称 · pro 档模型时' },
-            h(TextInput, { value: form.selfNamePro, disabled: disabled, onChange: function (v) { patchForm({ selfNamePro: v }); } }),
-            h('div', { className: 'wpr-hint' }, '自称只通过 {selfName} 占位符进提示词 —— 写进「立场正文」或任一条契约里才生效。')),
-          // 档位判定规则：原样展示宿主给的那句话（前端不硬编码，换供应商时文案不用改前端）
-          strOf(d.tierRule) ? h('div', { className: 'wpr-note' }, d.tierRule) : null,
-          h(Field, { label: '称呼' },
-            h(TextInput, { value: form.userName, disabled: disabled, onChange: function (v) { patchForm({ userName: v }); } })),
-          h(Field, { label: '立场（一句话）' },
-            h(TextInput, { value: form.stance, disabled: disabled, onChange: function (v) { patchForm({ stance: v }); } })),
-          h(Field, { label: '立场正文' },
-            h(TextInput, {
-              multiline: true, value: form.character, disabled: disabled,
-              placeholder: '整段自定义，支持 {selfName} / {userName}',
-              onChange: function (v) { patchForm({ character: v }); },
-            })),
-          h(Field, { label: '后缀' },
-            h(TextInput, {
-              value: form.suffix, disabled: disabled, placeholder: '追加在提示词末尾的一句，支持 {{cwd}}',
-              onChange: function (v) { patchForm({ suffix: v }); },
-            }),
-            h('div', { className: 'wpr-hint' }, '支持 {{cwd}}（当前工作目录）；其余 {{变量}} 原样保留不解析。')))),
-        body.push(h(ByModelCard, {
-          key: 'bymodel', value: form.selfNameRows, disabled: disabled,
-          title: SELF_NAME_CARD.title,
-          subtitle: SELF_NAME_CARD.subtitle(form.selfNameRows.length),
-          empty: SELF_NAME_CARD.empty,
-          keyPlaceholder: SELF_NAME_CARD.keyPlaceholder,
-          valuePlaceholder: SELF_NAME_CARD.valuePlaceholder,
-          notes: SELF_NAME_CARD.notes.concat(modelNotes),
-          onPatch: function (i, f) { patchAt('selfNameRows', i, f); },
-          onRemove: function (i) { removeAt('selfNameRows', i); },
-          onAdd: function () { addAt('selfNameRows', seenModel); },
-        }));
-        // 形象 / 语气（0.9.0）：卡序与提示词里的渲染顺序对齐 —— 立场正文之后、工作契约之前
-        body.push(h(StyleCard, {
-          key: 'appearance',
-          title: '形象（appearance）',
-          switchLabel: '启用形象设定',
-          switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
-          enabled: form.appearanceEnabled,
-          text: form.appearanceText,
-          placeholder: '例：你是一位 20 岁的女性，身高 1.75 m。',
-          rows: form.appearanceRows,
-          keyPlaceholder: '模型关键词，如 deepseek-v4.1-flash',
-          valuePlaceholder: '这个模型下的形象，如 你是一位 20 岁的女性，身高 1.75 m。',
-          empty: '（没配就所有模型都用上面的通用文本）',
-          notes: [
-            '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面的通用文本。',
-            '形象是「你是谁／长什么样」的既定事实：不必解释、不要否认，也不要反复强调或拿它加戏；被问到年龄/性别/长相时照它回答。',
-            '注入位置：立场正文之后、工作契约之前。',
-          ].concat(modelNotes),
-          note: '形象是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
-          disabled: disabled,
-          onToggleEnabled: function (v) { patchForm({ appearanceEnabled: v }); },
-          onText: function (v) { patchForm({ appearanceText: v }); },
-          onPatch: function (i, f) { patchAt('appearanceRows', i, f); },
-          onRemove: function (i) { removeAt('appearanceRows', i); },
-          onAdd: function () { addAt('appearanceRows', seenModel); },
-        }));
-        body.push(h(StyleCard, {
-          key: 'tone',
-          title: '回复语气（tone）',
-          switchLabel: '启用回复语气',
-          switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
-          enabled: form.toneEnabled,
-          text: form.toneText,
-          placeholder: '例：语气温柔有耐心：先接住对方的处境再给方案，但该说的问题照样直说。',
-          rows: form.toneRows,
-          keyPlaceholder: '模型关键词，如 glm-5.1',
-          valuePlaceholder: '这个模型下的语气，如 语气严肃克制：先摆结论和依据。',
-          empty: '（没配就所有模型都用上面的通用文本）',
-          presets: arrOf(d.tonePresets),
-          onUsePreset: function (text) { patchForm({ toneText: text }); },
-          notes: [
-            '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面的通用文本。',
-            '语气只改措辞与节奏：不改变结论、证据标准与工作契约。',
-            '注入位置：立场正文之后、工作契约之前。',
-          ].concat(modelNotes),
-          note: '语气是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
-          disabled: disabled,
-          onToggleEnabled: function (v) { patchForm({ toneEnabled: v }); },
-          onText: function (v) { patchForm({ toneText: v }); },
-          onPatch: function (i, f) { patchAt('toneRows', i, f); },
-          onRemove: function (i) { removeAt('toneRows', i); },
-          onAdd: function () { addAt('toneRows', seenModel); },
-        }));
-        body.push(h(ContractsCard, {
-          key: 'contracts', value: form.contracts, disabled: disabled,
-          onPatch: function (i, f) { patchAt('contracts', i, f); },
-          onRemove: function (i) { removeAt('contracts', i); },
-          onAdd: function () { addAt('contracts'); },
-        }));
-        // 开关与条目编辑放在同一张卡里：原来拆成两张（一张显示状态、一张放开关），
-        // 既重复又不同步（状态那行读的是服务端值，改了开关不保存它不动）。2026-09-18 用户点名后合并。
-        body.push(h(MemoryCard, {
-          key: 'memory', mem: d.memory, value: form.entries,
-          enabled: form.memoryEnabled, capture: form.memoryCapture, disabled: disabled,
-          onToggleEnabled: function (v) { patchForm({ memoryEnabled: v }); },
-          onCapture: function (v) { patchForm({ memoryCapture: v }); },
-          onPatch: function (i, f) { patchAt('entries', i, f); },
-          onRemove: function (i) { removeAt('entries', i); },
-          onAdd: function () { addAt('entries'); },
-        }));
-        body.push(h(SectionsCard, {
-          key: 'sections', sections: shown ? shown.sections : d.sections, warnings: shown ? shown.warnings : [],
-          tier: d.tier, fromSave: !!savedPreview,
-        }));
-        if (shown && shown.warnings && shown.warnings.length && savedPreview) {
-          for (var sj = 0; sj < shown.warnings.length; sj++) {
-            body.push(h('div', { className: 'wpr-alert', key: 'pw' + sj }, '⚠ ' + shown.warnings[sj]));
-          }
-        }
-        body.push(h(EditorCard, { key: 'editor', editor: d.editor }));
-      }
-
-      return h('div', { className: 'wpr-wrap' },
-        h('div', { className: 'wpr-head' },
-          h('div', { className: 'wpr-h1' }, '人设 · whale-persona'),
-          h('span', { className: 'wpr-spacer' }),
-          d ? h('span', { className: 'wpr-sub' }, d.tier + ' 档') : null),
-        d && form ? h(Toolbar, {
-          // 表单禁用时工具栏一起禁用（老宿主无 raw / 磁盘坏 JSON）：档位与保存都不该能点
-          disabled: disabled, loading: !!st.loading, saving: !!sv.saving, dirty: dirty, tier: tier,
+      return panelView({
+        data: d, form: form, disabled: disabled, status: sv, savedPreview: savedPreview,
+        error: st.error, loading: !!st.loading, tier: tier, saving: !!sv.saving, dirty: dirty,
+        handlers: {
+          patchForm: patchForm, patchAt: patchAt, removeAt: removeAt, addAt: addAt,
           onPickTier: pick, onRefresh: refresh, onSave: save,
-        }) : null,
-        h('div', { className: 'wpr-sub', style: { margin: '6px 0' } },
-          savedPreview
-            ? '这里就是此刻会注入系统提示词的那几段（已按刚保存的配置就地更新，跟运行期同一套渲染）。'
-            : '这里显示的就是此刻真会注入系统提示词的那几段，跟运行期同一套渲染。'),
-        body);
+          onRetry: function () { setTick(tick + 1); },
+        },
+      });
     }
+
 
     /* ── 装配 ───────────────────────────────────────────────────────────── */
 
@@ -1363,6 +1555,26 @@ window.__ModuleLoader__.load({
           selfNameCard: SELF_NAME_CARD,
           ByModelCard: ByModelCard,
           StyleCard: StyleCard,
+          // 静态预览页（data/ui-design/preview-panel.mjs）要用：整页树 + 样式字符串 + 各张卡
+          css: CSS,
+          panelView: panelView,
+          panelBody: panelBody,
+          StateCard: StatusStrip,        // 旧名字保留：它现在就是顶部状态条（StatusStrip）
+          StatusStrip: StatusStrip,
+          Disclosure: Disclosure,
+          GroupTitle: GroupTitle,
+          CardHead: CardHead,
+          StyleSection: StyleSection,
+          VoiceCard: VoiceCard,
+
+          Toolbar: Toolbar,
+          Banner: Banner,
+          ContractsCard: ContractsCard,
+          MemoryCard: MemoryCard,
+          SectionsCard: SectionsCard,
+          EditorCard: EditorCard,
+          Field: Field,
+          badge: badge,
         });
       } catch (e) { /* 机检钩子坏了不能连累面板 */ }
     }
@@ -1376,7 +1588,7 @@ window.__ModuleLoader__.load({
             return function () {};
           }
           var style = document.createElement('style');
-          style.dataset.plugin = 'dsh-whale-persona-ui';
+          style.dataset.plugin = BASE_TAG;          // 基础层：永远注入，且只此一层
           style.textContent = CSS;
           document.head.appendChild(style);
           return function () { try { style.remove(); } catch (e) { /* 已被移除 */ } };
