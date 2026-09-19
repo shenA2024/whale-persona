@@ -10,145 +10,21 @@
  *   两者占同一个架构位——「preset 级 persona 遮蔽行」。挂载规则看层：
  *   跨层同名 = 遮蔽（官方替换机制，本插件在 agent preset 层遮蔽部署级默认）；
  *   同层同名 = 装配抛错（同一 preset 里已挂官方行就先卸掉它）；
- *   全局/profile 层挂载本插件 = 与注册表自身的 persona 注册同名冲突，当场 fail loud。
+ *   全局/profile 层挂载本插件 = 与注册表自身的 persona 注册同名冲突，当场 fail loud
+ *   —— **要"所有模式都生效"请改用本仓的全局入口** {@link ./global.js}（自有段名，不撞官方槽位）。
  *
  * 多宿主改造（2026-09-18）：渲染逻辑全部下沉到仓库根 core/（与 ZCode 适配器共享唯一源），
- * 本文件只剩「注册三个段 + 从 core 取文本」的宿主胶水。
+ * 段落注册下沉到 ./sections.js（与 global.js 共享唯一源），本文件只剩「选哪套段名」。
  *
  * 生效时机：段是装配期注册、text 是每步求值 —— 改配置下一步生效，改挂载要新会话。
  */
-import { createStore } from '../../core/store.js'
-import { captureActive, runMemoryCommand } from '../../core/capture.js'
-import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../core/prompt.js'
-// 记下宿主**真实**用的模型 id：界面显示名与它就常常不是一个东西（见 core/lastModel.js 头注）
-import { recordModel } from '../../core/lastModel.js'
+import { registerPersonaSections, PRESET_SECTIONS } from './sections.js'
 
 export const name = '@shenA2024/whale-persona'
 
 /** 依赖 dsh-system-prompt 提供的 systemPrompt 服务 */
 export const inject = ['systemPrompt']
 
-/**
- * order 解析：优先问宿主的中心具名表（getSectionOrder，DSH 官方自用法），
- * 查不到或宿主无此 API 再回落常量——防上游调表后段静默错位（DSH 预告会有破坏性变更）。
- */
-function resolveOrder(systemPrompt, key, fallback) {
-  try {
-    const n = systemPrompt && typeof systemPrompt.getSectionOrder === 'function'
-      ? systemPrompt.getSectionOrder(key) : undefined
-    return Number.isFinite(n) ? n : fallback
-  } catch {
-    return fallback
-  }
-}
-
-/**
- * 思考语言段：无官方具名槽位，固定 order 20 插在人设段（0）与策略段（500）之间。
- * 段名用自有前缀 whale:（不占官方 deployment: 命名空间——具名表 34 键无此项）。
- */
-
 export function apply(ctx) {
-  const store = createStore()
-  store.ensureFile()
-
-  // 人设前缀/后缀占官方具名槽位（跨层遮蔽部署级默认）；思考语言段是自有槽位
-  const ORDER_PERSONA_PREFIX = resolveOrder(ctx.systemPrompt, 'DEPLOYMENT_PERSONA_PREFIX', 0)
-  const ORDER_PERSONA_SUFFIX = resolveOrder(ctx.systemPrompt, 'DEPLOYMENT_PERSONA_SUFFIX', 10200)
-  const ORDER_THINKING_LANG = 20
-
-  const disposePrefix = ctx.systemPrompt.section({
-    name: 'deployment:persona-prefix',
-    order: ORDER_PERSONA_PREFIX,
-    // 正文由 core 渲染成品：关掉插值，既避免用户文本里的 {{}} 被误解析，也避免未知变量抛错
-    interpolate: false,
-    text: (context) => {
-      try {
-        const agent = context && context.agent
-        const model = agent && agent.options && agent.options.model
-        // cwd 给记忆相关性选择用（tag 命中当前项目目录的条目优先注入）
-        const cwd = (agent && agent.session && agent.session.header && agent.session.header.cwd)
-          || (agent && agent.session && agent.session.cwd)
-          || (agent && agent.options && agent.options.cwd)
-        const cfg = store.get()
-        recordModel(model)
-        // 【历史备忘】与【入库纪律】只在会话开关打开（或配置 capture:'always'）时注入
-        return buildPersonaPrompt(cfg, model, cwd, { capture: captureActive(cfg, agent) })
-      } catch {
-        return ''
-      }
-    },
-  })
-
-  const disposeSuffix = ctx.systemPrompt.section({
-    name: 'deployment:persona-suffix',
-    order: ORDER_PERSONA_SUFFIX,
-    // 不走 interpolate:true —— 用户自定义 suffix 里一个未知 {{var}} 就会让新会话发不出
-    // 第一句话。{{cwd}} 由 core 自行替换，其余变量原样保留不触达插值器。
-    interpolate: false,
-    text: (context) => {
-      try {
-        const agent = context && context.agent
-        const cwd = (agent && agent.session && agent.session.header && agent.session.header.cwd)
-          || (agent && agent.session && agent.session.cwd)
-          || (agent && agent.options && agent.options.cwd)
-        return buildSuffix(store.get(), cwd)
-      } catch {
-        return ''
-      }
-    },
-  })
-
-  const disposeThinkingLang = ctx.systemPrompt.section({
-    name: 'whale:thinking-language',
-    order: ORDER_THINKING_LANG,
-    interpolate: false,
-    text: () => {
-      try {
-        return buildThinkingLanguage(store.get())
-      } catch {
-        return ''
-      }
-    },
-  })
-
-  /**
-   * 会话内的「长期记忆收口」开关：/memory [on|off|status]
-   * 命令跑在 UI 命令平面 —— 不产生模型消息、不占 token（dsh-commands 的约定）。
-   * 用动态注入（ctx.inject）而不是静态 inject：拿不到 commands 服务时命令静默缺席，
-   * 人设照常工作（静态 inject 不满足会让整个插件挂不上，人设直接消失）。
-   */
-  let registered = false
-  let disposeFiber = null
-  let disposeCommand = null
-  const registerMemoryCommand = (commands) => {
-    if (registered || !commands || typeof commands.register !== 'function') return
-    registered = true
-    disposeCommand = commands.register({
-      name: 'memory',
-      description: '长期记忆收口：开/关本会话的【入库纪律】注入（/memory on|off|status）',
-      input: { hint: 'on | off | status' },
-      handler: (invocation) => runMemoryCommand(invocation, store),
-    })
-  }
-  try {
-    // 先试同步取服务（命令当次挂载即可用）；取不到再退到动态注入
-    if (typeof ctx.get === 'function') registerMemoryCommand(ctx.get('commands'))
-  } catch { /* 服务还没就位 */ }
-  if (!registered && typeof ctx.inject === 'function') {
-    try {
-      disposeFiber = ctx.inject(['commands'], (c) => {
-        try { registerMemoryCommand(c.commands) } catch { disposeCommand = null }
-      })
-    } catch {
-      disposeFiber = null
-    }
-  }
-
-  return () => {
-    try { if (typeof disposeCommand === 'function') disposeCommand() } catch { /* 已随 fiber 释放 */ }
-    try { if (disposeFiber && typeof disposeFiber.dispose === 'function') disposeFiber.dispose() } catch { /* 无视 */ }
-    disposePrefix()
-    disposeSuffix()
-    disposeThinkingLang()
-  }
+  return registerPersonaSections(ctx, PRESET_SECTIONS)
 }
