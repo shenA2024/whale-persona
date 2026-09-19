@@ -321,6 +321,7 @@ scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设�
                  ui.mjs + ui.html 本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
                  memory.mjs       长期记忆确认台（status/confirm/reject/adopt/log）
 tests/           七套测试：DSH 冒烟 / 记忆收件箱 / 模型名匹配 / 形象与语气 / 设置面板 / ZCode hook / 本地编辑器 API
+qa/              安全审查：probes/probe-security.js（探针）+ security-审查.md（台账与人工复核项）
 ```
 
 配置结构与「契约怎么写才有效」「让 AI 代写配置」的完整说明：
@@ -331,6 +332,7 @@ tests/           七套测试：DSH 冒烟 / 记忆收件箱 / 模型名匹配 /
 ```bash
 node scripts/sync-core.mjs          # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
 npm test                            # 仓库根跑全部七套测试（含记忆闸门 T18-T22、CSP U5、形象/语气 L1-L5）
+npm run sec                         # 安全探针：11 组断言 + 自测（探针自己也要能被证明有牙）
 npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 ```
 
@@ -341,6 +343,7 @@ npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 - **安装器运行期零 shell**：自己定位 `@deepseek-ai/dsh/lib/bin.js` 交给 `process.execPath` 以数组传参执行，
   `--profile` / `--base` 走白名单校验，消掉命令注入面；
 - **本地页有 CSP**：一次性 nonce，无 `unsafe-inline`；异常细节只进终端，不回传堆栈；
+- **本地安全探针**：`npm run sec` —— `qa/probes/probe-security.js` 11 组可自动化检查（零依赖 / 零外联 / 无 shell / 路径白名单 / CSP / 注入面 / loopback / 记忆闸门功能探针 / 凭据 / .gitignore / 二进制），带 `--selftest` 证明探针本身有牙；人工复核项与历史班次见 [qa/security-审查.md](qa/security-审查.md)；
 - 详细策略与漏洞上报方式：[.github/SECURITY.md](.github/SECURITY.md)。
 
 ### 第三方扫描结果与处置（2026-09-18）

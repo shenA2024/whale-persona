@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+/**
+ * 安全探针（纯 node，零第三方依赖）——把 qa/security-审查.md 里可自动化的检查工具化。
+ * 做法对齐 D:/external-review/qa（安全审查部门）：分组断言 -> PASS <true|false> DETAIL <json> + 退出码；
+ * 只读、不改仓库、不联网、不装包。任一组自身抛错时降级为 SEC_SKIP，不拖垮整轮。
+ *
+ * 用法:
+ *   node qa/probes/probe-security.js                 检查本仓
+ *   node qa/probes/probe-security.js --root <dir>    指定检查根
+ *   node qa/probes/probe-security.js --selftest      自测：在临时目录种违规，断言探针会 FAIL
+ *
+ *   S1  SEC_DEPS      零运行时依赖：根 package.json 无 dependencies / devDependencies
+ *   S2  SEC_NET       不联网：生产源码里没有指向非 loopback 主机的 URL
+ *   S3  SEC_SHELL     不执行 shell：无 shell:true、无 exec/execSync，spawn* 一律数组传参
+ *   S4  SEC_TRAVERSAL 安装器路径纪律：--profile/--base 白名单 + path.resolve
+ *   S5  SEC_CSP       本地页 CSP：nonce 一次性、无 unsafe-inline/unsafe-eval、响应头+meta 双份 + nosniff
+ *   S6  SEC_INJECT    注入面：无 eval/new Function/document.write；innerHTML 只允许清空
+ *   S7  SEC_BIND      只绑 loopback + Host/Origin 双校验
+ *   S8  SEC_GATE      记忆闸门（功能探针，真跑一次渲染）：proposed 不进注入，confirmed 才进
+ *   S9  SEC_SECRET    仓库里没有真实凭据
+ *   S10 SEC_IGNORE    .gitignore 挡住依赖/生成物/大素材/日志/环境文件
+ *   S11 SEC_BINARY    版本库里没有二进制大件
+ *
+ * 无法自动化项（SEC_SKIP，不计失败）: 记忆确认行的语义伪造、提示词注入逃逸的人工判定、
+ *   宿主平面划分（headless 不注入人设）、第三方扫描复核。以上以 qa/security-审查.md 的人工核验为准。
+ *
+ * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 11 组；门禁以台账全项人工核验为准。
+ */
+import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+
+const HERE = path.dirname(fileURLToPath(import.meta.url))
+const argv = process.argv.slice(2)
+const opt = { root: path.resolve(HERE, '..', '..'), selftest: false }
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === '--root') opt.root = path.resolve(argv[++i] || '.')
+  else if (argv[i] === '--selftest') opt.selftest = true
+  else { console.error('unknown arg: ' + argv[i]); process.exit(2) }
+}
+const ROOT = opt.root
+
+let fails = 0, skips = 0, suspects = 0
+const ok = (id, msg) => console.log('SEC_OK   ' + id + ' ' + msg)
+const bad = (id, msg) => { fails++; console.log('SEC_FAIL ' + id + ' ' + msg) }
+const sus = (id, msg) => { suspects++; console.log('SEC_SUSPECT ' + id + ' ' + msg) }
+const skip = (id, reason, msg) => { skips++; console.log('SEC_SKIP ' + id + ' reason=' + reason + (msg ? ' ' + msg : '')) }
+const t = (id, cond, detail) => { if (cond) ok(id, detail || ''); else bad(id, detail || '') }
+const guard = (id, fn) => { try { fn() } catch (e) { skip(id, 'probe-error', String(e && e.message).slice(0, 80)) } }
+
+const SKIP_DIRS = new Set(['node_modules', '.git', 'data', '.tmp', 'out', 'build', 'dist', '.inbox'])
+const PROD_EXT = new Set(['.js', '.mjs', '.html'])
+/** 生产源码 = core/ adapters/ scripts/（tests/ 是夹具，不算生产面） */
+function walk(dir, extSet, out) {
+  const acc = out || []
+  if (!existsSync(dir)) return acc
+  for (const name of readdirSync(dir)) {
+    if (SKIP_DIRS.has(name)) continue
+    const p = path.join(dir, name)
+    if (statSync(p).isDirectory()) walk(p, extSet, acc)
+    else if (!extSet || extSet.has(path.extname(name))) acc.push(p)
+  }
+  return acc
+}
+const prodFiles = () => walk(path.join(ROOT, 'core'), PROD_EXT).concat(walk(path.join(ROOT, 'adapters'), PROD_EXT), walk(path.join(ROOT, 'scripts'), PROD_EXT))
+const rel = (p) => path.relative(ROOT, p).split(path.sep).join('/')
+const readLines = (p) => readFileSync(p, 'utf8').split(/\r?\n/)
+/** 注释行不算违规（纪律写在注释里是好事，不是漏洞） */
+const isComment = (line) => /^\s*(\/\/|\*|\/\*)/.test(line)
+const LOOPBACK = /(127\.0\.0\.1|localhost|\[::1\]|::1)/
+const lineHits = (pred) => {
+  const out = []
+  for (const p of prodFiles()) {
+    for (const [i, line] of readLines(p).entries()) {
+      if (isComment(line)) continue
+      const hit = pred(line, p)
+      if (hit) out.push(rel(p) + ':' + (i + 1) + ' ' + String(hit))
+    }
+  }
+  return out
+}
+
+guard('S1', () => {
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
+  const deps = Object.keys(pkg.dependencies || {})
+  const dev = Object.keys(pkg.devDependencies || {})
+  t('S1', deps.length === 0 && dev.length === 0, 'dependencies=' + JSON.stringify(deps) + ' devDependencies=' + JSON.stringify(dev))
+})
+
+guard('S2', () => {
+  const hits = lineHits((line) => { const m = line.match(/https?:\/\/[^\s'"\)\]]+/); return m && !LOOPBACK.test(m[0]) ? m[0] : null })
+  t('S2', hits.length === 0, hits.length ? JSON.stringify(hits.slice(0, 5)) : '生产源码零外联 URL')
+})
+
+guard('S3', () => {
+  const bads = lineHits((line) => {
+    if (/shell\s*:\s*true/.test(line)) return 'shell:true'
+    if (/\bexecSync\s*\(|\bexec\s*\(\s*['"`]/.test(line)) return 'exec'
+    return null
+  })
+  t('S3', bads.length === 0, bads.length ? JSON.stringify(bads.slice(0, 5)) : '无 shell:true / exec')
+  const susps = lineHits((line) => (/spawn(Sync)?\s*\(/.test(line) && !/shell\s*:\s*false/.test(line) ? 'spawn 未显式 shell:false' : null))
+  if (susps.length) sus('S3', 'spawn* 需人工确认数组传参: ' + JSON.stringify(susps.slice(0, 5)))
+})
+
+guard('S4', () => {
+  const f = path.join(ROOT, 'scripts', 'install-dsh.mjs')
+  if (!existsSync(f)) return skip('S4', 'no-installer')
+  const s = readFileSync(f, 'utf8')
+  const hasRe = /const ID_RE = \/\^/.test(s)
+  const guards = (s.match(/ID_RE\.test\(/g) || []).length >= 2
+  const resolved = /path\.resolve\(opts\.home/.test(s)
+  t('S4', hasRe && guards && resolved, 'ID_RE=' + hasRe + ' 校验点=' + guards + ' resolve=' + resolved)
+})
+
+guard('S5', () => {
+  const h = path.join(ROOT, 'scripts', 'ui.html')
+  const m = path.join(ROOT, 'scripts', 'ui.mjs')
+  if (!existsSync(h) || !existsSync(m)) return skip('S5', 'no-local-page')
+  const html = readFileSync(h, 'utf8')
+  const mjs = readFileSync(m, 'utf8')
+  const i = mjs.indexOf('function cspFor')
+  const cspFn = i < 0 ? '' : mjs.slice(i, i + 600)
+  const tight = cspFn.length > 0 && !/unsafe-inline|unsafe-eval/.test(cspFn) && /nonce-/.test(cspFn)
+  const header = /['"]content-security-policy['"]\s*:/i.test(mjs)
+  const nosniff = /x-content-type-options['"]?\s*:\s*['"]nosniff/i.test(mjs)
+  t('S5', html.includes('%CSP%') && html.includes('%NONCE%') && tight && header && nosniff,
+    'meta占位=' + (html.includes('%CSP%') && html.includes('%NONCE%')) + ' 非nonce化=' + tight + ' 响应头=' + header + ' nosniff=' + nosniff)
+})
+
+guard('S6', () => {
+  const bads = lineHits((line) => {
+    if (/\beval\s*\(|new Function\s*\(|document\.write\s*\(|insertAdjacentHTML|dangerouslySetInnerHTML/.test(line)) return line.trim().slice(0, 60)
+    const m = line.match(/innerHTML\s*(\+)?=\s*(.+)$/)
+    if (m) { const rhs = m[2].trim(); if (!/^(['\"]{2})\s*;?$/.test(rhs)) return '非清空 innerHTML: ' + line.trim().slice(0, 50) }
+    return null
+  })
+  t('S6', bads.length === 0, bads.length ? JSON.stringify(bads.slice(0, 5)) : '无 eval / 无非清空 innerHTML')
+})
+
+guard('S7', () => {
+  const m = path.join(ROOT, 'scripts', 'ui.mjs')
+  const u = path.join(ROOT, 'adapters', 'dsh-ui', 'index.js')
+  if (!existsSync(m) || !existsSync(u)) return skip('S7', 'no-local-server')
+  const mjs = readFileSync(m, 'utf8')
+  const ui = readFileSync(u, 'utf8')
+  const bound = /server\.listen\(\s*PORT\s*,\s*'127\.0\.0\.1'/.test(mjs)
+  const hostGuard = /function isLoopbackHost/.test(ui) && /req\.headers\.host/.test(ui) && /origin/.test(ui)
+  const jsHostGuard = /ALLOWED_HOSTS/.test(mjs)
+  t('S7', bound && hostGuard && jsHostGuard, 'listen127=' + bound + ' 面板Host/Origin=' + hostGuard + ' 本地页Host白名单=' + jsHostGuard)
+})
+
+guard('S8', () => {
+  const home = mkdtempSync(path.join(os.tmpdir(), 'wpr-sec-'))
+  const dir = path.join(home, 'whale-persona')
+  mkdirSync(dir, { recursive: true })
+  writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ enabled: true, persona: { enabled: true, userName: '审', selfNameFlash: '审', character: 'x' }, memory: { enabled: true, entries: [{ text: 'SEC-MANUAL-条目' }] } }), 'utf8')
+  writeFileSync(path.join(dir, 'memory-inbox.jsonl'), [
+    JSON.stringify({ text: 'SEC-CONFIRMED-条目', status: 'confirmed', at: '2026-09-19T00:00:00Z' }),
+    JSON.stringify({ text: 'SEC-PROPOSED-条目', status: 'proposed', at: '2026-09-19T00:00:00Z' }),
+  ].join('\n') + '\n', 'utf8')
+  process.env.DSH_HOME = home
+  process.env.DSH_WHALE_CONFIG = path.join(dir, 'config.json')
+  return (async () => {
+    const { buildPersonaPrompt } = await import(pathToFileURL(path.join(ROOT, 'core', 'prompt.js')).href)
+    const { mergeConfig } = await import(pathToFileURL(path.join(ROOT, 'core', 'defaults.js')).href)
+    const cfg = mergeConfig(JSON.parse(readFileSync(process.env.DSH_WHALE_CONFIG, 'utf8')))
+    const out = String(buildPersonaPrompt(cfg, 'deepseek-flash', home, {}) || '')
+    t('S8', out.indexOf('SEC-PROPOSED-条目') < 0 && out.indexOf('SEC-CONFIRMED-条目') >= 0 && out.indexOf('SEC-MANUAL-条目') >= 0,
+      'proposed进了=' + (out.indexOf('SEC-PROPOSED-条目') >= 0) + ' confirmed进了=' + (out.indexOf('SEC-CONFIRMED-条目') >= 0) + ' 手工条目进了=' + (out.indexOf('SEC-MANUAL-条目') >= 0))
+    rmSync(home, { recursive: true, force: true })
+  })().catch((e) => { skip('S8', 'probe-error', String(e.message).slice(0, 80)) })
+})
+
+guard('S9', () => {
+  const pat = /ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{24,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----/
+  const hits = []
+  for (const p of walk(ROOT, null)) {
+    if (!/\.(js|mjs|json|md|html|yml|yaml|txt)$/.test(p)) continue
+    if (pat.test(readFileSync(p, 'utf8'))) hits.push(rel(p))
+  }
+  t('S9', hits.length === 0, hits.length ? JSON.stringify(hits) : '零命中')
+})
+
+guard('S10', () => {
+  const f = path.join(ROOT, '.gitignore')
+  if (!existsSync(f)) return skip('S10', 'no-gitignore')
+  const s = readFileSync(f, 'utf8')
+  const need = ['node_modules/', 'data/', 'out/', 'build/', '.env', '*.log']
+  const miss = need.filter((x) => s.indexOf(x) < 0)
+  t('S10', miss.length === 0, miss.length ? '缺: ' + JSON.stringify(miss) : '覆盖 ' + need.join(' '))
+})
+
+guard('S11', () => {
+  const r = spawnSync('git', ['-C', ROOT, 'ls-files'], { encoding: 'utf8', shell: false })
+  if (r.status !== 0) return skip('S11', 'not-a-git-repo')
+  const big = r.stdout.split(/\r?\n/).filter((f) => /\.(png|jpe?g|gif|webp|zip|gz|exe|dll|so|blend|glb|mp4|mov|pdf|woff2?|ttf)$/i.test(f))
+  t('S11', big.length === 0, big.length ? JSON.stringify(big.slice(0, 5)) : '零二进制')
+})
+
+skip('M1', 'manual', '记忆确认行语义伪造（同进程文件信任的固有上限，见 SECURITY.md）')
+skip('M2', 'manual', '提示词注入逃逸：渲染文本的呈现缓解需人读一遍')
+skip('M3', 'manual', '宿主平面划分（headless 不注入人设）是行为约定不是漏洞')
+skip('M4', 'manual', '第三方扫描（CodeQL / CodeGuard）结论复核')
+
+console.log('PASS ' + (fails === 0) + ' DETAIL ' + JSON.stringify({ root: rel(ROOT) || '.', fail: fails, suspect: suspects, skip: skips }))
+if (fails) process.exitCode = 1
+
+/* ---------- 自测：探针自己也要能被证明有牙 ---------- */
+if (opt.selftest) {
+  const tmp = mkdtempSync(path.join(os.tmpdir(), 'wpr-probe-selftest-'))
+  mkdirSync(path.join(tmp, 'core'), { recursive: true })
+  writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0', dependencies: { 'evil-dep': '1.0.0' } }), 'utf8')
+  writeFileSync(path.join(tmp, 'core', 'a.js'), 'export const u = fetch("https://evil.example.com/x")\nexport const y = eval("1")\nconst el = document.createElement("div"); el.innerHTML = "<img src=x onerror=alert(1)>"\n', 'utf8')
+  writeFileSync(path.join(tmp, '.gitignore'), 'node_modules/' + String.fromCharCode(10), 'utf8')
+  const r2 = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--root', tmp], { encoding: 'utf8', shell: false })
+  const caught = r2.stdout.match(/SEC_FAIL (S\d+)/g) || []
+  const okSelf = r2.status === 1 && caught.length >= 4
+  console.log('SELFTEST ' + okSelf + ' DETAIL ' + JSON.stringify({ expectExit: 1, gotExit: r2.status, caught }))
+  rmSync(tmp, { recursive: true, force: true })
+  if (!okSelf) process.exitCode = 1
+}

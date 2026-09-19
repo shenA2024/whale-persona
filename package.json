@@ -13,13 +13,14 @@
   },
   "scripts": {
     "test": "node tests/smoke.mjs && node tests/inbox.mjs && node tests/model-names.mjs && node tests/style-fields.mjs && node tests/ui-panel.mjs && node tests/ui-css-scope.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs",
+    "sec": "node qa/probes/probe-security.js && node qa/probes/probe-security.js --selftest",
     "install-dsh": "node scripts/install-dsh.mjs",
     "render": "node scripts/render-preview.mjs",
     "ui": "node scripts/ui.mjs",
     "memory": "node scripts/memory.mjs",
     "sync-core": "node scripts/sync-core.mjs"
   },
-  "files": ["core", "adapters", "scripts", "examples", "README.md", "LICENSE"],
+  "files": ["core", "adapters", "scripts", "examples", "qa", "README.md", "LICENSE"],
   "keywords": ["dsh", "dsh-plugin", "persona", "system-prompt", "memory", "deepseek-harness", "zcode"],
   "engines": { "node": ">=20" },
   "private": false,
