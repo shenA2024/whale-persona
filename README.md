@@ -58,7 +58,15 @@ node scripts/install-dsh.mjs             # 真装
 dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.10.0/shenA2024-whale-persona-0.10.0.tgz
 ```
 
-干净 DSH_HOME 实测：**3.2 秒装成**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
+干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
+
+⚠️ 这一步只是「把包装进 profile」，**还没挂载**（DSH 的插件必须在挂载层里有行才生效）。接着跑包里自带的安装脚本，它会把 agent preset 与 UI 面板行都挂好：
+
+```powershell
+node "$env:USERPROFILE\.dsh\profiles\web\node_modules\@shenA2024\whale-persona\scripts\install-dsh.mjs"
+```
+
+然后重启 DSH。脚本会**跟随你当前的默认 preset** 建一份名为 `whale-persona` 的预设（不覆盖你原来那份），并提示你之后怎么切过去。
 
 **懒得自己动手？** 把下面这句连同仓库地址丢给你的 AI：
 
