@@ -3,6 +3,33 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.11.2（2026-09-19）
+
+### 修复
+
+- **干净 home 上装完起不来：`duplicate loader entry id: whale-persona-ui`**（`scripts/install-dsh.mjs`）。
+  0.11.1 给本包加了 `dsh.bundle.patch` 之后，宿主 `dsh plugin add` 会把本包自动追加进 profile 的
+  `dsh.profile.bundles`，而那个 bundle 的补丁里已经插了设置面板行；安装脚本仍按老办法"往 profile 的
+  `cordis.patch.yml` 里手工插一条"，于是同一个 id 被两个层各插一次 —— loader 的 entry id 全局唯一，
+  重复即硬错，**整个插件树加载失败、DSH 起不来**（面板没了，整个人设也没了）。
+  现在脚本先算清这条行的归属：bundle 已经挂了就一条都不插；重装还会把 0.11.1 写坏的那条摘掉（自愈）。
+  触发来源：2026-09-19 「拉起一个全新 DSH home（全官方默认）+ 装本插件」—— 在全新 `DSH_HOME` 首次启动即复现。
+  验证：`tests/install-contract.mjs` 新增 I4（11 条断言：bundle 已挂时不插 / 写坏的能摘回 / 别的 insert
+  不误伤 / 双向幂等）；空 home 实测两遍：装完 `--dump-config` 里该行恰好 1 条、`dsh web` 起得来、
+  `GET /whale-persona/api/summary` 返 200；把 0.11.1 写坏的文件放回 profile 再重装，脚本打
+  「摘掉 profile 层的手工重复行」并把文件还原成 `[]`，服务照常起。
+- **自愈路径不能留下两个 `[]`**（同轮返工）：摘完重复行若文件里还留着空列表占位行，就会写成两个 YAML
+  文档，`--dump-config` 直接抛 `YAMLException: end of the stream or a document separator is expected`
+  —— 比原来的重复 id 更难查。现在补行与摘行两条路都先收敛掉所有空列表占位行，最后只补一份。
+  验证：I4 的后四条（自愈后只剩一个空列表 / 补行时同样收敛 / 空文件也能长出合法内容）。
+
+### 验证
+
+```
+npm test     # 12 套，exit 0（install-contract 从 7 条断言涨到 18 条）
+npm run sec  # PASS true {"fail":0,"suspect":0,"skip":4}；--selftest 仍能抓出 6 类
+```
+
 ## v0.11.1（2026-09-19）
 
 ### 修复

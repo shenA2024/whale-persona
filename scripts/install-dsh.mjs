@@ -7,6 +7,9 @@
  *      pnpm 把 github: 展开成 ssh、pnpm 不支持子目录 git 依赖、仓库根原本没有 package.json；
  *   ② 人设行必须挂 agent preset 平面，挂 profile 平面会让整个插件树加载失败（prompt section already registered）；
  *   ③ 装完不设默认 preset，用户看到的还是官方默认人设。
+ *   ④ 0.11.2：宿主会把声明 dsh.bundle 的依赖自动挂进 profile 的 dsh.profile.bundles，而那个 bundle
+ *      的 patch 里已经插了设置面板行；旧脚本只看 profile 自己的 patch 文件，于是又插一条同 id 行 ——
+ *      loader 的 entry id 全局唯一，重复即硬错，整个插件树起不来。现在装与重装都先算清这条行的归属。
  * 本脚本把「装包 + 建 preset + 设默认 + 拷技能 + 自检」压成一条命令。
  *
  * 用法（在克隆下来的仓库根）：
@@ -29,6 +32,7 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import os from 'node:os'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -348,15 +352,135 @@ function swapPersonaRow(file) {
   writeFileSync(file, out.join('\n'), 'utf8')
 }
 
+// ── 设置面板行的归属判定（0.11.2）────────────────────────────────────────
+// 触发来源：2026-09-19 干净 DSH_HOME 实测 —— dsh plugin add 会把声明 dsh.bundle 的依赖自动追加
+// 进 profile 的 dsh.profile.bundles，而那个 bundle 的 patch 里已经插了 whale-persona-ui；旧脚本只看
+// profile 自己的 cordis.patch.yml，于是又插一条同 id 行。loader 的 entry id 全局唯一，两层各插一次
+// = duplicate loader entry id = 整个插件树加载失败、DSH 起不来。
+// 判据：同一 id 只能有一个来源；bundle 已经挂了，profile 层就一条都不该留（留了就是重复）。
+
+/** 本脚本会写进 profile patch 的那一块（幂等识别与移除都只认这一份） */
+const UI_BLOCK = ['- insert:', '    - id: whale-persona-ui', "      name: '" + UI_PKG + "'"]
+
+/** 读 JSON；文件不存在或坏掉都返回 null（不抛） */
+function readJsonSafe(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')) } catch { return null }
+}
+
+/** 包名 → package.json 路径：profile 自己的 node_modules 优先，其次 profiles 共享层，最后交给 node 解析 */
+function manifestPathOf(pkgName) {
+  const segments = String(pkgName).split('/')
+  const direct = [
+    path.join(PROFILE_DIR, 'node_modules', ...segments, 'package.json'),
+    path.join(HOME, 'profiles', 'node_modules', ...segments, 'package.json'),
+  ]
+  for (const candidate of direct) if (existsSync(candidate)) return candidate
+  try {
+    return createRequire(path.join(PROFILE_DIR, 'package.json')).resolve(String(pkgName) + '/package.json')
+  } catch { return '' }
+}
+
+/** 已挂进 profile 的 bundle 里，有没有谁已经插了同一条设置面板行；有则返回那个包名，没有返回空串 */
+function bundleOwningUiRow() {
+  const manifest = readJsonSafe(path.join(PROFILE_DIR, 'package.json'))
+  const bundles = (manifest && manifest.dsh && manifest.dsh.profile && manifest.dsh.profile.bundles) || []
+  for (const rawName of bundles) {
+    const file = manifestPathOf(rawName)
+    if (!file) continue
+    const pkg = readJsonSafe(file)
+    const rel = pkg && pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch
+    if (typeof rel !== 'string' || rel === '') continue
+    const patchFile = path.resolve(path.dirname(file), rel)
+    if (existsSync(patchFile) && readFileSync(patchFile, 'utf8').indexOf(UI_PKG) >= 0) return String(rawName)
+  }
+  return ''
+}
+
+/**
+ * 摘掉本脚本自己写过的那一块。块里必须**只有**这一条 insert，别的行一律不碰。
+ * @param {string} text - profile patch 文件内容
+ * @returns {{ text: string, removed: boolean }}
+ */
+function stripUiBlock(text) {
+  const lines = String(text).split(/\r?\n/)
+  const out = []
+  let removed = false
+  for (let i = 0; i < lines.length; i++) {
+    if (!removed && /^- insert:\s*$/.test(lines[i])) {
+      const block = []
+      let j = i + 1
+      while (j < lines.length && lines[j].trim() !== '' && !/^- /.test(lines[j])) { block.push(lines[j]); j++ }
+      const ids = block.filter((line) => /^\s*- id:\s*whale-persona-ui\s*$/.test(line)).length
+      const names = block.filter((line) => /^\s*name:\s*'@shenA2024\/whale-persona-ui'\s*$/.test(line)).length
+      if (ids === 1 && names === 1 && block.length === 2) {
+        removed = true
+        i = lines[j] === '' ? j : j - 1
+        continue
+      }
+    }
+    out.push(lines[i])
+  }
+  return { text: out.join('\n'), removed }
+}
+
+/** 去掉所有「空列表占位行」：`[]` 在补丁栈里是 no-op，留两份会把文件变成两个 YAML 文档直接解析失败 */
+function withoutEmptyListLines(text) {
+  return String(text)
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*\[\s*\]\s*$/.test(line))
+    .join('\n')
+    .replace(/\s+$/, '')
+}
+
+/** 收尾：还留着 entry 就原样交回，一条都没有就补一个（也只有一个）空列表 */
+function keepValidListForm(text) {
+  const body = withoutEmptyListLines(text)
+  const hasEntry = body.split(/\r?\n/).some((line) => /^- /.test(line))
+  const head = body === '' ? '' : body + '\n\n'
+  return hasEntry ? body + '\n' : head + '[]\n'
+}
+
+/**
+ * 设置面板行该不该留在 profile patch 层（纯函数，tests/install-contract.mjs 直接调）。
+ * @param {{ profilePatch?: string, bundleOwner?: string }} input - profile patch 文本 + 已挂 bundle 里插了本行的包名
+ * @returns {{ action: 'add'|'remove'|'none', reason: string }}
+ */
+export function planUiRow(input) {
+  const text = String((input && input.profilePatch) || '')
+  const owner = String((input && input.bundleOwner) || '')
+  if (owner !== '') {
+    if (stripUiBlock(text).removed) return { action: 'remove', reason: 'bundle ' + owner + ' 已挂同一条设置面板行，摘掉 profile 层的手工重复行' }
+    return { action: 'none', reason: 'bundle ' + owner + ' 已挂设置面板行，profile 层不需要再加' }
+  }
+  if (text.indexOf(UI_PKG) >= 0) return { action: 'none', reason: 'profile patch 已有 UI 行，跳过' }
+  return { action: 'add', reason: 'profile 层没有别的来源，由本脚本手工挂' }
+}
+
+/**
+ * 纯函数：算出 profile patch 文件该写成什么（不碰磁盘）。
+ * @param {{ profilePatch?: string, bundleOwner?: string }} input - 同 planUiRow
+ * @returns {{ action: 'add'|'remove'|'none', reason: string, text: string }}
+ */
+export function applyUiRow(input) {
+  const text = String((input && input.profilePatch) || '')
+  const plan = planUiRow(input)
+  if (plan.action === 'remove') return { ...plan, text: keepValidListForm(stripUiBlock(text).text) }
+  if (plan.action === 'add') {
+    const body = withoutEmptyListLines(text)
+    const head = body === '' ? '' : body + '\n\n'
+    return { ...plan, text: head + UI_BLOCK.join('\n') + '\n' }
+  }
+  return { ...plan, text }
+}
+
 function patchProfileRow() {
   const file = path.join(PROFILE_DIR, 'cordis.patch.yml')
   const raw = existsSync(file) ? readFileSync(file, 'utf8') : ''
-  if (raw.indexOf(UI_PKG) >= 0) { log('profile patch 已有 UI 行，跳过'); return }
-  const block = ['- insert:', '    - id: whale-persona-ui', "      name: '" + UI_PKG + "'"].join('\n')
-  const cleaned = raw.replace(/^\s*\[\s*\]\s*$/m, '').trimEnd()
-  if (opts.dry) { log('DRY: 追加 profile 行 -> ' + file); return }
-  writeFileSync(file, cleaned + '\n\n' + block + '\n', 'utf8')
-  log('UI 行已加（设置面板必须在 profile 平面）：' + file)
+  const result = applyUiRow({ profilePatch: raw, bundleOwner: bundleOwningUiRow() })
+  if (result.action === 'none') { log(result.reason); return }
+  if (opts.dry) { log('DRY: ' + result.action + ' profile 行 -> ' + file + '（' + result.reason + '）'); return }
+  writeFileSync(file, result.text, 'utf8')
+  log(result.reason + '：' + file)
 }
 
 function setDefaultPreset() {
@@ -431,4 +555,7 @@ function printNext() {
   log('  5) 长期记忆候选要**你自己确认**才生效：node scripts/memory.mjs status | confirm <序号>（AI 只能写「候选」）')
 }
 
-main()
+// 只有被当成脚本直接跑时才真的安装：测试要 import 本文件取 planUiRow / applyUiRow
+const INVOKED_AS_SCRIPT = process.argv[1] !== undefined
+  && path.resolve(process.argv[1]).toLowerCase() === path.resolve(fileURLToPath(import.meta.url)).toLowerCase()
+if (INVOKED_AS_SCRIPT) main()
