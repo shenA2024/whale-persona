@@ -23,7 +23,7 @@ import { TONE_PRESETS } from '../../core/presets.js'
 // 人设预设库（0.10.0）：预设 = 可切换 / 可分享的人格文件；酒馆卡映射单独一层
 import {
   PRESET_SPEC, applyPresetToFile, deletePreset as removePreset, listPresets, loadPreset,
-  normalizePreset, presetsDir, presetFromConfig, safeId as safePresetId, savePreset,
+  normalizePreset, presetsDir, presetFromConfig, safeId as safePresetId, savePreset, skippedPresets,
 } from '../../core/presetStore.js'
 import { detectCard, fromTavern, toTavern } from '../../core/tavernCard.js'
 // 宿主上一次真实注入用的模型 id：界面上的模型显示名通常不是它（见 core/lastModel.js 头注）
@@ -235,7 +235,7 @@ export function apply(ctx) {
         // 读：列表 / 导出；写：应用 / 另存 / 删除 / 导入。
         // 导出只回 JSON（不写盘、不生成下载流），由浏览器侧自己存文件。
         if (url.pathname === API_PATH + '/presets' && req.method === 'GET') {
-          return send(200, { ok: true, dir: presetsDir(), configPath: configPath(), presets: listPresets() })
+          return send(200, { ok: true, dir: presetsDir(), configPath: configPath(), presets: listPresets(), skipped: skippedPresets() })
         }
         if (url.pathname === API_PATH + '/presets/export' && req.method === 'GET') {
           const p = loadPreset(url.searchParams.get('id'))

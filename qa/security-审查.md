@@ -10,6 +10,7 @@
 |---|---|---|---|
 | 2026-09-18 | 第三方扫描（外部工具） | v0.8.0 / 0.8.1 | CodeGuard 与 GitHub CodeQL 的告警已全部处置，明细见 README「第三方扫描结果与处置（2026-09-18）」 |
 | 2026-09-19 | **sec-1（首班，本仓自建）** | v0.9.1 @ `21f44b2` | 探针 11/11 通过（自测通过）；人工复核 4 项已带过；**无新增阻塞项** |
+| 2026-09-19 | **sec-2（第三方复核整改班）** | v0.11.0 | 外部发现 3 条全部处置；探针 12/12 通过（自测能抓 6 类违规）；**无新增阻塞项** |
 
 ## §2 脱敏复核（2026-09-19，sec-1 附班）
 
@@ -94,3 +95,40 @@ npm run sec            # = node qa/probes/probe-security.js && node qa/probes/pr
 2. **一旦新增网络 / 子进程 / 写盘路径，先加探针组再动代码**（探针是新面的入场券）；
 3. M1、M2 在每次涉及 `core/memoryInbox.js` 或渲染文案的改动后都要重读一遍；
 4. 探针改过之后必须跑 `--selftest` —— 没有自测的探针等于没有探针。
+
+## §3 sec-2（2026-09-19，第三方复核整改班）
+
+### 3.1 审查对象
+
+- 版本 **v0.11.0**（本班），面：`scripts/ui.mjs`（本地编辑器）、`core/tavernCard.js`、`core/presetStore.js`、`adapters/dsh-ui`、`qa/probes/probe-security.js`、`tests/`。
+- 触发来源：2026-09-19 外部复核（第三方模型调研报告）指出三条，本班逐条落地并补可复现门禁：
+  1. 本地编辑器 `scripts/ui.mjs` **只查 Host、不查 Origin**；
+  2. 探针 **S7 是形态匹配**（`/origin/.test(ui)`），注释里出现该词即放行 —— 上一班的 PASS 属于**漏报**；
+  3. 酒馆卡 `system_prompt` **整段无换行且单行超长**时契约被静默丢光，且映射报告仍写"成功"。
+
+### 3.2 处置
+
+| 项 | 处置 | 证据 |
+|---|---|---|
+| 本地页 Origin | 加 `guard(req)`：Host 白名单 + **Origin 出现即须 loopback**（口径与面板 `guard()` 一致）；Host 判定拆成 `hostGuard` 便于单测 | `scripts/ui.mjs:99-132`；`tests/ui.mjs` U4b |
+| 探针漏报 | S7 收窄为"面板 `guard(req)` 真在 + 真读 host/origin 头"；**新增 S12 行为探针**：真起本地页打三条请求 | `PASS true {"fail":0,"skip":4}`，`SEC_OK S12 外源Origin=403 无Origin=200 自家Origin=200` |
+| 探针自测 | 假根里种一个**不做 Origin 校验**的本地页 + `adapters/dsh-ui`，断言 S12 会 FAIL | `SELFTEST true caught=[S1,S2,S6,S7,S10,S12]` |
+| 酒馆卡静默丢契约 | 单行超长先按句末标点/分号兜底断句；仍断不出时**不写 contracts、不谎报 mapped 成功**，转 `unmapped` 点名 | `core/tavernCard.js` `linesToContracts`；`tests/tavern.mjs` T4/T5 |
+| 静默过滤 | `listPresets()` 记录被跳过的文件，面板 `skipped` 字段回给界面 | `core/presetStore.js` `skippedPresets()`；`adapters/dsh-ui/index.js:238` |
+
+### 3.3 攻击面变化
+
+- 新增读请求头（Origin）、新增一个响应字段（`skipped`）、新增一个探针子进程（S12，仅探针自身用）。
+- **未新增**网络访问、未新增写盘路径、未新增生产期子进程；`/api/save` 的写入目标与校验顺序不变（Host → Origin → content-type）。
+- 版本一致性：根包与两个 sub 包 `0.10.0 → 0.11.0`（lockstep），`.github/SECURITY.md` 支持版本表述 `0.9.x → 0.11.x`。
+
+### 3.4 结论与交接点
+
+**结论：sec-2 无新增阻塞项。** 三条外部发现全部处置并留下二值判据（U4b / T4 / T5 / S12），自测能证明这四条判据有牙。
+
+给下一班的交接点：
+
+1. **S12 起，"有没有这道防线"只认行为测试**；形态匹配型的检查一律视为可疑（本班就是被 `/origin/` 这个词骗过一次）。
+2. 本地页与面板的 loopback 判定是同一口径，**改一处必须改两处**，否则两处漂移。
+3. 酒馆卡映射层的"报告"必须与"结果"一致：任何"声明承接但一条都没产出"的情况都要落到 `unmapped`，不许留在 `mapped`。
+

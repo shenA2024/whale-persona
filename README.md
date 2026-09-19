@@ -55,7 +55,7 @@ node scripts/install-dsh.mjs             # 真装
 **没有 git，或者 clone 不动？** 用本仓 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
 
 ```powershell
-dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.10.0/shenA2024-whale-persona-0.10.0.tgz
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.11.0/shenA2024-whale-persona-0.11.0.tgz
 ```
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
@@ -188,6 +188,65 @@ node scripts/presets.mjs export my-persona out.json --tavern   # 导出成酒馆
 
 目录兼容：早期布局（`$DSH_HOME/whale-suite/config.json` 存在）下沿用 `whale-suite/presets/`，
 早先那批「只有 character+contracts」的预设文件照旧可用（`tests/presets.mjs` 的 P5 钉着）。
+
+### 与 DSH agent team / 子代理的互操作（0.11.0）
+
+**结论先行**：本插件**不调用**任何 agent-team API —— 人设能跟着 teammate 走，靠的是宿主自己的平面机制
+（preset 组合 + 系统提示词段），所以**宿主升级不会破坏它**（插件侧压根没有需要跟着改的接口）。
+
+**人设是怎么传到 teammate 的**：DSH 官方子代理在创建时执行
+`childCtx.get("agentPresets")?.composeFrom(childCtx, parent.ctx)`
+（源码：`dsh-subagent/lib/index.js:544` 的 `applyChildComposition()`）——
+即**子代理加入父会话的 preset 组合**。所以 Lead 在哪个平面拿到人设，
+`spawn_teammate` / fork 出来的 teammate 就在**同一平面**拿到**同一份**。
+这不是顺手加的功能：官方注释原文说明，**不这么做的子代理连父会话的 prompt 段和工具注册表都看不到**
+（同文件 534–539 行，原文 "sees an empty tool registry and none of its parent's prompt sections"）。
+
+**两条挂载路径的取舍**（实现见 `adapters/dsh/index.js` 与 `adapters/dsh/global.js`）：
+
+| 入口 | 段名 | 能挂哪层 | 好处 | 代价 |
+|---|---|---|---|---|
+| `adapters/dsh/index.js`（包入口 `.`） | 占官方具名槽 `deployment:persona-prefix` | **只能挂 agent preset 平面** | 跨层遮蔽部署级默认人设 | 只有用那份 preset 的会话有人设 |
+| `adapters/dsh/global.js`（包入口 `./global`） | 自有段名 `whale:persona-global` | 可挂家目录层 `$DSH_HOME/cordis.patch.yml` | 一次覆盖 web / tui / headless 全部会话**与子代理** | 不遮蔽官方人设：若部署里 `system-prompt.personaPrefix` 非空，会**两份人设并存**，应把它置空 |
+
+**两种入口不要同时挂**（同时挂 = 同一份人设注入两遍；段名零交集由 `tests/global.mjs` 的 G5/G9/G10 钉着）。
+
+**成本提醒**：每个 teammate 都是**独立 Agent、独立系统提示词** —— 人设段会被**每个成员各付一次 token**，
+含每轮续跑。人设越长，并行越贵。这是取舍，不是 bug。
+
+**官方 agent team 的工具面**（名字逐字照抄，别写成别的）：
+
+```text
+spawn_teammate / send_message / list_agents / wait_agent / interrupt_agent
+team_task_create / team_task_list / team_task_get / team_task_update
+```
+
+### 组一支"AI 工作室"（recipe）
+
+三层各管一件事，别混：
+
+| 层 | 谁提供 | 管什么 |
+|---|---|---|
+| 人设层 | **本插件** | 部门人格、逐条工作契约、组织记忆（记忆闸门：AI 只能提议，**人确认**后才注入） |
+| 组队层 | 官方实验性 agent team（或你自建的编排插件） | Lead + 具名 teammate、持久邮箱、共享任务板 |
+| 角色卡层 | **本插件的预设库** | 把每个部门存成一张预设卡文件，用面板 / CLI 切换与分享 |
+
+三层之间**没有代码耦合**：本插件不碰组队层，组队层也不调用本插件（互操作只走宿主平面，见上一节）。
+
+**当前边界（第三方编排插件要读预设卡，必须按这个来）**：
+
+1. 预设卡是**「人设」层**的文件，不是「组队」层的配置 —— 得按 `spec: whale-persona-preset/1` 的
+   **嵌套形状**解析：`persona.contracts` / `persona.character` / `persona.stance` …
+   （`core/presetStore.js` 的 `PRESET_SPEC` 与 `PERSONA_KEYS`）；
+   **只认顶层 `contracts` 的旧读法会静默读不到新卡** —— 不报错，只是契约一条都没有。
+2. 目录要与本插件一致：`$DSH_HOME/whale-persona/presets/`；若 `$DSH_HOME/whale-suite/config.json` 存在
+   （早期布局），则沿用 `$DSH_HOME/whale-suite/presets/`（`core/presetStore.js` 的 `presetsDir()`）。
+
+```bash
+node scripts/presets.mjs list                    # 列出现有部门卡
+node scripts/presets.mjs apply frontend          # 切到「前端」这张卡
+node scripts/presets.mjs save backend "后端"     # 把当前人设存成一张新卡
+```
 
 ## 它到底做什么（真实输出，可复现）
 
@@ -457,6 +516,17 @@ npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 | CodeGuard（本机整仓扫描） | critical 0 / high 1 / medium 15 / low 3 / info 1；medium 绝大多数为静态规则误报（fetch 全指向 127.0.0.1、路径拼接全常量、测试夹具被当生产代码） | high（安装器 `shell:true`）已去掉 shell；CSP、.gitignore、锁文件、措辞项一并处理 |
 | GitHub CodeQL（`main` 分支） | high 1（`js/bad-tag-filter`，本地页用正则给 `<script>` 塞 nonce）/ medium 1（`js/stack-trace-exposure`，500 回传异常原文） | 0.8.1：模板改**占位符纯字符串替换**（不再用正则碰 HTML）；500 改固定文案 + 细节仅进终端 |
 | 自查（扫描报告之外） | 记忆入库门禁原本只是**提示词约束** | 0.8.0 升级为**代码强制**的 proposed/confirm 闸门 |
+
+## 已知边界（0.11.0 实测）
+
+- **酒馆卡 `system_prompt` 整段无换行且单行超长**：0.11.0 起会按句末标点（`。！？!?`）与分号兜底断句
+  （`core/tavernCard.js` 的 `linesToContracts()`）；仍然断不出可执行的行时**不再写 `contracts`、也不在映射报告里谎报成功**，
+  转而在「不承接/未映射」里点名（`data.system_prompt（整段没有可用的契约行：多为整段无换行或单行超长，请手工拆分）`），需要人工拆分。
+  修之前的表现是：这类卡的契约**全部丢光**且毫无提示。
+- **本地配置编辑器 `scripts/ui.mjs` 的 `Origin` 校验（0.11.0 补）**：
+  `Origin` 头出现即须为 loopback，非 loopback 一律 **403**（`origin not allowed`）。
+  它是**纵深防御**：该服务本来就只监听 127.0.0.1，且 `/api/save` 要求 `application/json`（跨站表单打不进来），
+  本机进程本来也能直接改配置文件 —— 所以这是「别给任意本地客户端留脏手」，**不是权限提升**。
 
 ## 常见问题
 

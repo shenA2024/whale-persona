@@ -50,6 +50,17 @@ t('T3 character_book 点名:', un.includes('character_book'))
 t('T3 alternate_greetings 点名:', un.includes('alternate_greetings'))
 t('T3 报告里说明不承接:', imp.notes.some((n) => n.includes('不承接')))
 
+// ── 单行超长的 system_prompt：必须断句兜底，且丢光时不许谎报映射成功（0.11.0）──
+const longLine = '你是一个耐心的助手。先给结论再给依据！不确定就说不确定？不要编造任何事实。'.repeat(12) // 无换行、远超 300 字
+const impLong = T.fromTavern({ spec: 'chara_card_v2', data: { name: 'LongPrompt', description: 'd', system_prompt: longLine } })
+t('T4 单行超长 system_prompt 断句兜底（>=2 条契约）:', !!impLong && Array.isArray(impLong.preset.persona.contracts) && impLong.preset.persona.contracts.length >= 2)
+t('T4 断出来的每条都短于上限:', !!impLong && impLong.preset.persona.contracts.every((c) => c.text.length <= 300))
+const gibberish = 'x'.repeat(500) // 无标点、无换行：断不出任何可执行的行
+const impDead = T.fromTavern({ spec: 'chara_card_v2', data: { name: 'Dead', description: 'd', system_prompt: gibberish } })
+t('T5 断不出契约时不写 contracts:', !!impDead && !impDead.preset.persona.contracts)
+t('T5 并且不谎报映射成功:', !!impDead && !impDead.mapped.some((m) => m.includes('system_prompt')))
+t('T5 并在 unmapped 里点名:', !!impDead && impDead.unmapped.some((u) => u.includes('system_prompt')))
+
 // ── 往返保真 ────────────────────────────────────────────────────────────
 const preset = {
   id: 'rt', label: '往返人格', author: 'me', tags: ['x'], thinkingLanguage: 'zh-CN',

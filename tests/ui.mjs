@@ -68,6 +68,24 @@ try {
     req.end()
   })
   t('U4 Host 防线:', status === 403)
+
+  // U4b Origin 防线（0.11.0）：Origin 只要出现就必须是 loopback。
+  // 为什么用裸 http：fetch 不允许改 Origin 这种被 CORS 管辖的头，而这次要的正是"外源网页发过来的样子"。
+  const postRaw = (headers) => new Promise((resolve) => {
+    const req = request({ host: '127.0.0.1', port: PORT, path: '/api/save', method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers } },
+      (res) => { res.resume(); resolve(res.statusCode) })
+    req.on('error', () => resolve(0))
+    req.end(JSON.stringify({ config: { persona: { character: 'SEC-U4B' } } }))
+  })
+  // 先打外源的：此时"没被写脏"才可判（放行的两次本来就会写盘，顺序反了就判不出来）
+  const evilOrigin = await postRaw({ Origin: 'https://evil.example' })
+  const onDiskAfterEvil = JSON.parse(readFileSync(cfgFile, 'utf8')).persona.character
+  const selfOrigin = await postRaw({ Origin: 'http://127.0.0.1:' + PORT })
+  const noOrigin = await postRaw({})
+  const onDiskAfterOk = JSON.parse(readFileSync(cfgFile, 'utf8')).persona.character
+  t('U4b Origin 防线（外源 403 且没写脏 / 自家与裸客户端放行）:',
+    evilOrigin === 403 && onDiskAfterEvil !== 'SEC-U4B' && selfOrigin === 200 && noOrigin === 200 && onDiskAfterOk === 'SEC-U4B')
   // U5 CSP（2026-09-18 审查修复）：响应头 + meta 双份、只认一次性 nonce、没有 unsafe-inline
   const pageRes = await fetch('http://127.0.0.1:' + PORT + '/')
   const html = await pageRes.text()

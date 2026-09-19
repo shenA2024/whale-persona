@@ -14,6 +14,7 @@
  * 安全边界（本服务能读写你的配置文件，所以写清楚）：
  *   · 只监听 127.0.0.1，不对外；
  *   · Host 头必须匹配 127.0.0.1/localhost:<port>（防 DNS rebinding）；
+ *   · Origin 头只要出现就必须是 loopback（防"任意本机客户端/网页盲写"，0.11.0 补）；
  *   · 只读写**定位链解析出的那一个** config.json，不碰别的路径；
  *   · POST 必须是 application/json；没有 CORS 头，浏览器跨域拿不到结果；
  *   · 每次请求生成一次性 nonce，CSP 同时走**响应头 + meta**（script-src/style-src 只认这个 nonce，
@@ -97,10 +98,43 @@ function readBody(req) {
 
 const ALLOWED_HOSTS = new Set(['127.0.0.1:' + PORT, 'localhost:' + PORT, '[::1]:' + PORT])
 
+/** loopback 判定：只认 127.0.0.1 / localhost / ::1（自带或不带端口写法都收） */
+function isLoopbackHost(host) {
+  const h = String(host || '').toLowerCase()
+  const name = h.startsWith('[') ? h.replace(/^\[([^\]]*)\].*$/, '$1') : h.split(':')[0]
+  return name === '127.0.0.1' || name === 'localhost' || name === '::1'
+}
+
+/**
+ * 本机护栏：Host 必须命中白名单；**Origin 只要出现就必须是 loopback**。
+ * 口径与设置面板 adapters/dsh-ui/index.js 的 guard() 一致（两处别各写一份判定）。
+ * 为什么 Host 白名单不够：它管的是"请求打到哪"，管不住"谁发起的" —— 本机任何进程
+ * 都能如实带上 Host: 127.0.0.1:<port> 通过白名单。加这一层是为了让"任意本地客户端"
+ * 变成"必须是 loopback 来源"，纵深防御，不是权限提升（本机进程本来就能直接改 config.json）。
+ * 触发来源：2026-09-19 第三方复核发现本地页只查 Host（见 qa/security-审查.md sec-2）。
+ */
+function guard(req) {
+  const blocked = hostGuard(req)
+  if (blocked) return blocked
+  const origin = req.headers && req.headers.origin
+  if (origin !== undefined && origin !== null && String(origin) !== '' && String(origin) !== 'null') {
+    let hostname = ''
+    try { hostname = new URL(String(origin)).hostname } catch { return { code: 403, error: 'origin not allowed' } }
+    if (!isLoopbackHost(hostname)) return { code: 403, error: 'origin not allowed' }
+  }
+  return null
+}
+
+/** 只查 Host（DNS rebinding 防线），与 Origin 分开写以便测试单独覆盖 */
+function hostGuard(req) {
+  const host = String((req.headers && req.headers.host) || '').toLowerCase()
+  return ALLOWED_HOSTS.has(host) ? null : { code: 403, error: 'host not allowed' }
+}
+
 const server = createServer(async (req, res) => {
   try {
-    const host = String((req.headers && req.headers.host) || '').toLowerCase()
-    if (!ALLOWED_HOSTS.has(host)) return json(res, 403, { ok: false, error: 'host not allowed' })
+    const blocked = guard(req)
+    if (blocked) return json(res, blocked.code, { ok: false, error: blocked.error })
 
     const u = new URL(req.url, 'http://127.0.0.1')
     const p = u.pathname
