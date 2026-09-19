@@ -25,6 +25,47 @@ npm run sec    # 安全探针 11 组 + 自测；改了探针必须让 --selftest
 - PR 请过一遍模板里的清单。
 - 我们在意「证据」，不在意「措辞漂亮」：结论要有命令输出 / 文件行号 / 字节数撑着。
 
+## 发布清单（每次发版逐条打勾）
+
+> 触发来源：2026-09-19 发 v0.11.1 时连踩两个坑 —— 附件传成上一版、包里没有 `dsh.bundle` 声明。
+> 每条都是**可执行动作**或**可判定判据**；打不动的条目不许跳过。
+
+### 1 代码与门禁
+
+- [ ] `npm test` → **exit 0**（11+ 套，含 `tests/install-contract.mjs`）
+- [ ] `npm run sec` → **PASS true**，且 `--selftest` 仍能抓出全部种下的违规
+- [ ] 版本 **lockstep**：根包 + `adapters/dsh` + `adapters/dsh-ui` 三处一起改
+- [ ] 改过 `core/` 就跑过 `node scripts/sync-core.mjs`（ZCode vendor 副本，测试 Z7 校验）
+- [ ] `CHANGELOG.md` 加了新版本节，写清**触发来源**与**验证方式**
+- [ ] 提交者身份对：`git log -1 --format=%an%n%ae` 应为 `shenA2024 <shenA2024@users.noreply.github.com>`
+      （**不要**出现真名或私人邮箱；历史里有旧残留不代表新提交可以再写进去）
+
+### 2 安装契约（这一条最容易漏）
+
+- [ ] `package.json` 有 `dsh.bundle.patch`，且指向的文件**真实存在**
+- [ ] 该文件被 `files` 白名单收进包里（声明了却打不进 tarball 等于没声明）
+- [ ] 判据：`npm pack --dry-run 2>&1 | Select-String cordis` 能看到补丁文件
+- [ ] **改过挂载方式就必须空 profile 实测一次**：
+      `dsh plugin add` 之后 `dsh.profile.bundles` 里应出现本包名，且**不再**有
+      `warning: declares no dsh.bundle` —— 只有这句警告消失，才算"装完即生效"
+
+### 3 打 tarball 与建 Release
+
+- [ ] `npm pack` 出 `shenA2024-whale-persona-<版本>.tgz`，记下**字节数 + sha256**
+- [ ] 打完之后**把文件挪出仓库根**（别让 `.tgz` 留在工作树里）
+- [ ] GitHub → Releases → Draft a new release：**标签必须选本次版本号**（选错 = README 的一键命令 404）
+- [ ] 附件传**本次那份** tarball，文件名一个字符都别改
+- [ ] 立项标签选 `最新的`；不是灰度就别勾 `预发布`
+- [ ] 发布后再验三条（别只看页面）：
+      ① `https://api.github.com/repos/<owner>/<repo>/releases/latest` 的 `tag_name` 与 `assets[].size` 对得上；
+      ② 从 `releases/download/<tag>/<file>` **真下载一次**，sha256 与本地原件一致；
+      ③ 用那条一键命令在**空 profile** 里装一次，确认落地的版本号与 bundles 都对
+
+### 4 本地生效（本机维护者专用）
+
+- [ ] 本机活挂载是 junction 指向本仓库，所以**改完即刻生效**；只有换挂载点或改挂载层级才需要重启 DSH
+- [ ] 人设改动只在**新建**会话生效（人设段在会话创建时绑定）
+
 ## 不适合走 Issue 的
 
 - **安全问题**：走[私有漏洞报告](https://github.com/shenA2024/whale-persona/security/advisories/new)，不要开公开 Issue（见 [SECURITY.md](.github/SECURITY.md)）。
