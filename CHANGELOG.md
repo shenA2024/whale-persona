@@ -3,6 +3,24 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.11.3（2026-09-19）
+
+### 修复
+
+- **tarball 通道装完，安装脚本静默什么都不做（退出码 0）**。0.11.2 为了让测试能 import 判定函数，
+  在 `scripts/install-dsh.mjs` 末尾加了「拿 `process.argv[1]` 与 `import.meta.url` 比字符串」判断自己
+  是不是入口。而 pnpm 把包装进 `node_modules/.pnpm/...` 再 **junction** 到
+  `node_modules/@shenA2024/whale-persona`：`argv[1]` 是 junction 路径、`import.meta.url` 是 realpath，
+  比较不相等 → `main()` 一次都没跑。现象是「命令成功、日志空白、没有人设、没有面板」。
+  修法不是把比较写对，而是**取消入口判定**：纯判定拆到 `scripts/ui-row.mjs`，安装脚本无条件执行。
+  触发来源：2026-09-19 发布 v0.11.2 后按 README 的 tarball 通道在全新 `DSH_HOME` 上复验 —— 装完发现
+  `settings.yaml` 里没有 `agent-presets.default`、也没有 `.agent-presets/whale-persona`。
+  验证：`tests/install-contract.mjs` 新增 I5（真 symlink 把整仓链过去跑一次，断言日志与退出码）；
+  另把 tarball 通道整套重跑一遍（装包 → 跑安装脚本 → `--dump-config` 里该行恰好 1 条 →
+  `dsh web` 起得来 → 面板 API 返 200）。
+- **发布清单补一条**（`CONTRIBUTING.md` §2）：改过安装脚本必须**从 Release 下载的包里**跑一次，
+  不能只跑仓库里的 —— 这两条路径在 pnpm 眼里不是同一条（仓库直跑没有 junction）。
+
 ## v0.11.2（2026-09-19）
 
 ### 修复

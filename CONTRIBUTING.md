@@ -45,6 +45,9 @@ npm run sec    # 安全探针 11 组 + 自测；改了探针必须让 --selftest
 - [ ] `package.json` 有 `dsh.bundle.patch`，且指向的文件**真实存在**
 - [ ] 该文件被 `files` 白名单收进包里（声明了却打不进 tarball 等于没声明）
 - [ ] 判据：`npm pack --dry-run 2>&1 | Select-String cordis` 能看到补丁文件
+- [ ] **改过安装脚本就必须从 Release 下载的包里跑一次**（`node <profile>/node_modules/@shenA2024/whale-persona/scripts/install-dsh.mjs`），
+      **看到日志**才算过：仓库里直跑没有 pnpm 的 junction，两条路径结论可能相反
+      （v0.11.2 的「静默空操作」就是这么漏过去的）
 - [ ] **改过挂载方式就必须空 profile 实测一次**：
       `dsh plugin add` 之后 `dsh.profile.bundles` 里应出现本包名，且**不再**有
       `warning: declares no dsh.bundle` —— 只有这句警告消失，才算"装完即生效"
