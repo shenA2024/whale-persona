@@ -1,0 +1,56 @@
+name: 安装求助
+description: 装不上 / 装完没反应 / 也可以让 AI 帮你装，把报错原文贴上来就行
+title: "[安装] "
+labels: ["install"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        贴报错原文就行，不用自己诊断。**不要贴凭据、密钥或你的私人配置内容。**
+
+        也可以直接把下面这句连同仓库地址丢给你的 AI，让它先试一遍：
+
+        > 读 https://github.com/shenA2024/whale-persona 的 README，按「60 秒上手」把我这台机器上的 whale-persona 装好，失败就把报错原文给我。
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统
+      placeholder: "Windows 11 / macOS 14 / Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Node 与 DSH 版本
+      placeholder: "node -v 与 dsh --version 的输出"
+    validations:
+      required: true
+  - type: dropdown
+    id: channel
+    attributes:
+      label: 走的哪条通道
+      options:
+        - "git clone + node scripts/install-dsh.mjs"
+        - "Release tarball 直链（dsh plugin add -w https://...tgz）"
+        - "让 AI 按 README 装的"
+        - "其他 / 不确定"
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: 报错原文（照抄，别截断）
+      description: "整段贴上来最有价值——AI 和你都不用再猜"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望发生什么
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 我没有在 issue 里贴凭据、密钥或私人配置内容
+          required: true

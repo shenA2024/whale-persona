@@ -52,6 +52,31 @@ node scripts/install-dsh.mjs             # 真装
 
 要求：**Node ≥ 20**、**DSH ≥ 0.1.6-alpha.1**，装完**重启 DSH**。装完你会看到两处新东西：
 
+**没有 git，或者 clone 不动？** 用本仓 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
+
+```powershell
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.10.0/shenA2024-whale-persona-0.10.0.tgz
+```
+
+干净 DSH_HOME 实测：**3.2 秒装成**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
+
+**懒得自己动手？** 把下面这句连同仓库地址丢给你的 AI：
+
+> 读 https://github.com/shenA2024/whale-persona 的 README，按「60 秒上手」把 whale-persona 装到我的 DSH 上
+> （要求 Node ≥ 20、DSH ≥ 0.1.6-alpha.1），装完告诉我怎么重启与验证。
+
+**装不上？先对两处已知坑**（报错原文照抄，可直接搜）：
+
+| 报错原文 | 原因 | 修法 |
+|---|---|---|
+| `Failed to connect to github.com:443` / `Connection was reset` | 你的网络连不上 github.com（国内常见） | git 配代理：`git config --global http.proxy socks5h://127.0.0.1:<你的代理端口>`；或直接用上面的 tarball 通道 |
+| `git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed — add the exact key pnpm printed above under allowBuilds in <profile>/pnpm-workspace.yaml, then re-run` | pnpm 会拦 git 依赖的构建脚本 | 按提示把那行加进 `pnpm-workspace.yaml` 的 `allowBuilds` 再重跑（走 tarball / npm 通道遇不到） |
+| `ERR_PNPM_ADDING_TO_ROOT` | profile 目录自带 `pnpm-workspace.yaml`，往根加依赖必须带 `-w` | 命令里补 `-w`（上面几条都已带） |
+
+还不行 → **开一个 issue，选「安装求助」模板**，把报错原文贴上来即可（不用自己诊断）。
+同类求助攒够（≥5 个不同用户，或一周内 ≥3 次同类）就会补上「一键安装」（npm）通道。
+
+
 - **设置 → Agent 预设**：多出一张「**自定义人设**」卡片（已是「新任务默认」）；
 - **设置 → 人设**：左边填（自称/称呼/立场/正文/工作契约/长期记忆），右边**实时显示此刻实际注入的三段文本**，保存即生效。
 
