@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 2026-09-18 | 第三方扫描（外部工具） | v0.8.0 / 0.8.1 | CodeGuard 与 GitHub CodeQL 的告警已全部处置，明细见 README「第三方扫描结果与处置（2026-09-18）」 |
 | 2026-09-19 | **sec-1（首班，本仓自建）** | v0.9.1 @ `21f44b2` | 探针 11/11 通过（自测通过）；人工复核 4 项已带过；**无新增阻塞项** |
-| 2026-09-19 | **sec-2（第三方复核整改班）** | v0.11.0 | 外部发现 3 条全部处置；探针 12/12 通过（自测能抓 6 类违规）；**无新增阻塞项** |
+| 2026-09-19 | **sec-2（第三方复核整改班）** | v0.11.0 / v0.11.1 | 外部发现 3 条全部处置；探针 12/12 通过（自测能抓 6 类违规）；另修「装完不生效」的安装契约（`dsh.bundle.patch`）；**无新增阻塞项** |
 
 ## §2 脱敏复核（2026-09-19，sec-1 附班）
 
@@ -100,7 +100,7 @@ npm run sec            # = node qa/probes/probe-security.js && node qa/probes/pr
 
 ### 3.1 审查对象
 
-- 版本 **v0.11.0**（本班），面：`scripts/ui.mjs`（本地编辑器）、`core/tavernCard.js`、`core/presetStore.js`、`adapters/dsh-ui`、`qa/probes/probe-security.js`、`tests/`。
+- 版本 **v0.11.0 → v0.11.1**（本班），面：`scripts/ui.mjs`（本地编辑器）、`core/tavernCard.js`、`core/presetStore.js`、`adapters/dsh-ui`、`qa/probes/probe-security.js`、`tests/`。
 - 触发来源：2026-09-19 外部复核（第三方模型调研报告）指出三条，本班逐条落地并补可复现门禁：
   1. 本地编辑器 `scripts/ui.mjs` **只查 Host、不查 Origin**；
   2. 探针 **S7 是形态匹配**（`/origin/.test(ui)`），注释里出现该词即放行 —— 上一班的 PASS 属于**漏报**；
@@ -120,7 +120,8 @@ npm run sec            # = node qa/probes/probe-security.js && node qa/probes/pr
 
 - 新增读请求头（Origin）、新增一个响应字段（`skipped`）、新增一个探针子进程（S12，仅探针自身用）。
 - **未新增**网络访问、未新增写盘路径、未新增生产期子进程；`/api/save` 的写入目标与校验顺序不变（Host → Origin → content-type）。
-- 版本一致性：根包与两个 sub 包 `0.10.0 → 0.11.0`（lockstep），`.github/SECURITY.md` 支持版本表述 `0.9.x → 0.11.x`。
+- 版本一致性：根包与两个 sub 包 `0.10.0 → 0.11.0 → 0.11.1`（lockstep），`.github/SECURITY.md` 支持版本表述 `0.9.x → 0.11.x`。
+- 0.11.1 的安装契约改动：新增 `dsh.bundle.patch` + `cordis.patch.yml`（只挂设置面板）。新增的 patch 入口是**声明式挂载**，不含代码执行路径、不新增网络与写盘；判据见 `tests/install-contract.mjs` I1–I3。
 
 ### 3.4 结论与交接点
 

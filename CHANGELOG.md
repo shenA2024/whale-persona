@@ -3,6 +3,25 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.11.1（2026-09-19）
+
+### 修复
+
+- **声明 `dsh.bundle.patch`，让 `dsh plugin add` 装完就生效**（`package.json` + 新增 `cordis.patch.yml`）。
+  此前包没有这个声明，宿主会打一句
+  `warning: declares no dsh.bundle — installed as a plain dependency, not a profile layer`，
+  然后把包**只塞进 profile 的 dependencies 就完事** —— 用户装完是"躺在 node_modules 里但不生效"，
+  必须手工改 profile 的 `cordis.patch.yml` 才看得见面板。
+  触发来源：2026-09-19 空 profile 实测（本地 HTTP 服务器当替身跑 `dsh plugin add`）。
+  修完实测（同一个夹具）：`dsh.profile.bundles` 自动多出 `@shenA2024/whale-persona`。
+  验证：新增 `tests/install-contract.mjs`（I1 声明与文件存在、I2 只挂面板不挂人设本体、I3 入口与零依赖）。
+- 包白名单（`files`）补上 `cordis.patch.yml` 与 `CHANGELOG.md` —— 声明了却打不进 tarball 等于没声明。
+
+### 口径说明
+
+本包自动挂的**只有设置面板**；人设本体仍由 agent preset（或家目录层的 ``./global`` 入口）挂载，
+这样"鲸鱼模式专属"的现状不变。理由写在 `cordis.patch.yml` 文件头。
+
 ## v0.11.0（2026-09-19）
 
 ### 修复
