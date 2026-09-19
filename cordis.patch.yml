@@ -1,0 +1,19 @@
+# whale-persona 的 profile 层补丁（dsh.bundle.patch 指向本文件）
+#
+# 为什么需要它：dsh plugin add 只把包塞进 profile 的 dependencies；
+# 只有当包声明了 dsh.bundle 时，宿主才会把它当成"profile 层"自动挂载
+# （见 dsh-app-boot 的 reconcileProfilePlugins：带 bundle 声明的依赖会自动进
+#  dsh.profile.bundles 列表）。没有这个文件，用户装完是"躺在 node_modules 里
+# 但不生效"的状态 —— 必须手工改 profile 的 cordis.patch.yml 才看得见面板。
+#
+# 本文件只挂**设置面板**（浏览器半身 + 宿主 HTTP 路由）。
+# 人设本体（三段系统提示词）**故意不在这里挂**：
+#   · 挂 profile 层 = 所有模式都带人设（含 headless/tui），且遮蔽不了部署级默认；
+#   · 要"鲸鱼模式专属"就得挂在 agent preset 平面，见 README「为什么 DSH 上会多出一个 Agent 预设？」。
+#   想全局生效的用另一个入口 '@shenA2024/whale-persona/global'（按 README 的全局模式一节挂家目录层）。
+#
+# 回退：删掉下面两条 insert，或在 dsh 的插件管理里停用本包。
+
+- insert:
+    - id: whale-persona-ui
+      name: '@shenA2024/whale-persona-ui'

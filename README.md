@@ -55,12 +55,15 @@ node scripts/install-dsh.mjs             # 真装
 **没有 git，或者 clone 不动？** 用本仓 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
 
 ```powershell
-dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.11.0/shenA2024-whale-persona-0.11.0.tgz
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.11.1/shenA2024-whale-persona-0.11.1.tgz
 ```
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
 
-⚠️ 这一步只是「把包装进 profile」，**还没挂载**（DSH 的插件必须在挂载层里有行才生效）。接着跑包里自带的安装脚本，它会把 agent preset 与 UI 面板行都挂好：
+⚠️ 这一步把包装进 profile，并把**设置面板**自动挂成 profile 层（0.11.1 起本包声明了 `dsh.bundle.patch`，
+宿主会自动把它加进 `dsh.profile.bundles` —— 0.11.1 之前没有这个声明，装完只是躺在 `node_modules` 里不生效）。
+**人设本体故意不自动挂**：它要挂在 agent preset 平面才是"鲸鱼模式专属"（挂在 profile 层对所有模式生效）。
+所以要用人设，接着跑包里自带的安装脚本，它会把 agent preset 与 UI 面板行都挂好：
 
 ```powershell
 node "$env:USERPROFILE\.dsh\profiles\web\node_modules\@shenA2024\whale-persona\scripts\install-dsh.mjs"
