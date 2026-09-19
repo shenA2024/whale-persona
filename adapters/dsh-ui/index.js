@@ -143,6 +143,7 @@ function buildSummary(query) {
     // 表单要用：磁盘上的原始对象（含未知键，保存时整体回写）、出厂默认值、静默失效告警
     raw: raw === null ? null : raw,
     configValid: raw !== null,
+
     defaults: DEFAULTS,
     warnings: rendered.warnings,
     configPath: file,
