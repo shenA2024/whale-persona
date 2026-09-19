@@ -115,6 +115,47 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 | 生效条件 | **增删挂载行要重启宿主**；改配置照旧下一步生效 |
 | headless | 全局模式下 \`dsh --profile headless "..."\` 这类一次性任务**也有人设**（preset 模式下没有） |
 
+### 人设预设与酒馆卡（0.10.0）
+
+人设可以存成**文件**：一个预设 = 一份人格快照（立场正文 / 工作契约 / 自称 / 称呼 / 立场 / 语气 / 形象 /
+思维链语言），放在 `$DSH_HOME/whale-persona/presets/`，复制给别人就是分享。
+三个入口同一套核心（`core/presetStore.js`）：设置面板的「人设预设」卡、本地编辑页、命令行。
+
+```bash
+node scripts/presets.mjs list                      # 列出预设
+node scripts/presets.mjs apply starter             # 应用（现状先自动存为 autosave · 上次的人设）
+node scripts/presets.mjs save my-persona "我的"    # 把当前人设存成预设
+node scripts/presets.mjs import card.json          # 导入：酒馆角色卡 或 本引擎预设
+node scripts/presets.mjs export my-persona out.json --tavern   # 导出成酒馆 v2 卡
+```
+
+**酒馆（SillyTavern）角色卡映射**——只承接「写系统提示词」的那部分，接不了的在导入报告里逐个点名：
+
+| 卡片字段（v2 `data.*`） | 我们的字段 |
+|---|---|
+| `name` / `creator` / `tags` / `character_version` | label / author / tags / 元数据 |
+| `description` | 立场正文（character） |
+| `personality` | 立场（stance，一句话） |
+| `scenario` | 追加进立场正文（【场景】） |
+| `system_prompt` | 工作契约（按行拆成逐条） |
+| `post_history_instructions` | 后缀（suffix） |
+| `extensions.whale_persona` | 本引擎独有字段（往返不丢） |
+| `first_mes` / `alternate_greetings` / `mes_example` / `character_book` | **不承接**（开场白 / 示例对话 / 世界书需要宿主能力，不是人设段能干的）→ 导入时点名 |
+
+- **不做 PNG 卡**：酒馆常见的「PNG 内嵌 JSON」要先在酒馆里导出成 JSON。理由：解析不受信二进制、
+  面板要开文件上传面，而收益只是省一步导出。
+- 导出走 v2 规范（`spec: "chara_card_v2"` / `spec_version: "2.0"`，我们独有字段放
+  `data.extensions.whale_persona`），所以导出 → 再导入能原样还原。
+
+三条边界（面板的折叠说明里也写了一遍）：
+
+1. **预设不含长期记忆** —— 记忆是你与这个 AI 之间发生过的事，不是人格的一部分，不该被别人的卡覆盖；
+2. **导入不自动启用** —— 先看「此刻注入什么」的三段全文再点应用（卡片是准则级内容，导入即改行为）；
+3. **应用只覆盖预设里出现的字段** —— 没出现的 persona 字段、以及配置里别的工具的段，一律原样保留。
+
+目录兼容：早期布局（`$DSH_HOME/whale-suite/config.json` 存在）下沿用 `whale-suite/presets/`，
+早先那批「只有 character+contracts」的预设文件照旧可用（`tests/presets.mjs` 的 P5 钉着）。
+
 ## 它到底做什么（真实输出，可复现）
 
 `scripts/render-preview.mjs` 读的是运行期同一套 `core/`，输出逐字一致。

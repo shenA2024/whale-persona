@@ -34,6 +34,7 @@ window.__ModuleLoader__.load({
 
     var SUMMARY_API = '/whale-persona/api/summary';
     var CONFIG_API = '/whale-persona/api/config';
+    var PRESETS_API = '/whale-persona/api/presets';
     /** 面板看到的三段是按模型档渲染的：切换档位即带参数重新 fetch */
     /** 预览档位：面板只认档位 id 与标签，**不持有任何具体模型 id**（用户用 GLM/grok 时看到 deepseek 很怪）；
      *  预览请求的 model 参数由 summary.model 提供（宿主不认识它也无所谓）。 */
@@ -861,6 +862,142 @@ window.__ModuleLoader__.load({
         h(Seg, { title: '人设后缀（suffix）', text: sec.suffix }));
     }
 
+    /**
+     * 人设预设卡（0.10.0）：一张卡 = 一个人格文件（可切换 / 可分享 / 可导入酒馆角色卡）。
+     * 数据全部来自宿主路由 —— 面板自己不做解析，免得与 CLI、核心库各算一份。
+     * 状态用"盒子 + 整体 set"的写法（与本文件其它卡片一致）：桩 React 里也能渲染。
+     */
+    function PresetCard(props) {
+      // props.presets / props.dir 是给**静态预览页**与测试用的初始值（真页面靠下面的 fetch 刷新）
+      var box = {
+        presets: arrOf(props.presets), dir: strOf(props.dir), msg: '', bad: false, busy: false,
+        paste: '', newId: 'my-persona', newLabel: '', report: null,
+      };
+      var stP = React.useState(box);
+      var s = stP[0];
+      var setS = stP[1];
+      function upd(patch) {
+        for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) box[k] = patch[k];
+        setS({
+          presets: box.presets, dir: box.dir, msg: box.msg, bad: box.bad, busy: box.busy,
+          paste: box.paste, newId: box.newId, newLabel: box.newLabel, report: box.report,
+        });
+      }
+
+      function reload() {
+        return fetch(PRESETS_API, { headers: { accept: 'application/json' } }).then(readBody).then(function (res) {
+          var d = res && res.data;
+          if (!d || d.ok === false) throw new Error((d && d.error) || ('HTTP ' + (res && res.status)));
+          upd({ presets: arrOf(d.presets), dir: strOf(d.dir) });
+        }, function (e) { upd({ bad: true, msg: '读取预设失败：' + messageOf(e) }); });
+      }
+      React.useEffect(function () { reload(); }, []);
+
+      function post(action, payload, okMsg) {
+        upd({ busy: true, msg: '处理中…', bad: false });
+        return fetch(PRESETS_API + '/' + action, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', accept: 'application/json' },
+          body: JSON.stringify(payload || {}),
+        }).then(readBody).then(function (res) {
+          var d = res && res.data;
+          if (res && typeof res.status === 'number' && (res.status < 200 || res.status >= 300)) {
+            throw new Error((d && d.error) || ('HTTP ' + res.status));
+          }
+          if (!d || d.ok === false) throw new Error((d && d.error) || '接口返回 ok=false');
+          upd({ busy: false, bad: false, msg: okMsg || '完成', presets: arrOf(d.presets), report: d.report || box.report });
+          if (d.autosave) upd({ msg: (okMsg || '完成') + '（现状已存为 autosave · 上次的人设）' });
+          if (props.onApplied) props.onApplied();
+          return d;
+        }, function (e) { upd({ busy: false, bad: true, msg: '失败：' + messageOf(e) }); });
+      }
+
+      /** 导出后立刻回读，确保"导出的是此刻磁盘上那份" */
+      function download(id, format) {
+        fetch(PRESETS_API + '/export?id=' + encodeURIComponent(id) + '&format=' + encodeURIComponent(format || 'whale'),
+          { headers: { accept: 'application/json' } }).then(readBody).then(function (res) {
+          var d = res && res.data;
+          if (!d || d.ok === false) throw new Error((d && d.error) || ('HTTP ' + (res && res.status)));
+          var text = JSON.stringify(d.json, null, 2);
+          var name = id + (format === 'tavern' ? '.tavern-v2.json' : '.whale-preset.json');
+          var canBlob = typeof Blob === 'function' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function'
+            && typeof document !== 'undefined' && typeof document.createElement === 'function';
+          if (!canBlob) { upd({ bad: false, msg: '这个环境不支持下载，内容已打到控制台' }); console.log(text); return; }
+          var url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+          var a = document.createElement('a');
+          a.href = url; a.download = name;
+          a.click();
+          setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 1000);
+          upd({ bad: false, msg: '已导出 ' + name });
+        }, function (e) { upd({ bad: true, msg: '导出失败：' + messageOf(e) }); });
+      }
+
+      function pickFile(ev) {
+        var f = ev && ev.target && ev.target.files && ev.target.files[0];
+        if (!f) return;
+        if (typeof FileReader !== 'function') { upd({ bad: true, msg: '这个环境读不了文件，请把 JSON 粘到下面的框里' }); return; }
+        var rd = new FileReader();
+        rd.onload = function () { upd({ paste: strOf(rd.result), msg: '已读入 ' + f.name + '，点「导入」' }); };
+        rd.onerror = function () { upd({ bad: true, msg: '读文件失败' }); };
+        rd.readAsText(f);
+      }
+
+      var rows = s.presets.map(function (p, i) {
+        var meta = p.id + (p.contracts ? ' · 契约 ' + p.contracts + ' 条' : '') + (p.hasCharacter ? ' · 有正文' : '')
+          + (p.hasTone ? ' · 有语气' : '') + (p.hasAppearance ? ' · 有形象' : '') + (p.author ? ' · ' + p.author : '');
+        return h('div', { className: 'wpr-contract', key: 'p' + i },
+          h('span', { className: 'wpr-sub' }, (p.label || p.id) + ' — ' + meta),
+          h('button', { className: 'wpr-btn', type: 'button', disabled: s.busy, title: '应用这个预设（现状先自动存为 autosave）', onClick: function () { post('apply', { id: p.id }, '已应用 ' + p.id + ' · 下一步生效'); } }, '应用'),
+          h('button', { className: 'wpr-btn', type: 'button', disabled: s.busy, title: '导出为酒馆 v2 角色卡（可拿去分享/导入其它客户端）', onClick: function () { download(p.id, 'tavern'); } }, '导出卡'),
+          h('button', { className: 'wpr-btn', type: 'button', disabled: s.busy, title: '导出为本引擎预设文件', onClick: function () { download(p.id, 'whale'); } }, '导出'),
+          h('button', { className: 'wpr-btn wpr-icon', type: 'button', disabled: s.busy, title: '删除这个预设文件（不可撤销）', onClick: function () { post('delete', { id: p.id }, '已删除 ' + p.id); } }, '删除'));
+      });
+
+      var report = null;
+      if (s.report) {
+        var parts = [];
+        if (arrOf(s.report.mapped).length) parts.push('已映射：' + arrOf(s.report.mapped).join(' / '));
+        if (arrOf(s.report.unmapped).length) parts.push('不承接：' + arrOf(s.report.unmapped).join(' / '));
+        for (var ni = 0; ni < arrOf(s.report.notes).length; ni++) parts.push(arrOf(s.report.notes)[ni]);
+        report = h('div', { className: 'wpr-note' }, parts.join('　·　'));
+      }
+
+      return h('div', { className: 'wpr-card' },
+        h(CardHead, {
+          title: '人设预设',
+          sub: arrOf(s.presets).length + ' 个 · 应用后下一步生效 · 目录 ' + (s.dir || '（读取中）'),
+        }),
+        s.msg ? h('div', { className: s.bad ? 'wpr-warn' : 'wpr-sub' }, s.msg) : null,
+        rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有预设文件 —— 点下面的「存为预设」，或导入一张卡）'),
+        h(Field, { label: '存为预设（把当前人设文件化，可分享）' },
+          h(TextInput, { value: s.newId, disabled: s.busy, placeholder: 'id：只能字母数字_-', onChange: function (v) { upd({ newId: v }); } }),
+          h(TextInput, { value: s.newLabel, disabled: s.busy, placeholder: '显示名（可留空）', onChange: function (v) { upd({ newLabel: v }); } }),
+          h('button', {
+            className: 'wpr-btn wpr-mt4', type: 'button', disabled: s.busy,
+            onClick: function () { post('save', { id: s.newId, label: s.newLabel || s.newId }, '已存为预设 ' + s.newId); },
+          }, '存为预设')),
+        h(Field, { label: '导入（酒馆角色卡 v1/v2 JSON，或本引擎预设）' },
+          h('textarea', {
+            className: 'wpr-in', rows: 3, value: s.paste, spellCheck: false,
+            placeholder: '把卡的 JSON 粘到这里，或选一个 .json 文件',
+            onChange: function (ev) { upd({ paste: strOf(ev && ev.target && ev.target.value) }); },
+          }),
+          h('input', { className: 'wpr-in wpr-mt4', type: 'file', accept: '.json,application/json', onChange: pickFile }),
+          h('button', {
+            className: 'wpr-btn wpr-mt4', type: 'button', disabled: s.busy,
+            onClick: function () { post('import', { json: s.paste }, '导入完成（不会自动应用）'); },
+          }, '导入')),
+        report,
+        h(Disclosure, { summary: '预设是什么 · 与酒馆卡怎么对应 · 边界在哪' },
+          h('div', { className: 'wpr-note' }, '预设 = 一个人格快照文件（character / 契约 / 自称 / 称呼 / 立场 / 语气 / 形象 / 思维链语言），放在上面的目录里，复制给别人即可分享。'),
+          h('div', { className: 'wpr-note' }, '应用是"只覆盖预设里出现的字段"：没出现的字段、以及配置里别的工具的段，一律保持原样。'),
+          h('div', { className: 'wpr-note' }, '预设**不含长期记忆**：记忆是你与这个 AI 之间发生过的事，不该被别人的卡覆盖。'),
+          h('div', { className: 'wpr-note' }, '导入**不会自动启用**：先看上面「此刻注入什么」的三段全文，确认后再点应用。'),
+          h('div', { className: 'wpr-note' }, '酒馆卡映射：description→立场正文、personality→立场、scenario→正文（场景）、system_prompt→逐条契约、post_history_instructions→后缀；'
+            + 'first_mes / mes_example / 世界书（character_book）本引擎**不承接**（那要宿主能力），导入时会逐个点名。'),
+          h('div', { className: 'wpr-note' }, '不支持 PNG 卡：那种卡要在酒馆里先导出成 JSON（本插件不解析不受信二进制）。')));
+    }
+
     function ContractsCard(props) {
       var list = arrOf(props.value);   // 兜底成数组：任何非数组都不许把整块设置页带崩
       var rows = list.map(function (c, i) {
@@ -1211,6 +1348,10 @@ window.__ModuleLoader__.load({
         onThinking: function (v) { cb.patchForm({ thinkingLanguage: v }); },
       }));
 
+      // ①′ 人设预设（0.10.0）—— 一整组：切换 / 另存 / 导入导出；应用后走 cb.onRetry 重读面板
+      body.push(h(GroupTitle, { key: 'g0', text: '人设预设', hint: '可切换 · 可分享 · 可导入酒馆卡' }));
+      body.push(h(PresetCard, { key: 'presets', onApplied: cb.onRetry }));
+
       // ② 我是谁 —— 自称两档 / 按模型指定自称 / 称呼 / 立场与后缀
       body.push(h(GroupTitle, { key: 'g1', text: '我是谁', hint: '自称 · 称呼 · 立场' }));
       body.push(h('div', { className: 'wpr-card', key: 'who' },
@@ -1555,6 +1696,7 @@ window.__ModuleLoader__.load({
           selfNameCard: SELF_NAME_CARD,
           ByModelCard: ByModelCard,
           StyleCard: StyleCard,
+          PresetCard: PresetCard,     // 预设卡（0.10.0）：测试要能拿真数据渲染它（桩里 useEffect 不跑）
           // 静态预览页（data/ui-design/preview-panel.mjs）要用：整页树 + 样式字符串 + 各张卡
           css: CSS,
           panelView: panelView,

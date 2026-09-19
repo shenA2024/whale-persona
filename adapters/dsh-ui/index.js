@@ -20,6 +20,12 @@ import { readInbox, resolveInbox } from '../../core/memoryInbox.js'
 import { selfNameOf } from '../../core/render.js'
 // 语气预设的文案只有 core/presets.js 一份：面板（/summary）与本地编辑页都从这里取，两处各写一份必然漂移
 import { TONE_PRESETS } from '../../core/presets.js'
+// 人设预设库（0.10.0）：预设 = 可切换 / 可分享的人格文件；酒馆卡映射单独一层
+import {
+  PRESET_SPEC, applyPresetToFile, deletePreset as removePreset, listPresets, loadPreset,
+  normalizePreset, presetsDir, presetFromConfig, safeId as safePresetId, savePreset,
+} from '../../core/presetStore.js'
+import { detectCard, fromTavern, toTavern } from '../../core/tavernCard.js'
 // 宿主上一次真实注入用的模型 id：界面上的模型显示名通常不是它（见 core/lastModel.js 头注）
 import { readLastModel } from '../../core/lastModel.js'
 // 读写纪律与本地编辑器页（scripts/ui.mjs）**同一套**：只替换已知段、未知键保留、坏 JSON 拒写
@@ -224,6 +230,101 @@ export function apply(ctx) {
             preview: renderSections(next, { model, cwd: '<当前工作目录>' }),
             savedAt: new Date().toISOString(),
           })
+        }
+        // ── 人设预设库（0.10.0）────────────────────────────────────────────
+        // 读：列表 / 导出；写：应用 / 另存 / 删除 / 导入。
+        // 导出只回 JSON（不写盘、不生成下载流），由浏览器侧自己存文件。
+        if (url.pathname === API_PATH + '/presets' && req.method === 'GET') {
+          return send(200, { ok: true, dir: presetsDir(), configPath: configPath(), presets: listPresets() })
+        }
+        if (url.pathname === API_PATH + '/presets/export' && req.method === 'GET') {
+          const p = loadPreset(url.searchParams.get('id'))
+          if (!p) return send(404, { ok: false, error: 'preset not found' })
+          const wantTavern = String(url.searchParams.get('format') || '') === 'tavern'
+          const json = wantTavern
+            ? toTavern(p)
+            : {
+              spec: PRESET_SPEC, id: p.id, label: p.label, description: p.description,
+              author: p.author, tags: p.tags, thinkingLanguage: p.thinkingLanguage, persona: p.persona,
+            }
+          return send(200, { ok: true, id: p.id, format: wantTavern ? 'tavern' : 'whale', json })
+        }
+        if (url.pathname.indexOf(API_PATH + '/presets/') === 0 && req.method === 'POST') {
+          const ct = String((req.headers && req.headers['content-type']) || '').toLowerCase()
+          if (ct.indexOf('application/json') === -1) return send(415, { ok: false, error: 'content-type must be application/json' })
+          let body = null
+          try { body = JSON.parse(await readBody(req)) } catch (e) {
+            return send(400, { ok: false, error: 'body is not valid JSON: ' + String((e && e.message) || e) })
+          }
+          const action = url.pathname.slice((API_PATH + '/presets/').length)
+
+          if (action === 'apply') {
+            const preset = loadPreset(body && body.id)
+            if (!preset) return send(404, { ok: false, error: 'preset not found' })
+            const r = applyPresetToFile(preset)
+            if (!r.ok) return send(409, { ok: false, error: r.error })
+            const model = modelForPanel(url.searchParams)
+            const next = readRawConfig(configPath())
+            return send(200, {
+              ok: true,
+              applied: preset.id,
+              autosave: r.autosave ? 'autosave' : '',
+              presets: listPresets(),
+              config: next === null ? null : next,
+              preview: renderSections(next === null ? {} : next, { model, cwd: '<当前工作目录>' }),
+            })
+          }
+
+          if (action === 'save') {
+            const id = safePresetId(body && body.id)
+            if (!id) return send(400, { ok: false, error: 'id 只能字母数字_-（作为文件名）' })
+            const cfg = createStore().get()
+            const file = savePreset(presetFromConfig(cfg, {
+              id, label: (body && body.label) || id, description: (body && body.description) || '',
+            }))
+            if (!file) return send(500, { ok: false, error: 'save failed' })
+            return send(200, { ok: true, id, file, presets: listPresets() })
+          }
+
+          if (action === 'delete') {
+            const id = safePresetId(body && body.id)
+            if (!id) return send(400, { ok: false, error: 'id required' })
+            return send(200, { ok: true, id, deleted: removePreset(id), presets: listPresets() })
+          }
+
+          if (action === 'import') {
+            // 文本进来就行：酒馆卡（v1/v2 JSON）或本引擎预设都能认；认不出**不猜**
+            let raw = body && body.json
+            if (typeof raw === 'string') {
+              try { raw = JSON.parse(raw) } catch (e) {
+                return send(400, { ok: false, error: '不是合法 JSON：' + String((e && e.message) || e) + '（酒馆的 PNG 卡请先在酒馆里导出成 JSON）' })
+              }
+            }
+            if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return send(400, { ok: false, error: '需要一个 JSON 对象' })
+            const kind = detectCard(raw)
+            let preset = null
+            let report = { mapped: [], unmapped: [], notes: [] }
+            if (kind === 'tavern-v2' || kind === 'tavern-v1') {
+              const imp = fromTavern(raw)
+              if (!imp) return send(400, { ok: false, error: '这张卡读不出来' })
+              preset = imp.preset
+              report = { mapped: imp.mapped, unmapped: imp.unmapped, notes: imp.notes, kind }
+            } else if (kind === 'whale-preset') {
+              preset = normalizePreset(raw, 'imported')
+              report = { mapped: ['whale-persona 预设（' + (raw.spec || '早期格式') + '）'], unmapped: [], notes: [], kind }
+            } else {
+              return send(400, { ok: false, error: '认不出这是哪种卡（既不是酒馆 v1/v2 角色卡，也不是本引擎预设）' })
+            }
+            let id = safePresetId(preset.id) || 'imported'
+            let n = 1
+            while (loadPreset(id)) { n += 1; id = (safePresetId(preset.id) || 'imported') + '-' + n }
+            preset.id = id
+            const file = savePreset(preset)
+            if (!file) return send(500, { ok: false, error: 'write failed' })
+            return send(200, { ok: true, id, file, report, presets: listPresets() })
+          }
+
+          return send(404, { ok: false, error: 'unknown presets action: ' + action })
         }
         if (url.pathname === API_PATH + '/health' && req.method === 'GET') {
           return send(200, { ok: true, exists: existsSync(configPath()) })
