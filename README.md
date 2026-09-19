@@ -56,13 +56,15 @@ node scripts/install-dsh.mjs             # 真装
 **没有 git，或者 clone 不动？** 用本仓 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
 
 ```powershell
-dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.11.1/shenA2024-whale-persona-0.11.1.tgz
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.11.2/shenA2024-whale-persona-0.11.2.tgz
 ```
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
 
 ⚠️ 这一步把包装进 profile，并把**设置面板**自动挂成 profile 层（0.11.1 起本包声明了 `dsh.bundle.patch`，
 宿主会自动把它加进 `dsh.profile.bundles` —— 0.11.1 之前没有这个声明，装完只是躺在 `node_modules` 里不生效）。
+0.11.2 起安装脚本会**先算清这条行的归属**：bundle 已经挂了，profile 层就一条都不插（重装还会把 0.11.1
+写坏的那条摘掉）—— 见下面「装不上？」表里那条 `duplicate loader entry id`。
 **人设本体故意不自动挂**：它要挂在 agent preset 平面才是"鲸鱼模式专属"（挂在 profile 层对所有模式生效）。
 所以要用人设，接着跑包里自带的安装脚本，它会把 agent preset 与 UI 面板行都挂好：
 
@@ -84,6 +86,7 @@ node "$env:USERPROFILE\.dsh\profiles\web\node_modules\@shenA2024\whale-persona\s
 | `Failed to connect to github.com:443` / `Connection was reset` | 你的网络连不上 github.com（国内常见） | git 配代理：`git config --global http.proxy socks5h://127.0.0.1:<你的代理端口>`；或直接用上面的 tarball 通道 |
 | `git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed — add the exact key pnpm printed above under allowBuilds in <profile>/pnpm-workspace.yaml, then re-run` | pnpm 会拦 git 依赖的构建脚本 | 按提示把那行加进 `pnpm-workspace.yaml` 的 `allowBuilds` 再重跑（走 tarball / npm 通道遇不到） |
 | `ERR_PNPM_ADDING_TO_ROOT` | profile 目录自带 `pnpm-workspace.yaml`，往根加依赖必须带 `-w` | 命令里补 `-w`（上面几条都已带） |
+| `Error: dsh: plugin tree failed to load: failed to apply loader entry include (cordis:include): duplicate loader entry id: whale-persona-ui` | 0.11.1 的安装脚本看不出宿主已经把面板行自动挂进 profile 层（`dsh.profile.bundles`），又往 profile 的 `cordis.patch.yml` 手工插了一条同 id 行；loader 的 entry id 全局唯一，重复即硬错 | 拉到 0.11.2 后**重跑一次安装脚本**即可自愈（它会摘掉那条重复行）；急用时手工把 `profiles/<profile>/cordis.patch.yml` 还原成只剩注释 + `[]` |
 
 还不行 → **开一个 issue，选「安装求助」模板**，把报错原文贴上来即可（不用自己诊断）。
 同类求助攒够（≥5 个不同用户，或一周内 ≥3 次同类）就会补上「一键安装」（npm）通道。
