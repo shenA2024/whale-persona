@@ -50,19 +50,19 @@ t('P4 写出的文件带 spec:', JSON.parse(readFileSync(saved, 'utf8')).spec ==
 // ── 应用：只覆盖预设里出现的字段 ─────────────────────────────────────────
 const cfg = {
   enabled: true, thinkingLanguage: 'en',
-  persona: { enabled: true, userName: '<maintainer>', selfNameFlash: '<persona-name>', character: '旧正文', legacyField: '保我' },
+  persona: { enabled: true, userName: '小林', selfNameFlash: '小助手', character: '旧正文', legacyField: '保我' },
   context: { memory: true }, forge: { enabled: true },
 }
 const legacyPreset = P.normalizePreset({ id: 'old', label: '老格式', character: '新正文', contracts: [{ id: 'x', text: '新契约', on: true }] }, 'old')
 const next = P.applyPresetToConfig(cfg, legacyPreset)
 t('P5 老格式(顶层 character/contracts)能认:', !!legacyPreset && legacyPreset.persona.character === '新正文')
 t('P5 覆盖预设里出现的:', next.persona.character === '新正文' && next.persona.contracts.length === 1)
-t('P5 没出现的字段保持原样:', next.persona.userName === '<maintainer>' && next.persona.selfNameFlash === '<persona-name>')
+t('P5 没出现的字段保持原样:', next.persona.userName === '小林' && next.persona.selfNameFlash === '小助手')
 t('P5 persona 未知子键不丢:', next.persona.legacyField === '保我')
 t('P5 别的段不丢:', next.context.memory === true && next.forge.enabled === true && next.enabled === true)
 
 // ── 预设不带记忆 ────────────────────────────────────────────────────────
-const fromCfg = P.presetFromConfig({ thinkingLanguage: 'zh-CN', persona: { userName: '<maintainer>', character: 'x' }, memory: { enabled: true, entries: [{ text: '私事', on: true }] } }, { id: 'snap', label: '快照' })
+const fromCfg = P.presetFromConfig({ thinkingLanguage: 'zh-CN', persona: { userName: '小林', character: 'x' }, memory: { enabled: true, entries: [{ text: '示例条目', on: true }] } }, { id: 'snap', label: '快照' })
 t('P9 快照不含 memory:', !Object.prototype.hasOwnProperty.call(fromCfg, 'memory') && !Object.prototype.hasOwnProperty.call(fromCfg.persona, 'entries'))
 
 // ── 坏文件 & 落盘纪律 ───────────────────────────────────────────────────
@@ -75,7 +75,7 @@ process.env.DSH_WHALE_CONFIG = path.join(home, 'config.json')
 // 别的段是"原样保留"——保留的是**磁盘上已有的**那些，patch 里塞未知段会被丢掉。
 // 所以要验"别的段不丢"，得先让磁盘上真有那个段（这里直接写文件造出来）。
 writeFileSync(process.env.DSH_WHALE_CONFIG, JSON.stringify({
-  enabled: true, thinkingLanguage: 'en', persona: { userName: '<maintainer>', character: '旧' },
+  enabled: true, thinkingLanguage: 'en', persona: { userName: '小林', character: '旧' },
   context: { memory: true }, forge: { enabled: true },
 }, null, 2), 'utf8')
 writeMergedConfig(P.applyPresetToConfig(readRawConfig(), P.loadPreset('starter')))
