@@ -1,0 +1,34 @@
+# 门禁：把本仓两套机器判据变成公开的、每次 push 都跑的。
+#   npm test    —— 8 套功能测试（含记忆闸门 T18-T22、CSP U5、样式作用域门 C1-C11、保存按钮 N10）
+#   npm run sec —— 安全探针 11 组 + --selftest（没有自测的探针等于没有探针）
+# 触发来源：shenA2024 2026-09-19「你能管理一下我和你开源的那个仓库吗」。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ['20', '22']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # 零运行时依赖：不需要 npm ci，直接跑
+      - name: 功能测试（8 套）
+        run: npm test
+      - name: 安全探针（11 组 + 自测）
+        run: npm run sec

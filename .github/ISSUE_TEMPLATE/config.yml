@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 用法提问 / 想法讨论
+    url: https://github.com/shenA2024/whale-persona/discussions
+    about: 怎么配人设、按模型命中怎么写、要不要开某段——这类先到 Discussions
+  - name: 安全漏洞（私密）
+    url: https://github.com/shenA2024/whale-persona/security/advisories/new
+    about: 记忆投毒 / 越界读文件 / 注入逃逸 / 绕确认闸门 —— 不要开公开 Issue

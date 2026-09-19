@@ -1,0 +1,55 @@
+name: Bug 报告
+description: 装 / 用 whale-persona 时遇到的错误行为
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **安全问题不要开 Issue**（记忆投毒 / 越界读文件 / 注入逃逸 / 绕确认闸门）——
+        请走 [私有漏洞报告](https://github.com/shenA2024/whale-persona/security/advisories/new)。
+  - type: input
+    id: version
+    attributes:
+      label: 插件版本
+      description: "看 $DSH_HOME/plugins/whale-persona/package.json 的 version 字段"
+      placeholder: "0.9.1"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: DSH 版本 + 操作系统 + 是否 PTC/标准模式
+      placeholder: "DSH 0.1.6-alpha.1 / Windows 11 / 标准模式"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 越具体越好；能附命令输出、截图、报错原文最好
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望 vs 实际
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: 相关配置片段（**请先脱敏**）
+      description: "config.json（或旧布局 whale-suite/）里与问题相关的那几行；去掉自称、真名、记忆条目等私人内容"
+      render: jsonc
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前自查
+      options:
+        - label: 我跑过 npm test（在仓库根）
+        - label: 我没有在 Issue 里贴任何凭据、密钥或私人内容
+          required: true
