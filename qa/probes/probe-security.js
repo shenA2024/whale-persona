@@ -21,6 +21,7 @@
  *   S9  SEC_SECRET    仓库里没有真实凭据
  *   S10 SEC_IGNORE    .gitignore 挡住依赖/生成物/大素材/日志/环境文件
  *   S11 SEC_BINARY    版本库里没有二进制大件
+ *   S12 SEC_ORIGIN    本地页真起服务打三个 Origin（行为测试）：非 loopback 必须 403
  *
  * 无法自动化项（SEC_SKIP，不计失败）: 记忆确认行的语义伪造、提示词注入逃逸的人工判定、
  *   宿主平面划分（headless 不注入人设）、第三方扫描复核。以上以 qa/security-审查.md 的人工核验为准。
@@ -28,7 +29,7 @@
  * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 11 组；门禁以台账全项人工核验为准。
  */
 import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -50,6 +51,8 @@ const sus = (id, msg) => { suspects++; console.log('SEC_SUSPECT ' + id + ' ' + m
 const skip = (id, reason, msg) => { skips++; console.log('SEC_SKIP ' + id + ' reason=' + reason + (msg ? ' ' + msg : '')) }
 const t = (id, cond, detail) => { if (cond) ok(id, detail || ''); else bad(id, detail || '') }
 const guard = (id, fn) => { try { fn() } catch (e) { skip(id, 'probe-error', String(e && e.message).slice(0, 80)) } }
+/** 异步探针（S12 要真起服务）登记到这里，结论处 await —— 必须声明在 guard 之前，否则 TDZ 报错 */
+let pending = Promise.resolve()
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'data', '.tmp', 'out', 'build', 'dist', '.inbox'])
 const PROD_EXT = new Set(['.js', '.mjs', '.html'])
@@ -148,9 +151,10 @@ guard('S7', () => {
   const mjs = readFileSync(m, 'utf8')
   const ui = readFileSync(u, 'utf8')
   const bound = /server\.listen\(\s*PORT\s*,\s*'127\.0\.0\.1'/.test(mjs)
-  const hostGuard = /function isLoopbackHost/.test(ui) && /req\.headers\.host/.test(ui) && /origin/.test(ui)
+  // 面板：只认"校验代码真的在"（guard 函数体 + 读取 host/origin 头），不认文件里出现过的词
+  const hostGuard = /function guard\s*\(req\)/.test(ui) && /req\.headers\.origin/.test(ui) && /req\.headers\.host/.test(ui)
   const jsHostGuard = /ALLOWED_HOSTS/.test(mjs)
-  t('S7', bound && hostGuard && jsHostGuard, 'listen127=' + bound + ' 面板Host/Origin=' + hostGuard + ' 本地页Host白名单=' + jsHostGuard)
+  t('S7', bound && hostGuard && jsHostGuard, 'listen127=' + bound + ' 面板Host/Origin=' + hostGuard + ' 本地页Host白名单=' + jsHostGuard + '（本地页实际行为见 S12）')
 })
 
 guard('S8', () => {
@@ -201,11 +205,61 @@ guard('S11', () => {
   t('S11', big.length === 0, big.length ? JSON.stringify(big.slice(0, 5)) : '零二进制')
 })
 
+guard('S12', () => {
+  const ui = path.join(ROOT, 'scripts', 'ui.mjs')
+  if (!existsSync(ui)) return skip('S12', 'no-local-server')
+  const home = mkdtempSync(path.join(os.tmpdir(), 'wpr-origin-'))
+  const cfg = path.join(home, 'config.json')
+  writeFileSync(cfg, JSON.stringify({ enabled: true, persona: { character: 'x' } }), 'utf8')
+  const port = 8900 + Math.floor(Math.random() * 90)
+  const base = 'http://127.0.0.1:' + port
+  const child = spawn(process.execPath, [ui, '--port', String(port)], {
+    cwd: ROOT, env: { ...process.env, DSH_HOME: home, DSH_WHALE_CONFIG: cfg }, stdio: 'ignore',
+  })
+  let cleaned = false
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    try { child.kill('SIGKILL') } catch { /* 已经退出 */ }
+    rmSync(home, { recursive: true, force: true })
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  pending = pending.then(async () => {
+    let up = false
+    for (let i = 0; i < 20 && !up; i++) {
+      try { up = (await fetch(base + '/api/state')).ok } catch { await sleep(150) }
+    }
+    if (!up) {
+      cleanup()
+      return bad('S12', '本地页起不来（起不来就没法证明它拒外源 Origin，不算通过）port=' + port)
+    }
+    const post = async (headers) => {
+      try {
+        const r = await fetch(base + '/api/save', {
+          method: 'POST', headers: { 'content-type': 'application/json', ...headers },
+          body: JSON.stringify({ config: { persona: { character: 'SEC-ORIGIN-PROBE' } } }),
+        })
+        return r.status
+      } catch { return 0 }
+    }
+    const evil = await post({ origin: 'https://evil.example' })
+    const absent = await post({})
+    const self = await post({ origin: base })
+    cleanup()
+    t('S12', evil === 403 && absent === 200 && self === 200,
+      '外源Origin=' + evil + '(期望403) 无Origin=' + absent + '(期望200) 自家Origin=' + self + '(期望200)')
+  }).catch((e) => { cleanup(); throw e })
+})
+
+/** 异步探针（S12 要真起服务）——登记后由结论处 await，保证顺序与退出码都在异步跑完之后 */
+function flushAsync() { return pending }
+
 skip('M1', 'manual', '记忆确认行语义伪造（同进程文件信任的固有上限，见 SECURITY.md）')
 skip('M2', 'manual', '提示词注入逃逸：渲染文本的呈现缓解需人读一遍')
 skip('M3', 'manual', '宿主平面划分（headless 不注入人设）是行为约定不是漏洞')
 skip('M4', 'manual', '第三方扫描（CodeQL / CodeGuard）结论复核')
 
+await flushAsync()
 console.log('PASS ' + (fails === 0) + ' DETAIL ' + JSON.stringify({ root: rel(ROOT) || '.', fail: fails, suspect: suspects, skip: skips }))
 if (fails) process.exitCode = 1
 
@@ -216,9 +270,23 @@ if (opt.selftest) {
   writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0', dependencies: { 'evil-dep': '1.0.0' } }), 'utf8')
   writeFileSync(path.join(tmp, 'core', 'a.js'), 'export const u = fetch("https://evil.example.com/x")\nexport const y = eval("1")\nconst el = document.createElement("div"); el.innerHTML = "<img src=x onerror=alert(1)>"\n', 'utf8')
   writeFileSync(path.join(tmp, '.gitignore'), 'node_modules/' + String.fromCharCode(10), 'utf8')
-  const r2 = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--root', tmp], { encoding: 'utf8', shell: false })
+  // S12 的行为测法要有牙：这里种一个**没做 Origin 校验**的本地页，断言探针会 FAIL
+  mkdirSync(path.join(tmp, 'scripts'), { recursive: true })
+  mkdirSync(path.join(tmp, 'adapters', 'dsh-ui'), { recursive: true })
+  writeFileSync(path.join(tmp, 'adapters', 'dsh-ui', 'index.js'), 'function isLoopbackHost(h) { return h === "127.0.0.1" }\nexport const x = (req) => req.headers.host\n', 'utf8')
+  writeFileSync(path.join(tmp, 'scripts', 'ui.mjs'), [
+    "import { createServer } from 'node:http'",
+    'const PORT = Number((process.argv.indexOf("--port") >= 0 ? process.argv[process.argv.indexOf("--port") + 1] : 0) || 8799)',
+    'const s = createServer((req, res) => {',
+    '  res.writeHead(200, { "content-type": "application/json" })',
+    '  res.end(JSON.stringify({ ok: true }))',
+    '})',
+    "s.listen(PORT, '127.0.0.1')",
+    '',
+  ].join(String.fromCharCode(10)), 'utf8')
+  const r2 = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--root', tmp], { encoding: 'utf8', shell: false, timeout: 120000 })
   const caught = r2.stdout.match(/SEC_FAIL (S\d+)/g) || []
-  const okSelf = r2.status === 1 && caught.length >= 4
+  const okSelf = r2.status === 1 && caught.length >= 5 && caught.includes('SEC_FAIL S12')
   console.log('SELFTEST ' + okSelf + ' DETAIL ' + JSON.stringify({ expectExit: 1, gotExit: r2.status, caught }))
   rmSync(tmp, { recursive: true, force: true })
   if (!okSelf) process.exitCode = 1

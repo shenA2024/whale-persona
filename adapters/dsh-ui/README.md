@@ -105,6 +105,10 @@ token 名取自 DSH 前端产物实测（`dsh-client-ui-theme` 的 `body[data-ds
 
 护栏：Host / Origin 必须 loopback，否则 403；未知路径 404；任何异常都回可读 JSON（面板坏掉不连累设置页）。
 
+`GET /whale-persona/api/presets`（0.10.0 起）→ `{ ok, dir, configPath, presets, skipped }`。
+`skipped`（0.11.0 新增）是**本次列目录时被跳过的文件**（`[{ file, reason: 'unrecognized-shape' | 'unreadable' }]`）：
+预设读不出来时不再无声跳过 —— "格式不兼容"和"用户没建卡"必须能分辨，排查成本差在这里。
+
 ## 测试
 
 ```bash

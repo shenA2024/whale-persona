@@ -114,13 +114,14 @@ export function normalizePreset(raw, fallbackId) {
 export function listPresets() {
   ensureSeeds()
   const out = []
+  lastSkipped = []
   try {
     for (const name of readdirSync(presetsDir()).sort()) {
       if (!name.toLowerCase().endsWith('.json')) continue
       try {
         const raw = JSON.parse(readFileSync(path.join(presetsDir(), name), 'utf8'))
         const p = normalizePreset(raw, name.replace(/\.json$/i, ''))
-        if (!p) continue
+        if (!p) { lastSkipped.push({ file: name, reason: 'unrecognized-shape' }); continue }
         out.push({
           id: p.id, label: p.label, description: p.description, author: p.author, tags: p.tags,
           spec: p.spec, file: name,
@@ -129,11 +130,24 @@ export function listPresets() {
           hasTone: !!(p.persona.tone && p.persona.tone.text),
           hasAppearance: !!(p.persona.appearance && p.persona.appearance.text),
         })
-      } catch { /* 坏文件跳过 */ }
+      } catch { lastSkipped.push({ file: name, reason: 'unreadable' }) }
     }
   } catch { /* 目录读不了：空表 */ }
   return out
 }
+
+/** 上一次 listPresets() 跳过的文件（诊断用，见文件头注） */
+export function skippedPresets() {
+  return lastSkipped.slice()
+}
+
+/**
+ * 最近一次 listPresets() 里被跳过的文件（坏 JSON / 形状不认）。
+ * 为什么要有这个：静默过滤会把"格式不兼容"伪装成"用户没建卡"，排查成本极高
+ * （0.11.0 补，触发来源：2026-09-19 复核发现 dsh-team 看不到新格式卡却毫无提示）。
+ * 面板可把它显示成一行提示；核心读取路径不因此抛错。
+ */
+let lastSkipped = []
 
 /** 读单个预设（坏 JSON / 越界 id 一律 null） */
 export function loadPreset(id) {

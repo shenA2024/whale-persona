@@ -40,9 +40,14 @@ export function slugId(name) {
   return 'card-' + h.toString(36).slice(0, 6)
 }
 
-/** 认卡：'tavern-v2' | 'tavern-v1' | 'whale-preset' | 'unknown' */
+/**
+ * 认卡：'tavern-v2' | 'tavern-v1' | 'whale-preset' | 'unknown'
+ * v3（spec = chara_card_v3）与「没有 spec 但带 data.description」的卡**都归 tavern-v2**：
+ * 映射用的字段名与 v2 同族，实测可正常导入（原注释漏了这两档）。
+ */
 export function detectCard(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return 'unknown'
+  // 自家标记**只认顶层**：酒馆卡的 persona 在 data.persona 里，不会被这一行误判成自家预设
   if (raw.persona && typeof raw.persona === 'object') return 'whale-preset'
   if (typeof raw.character === 'string' || Array.isArray(raw.contracts)) return 'whale-preset'
   const spec = String(raw.spec || '').toLowerCase()
@@ -64,7 +69,21 @@ function linesToContracts(text) {
   const seen = new Set()
   for (const rawLine of String(text || '').split(/\r?\n/)) {
     const line = rawLine.trim().replace(/^(?:[-*•·]|\d+[.)、])\s*/, '').trim()
-    if (line.length < 2 || line.length > 300) continue
+    if (line.length < 2) continue
+    if (line.length > 300) {
+      // 单行超长：先按句末标点兜底断句，再按分号看；仍然拿不到可执行的行就跳过。
+      // 为什么要有这一步：system_prompt 整段无换行是常见写法，只按 \n 拆会把契约**全部丢光**
+      // 且毫无提示（0.11.0 修，触发来源见 README「已知边界」）。
+      const parts = line.split(/(?<=[。！？!?])/).flatMap((seg) => seg.split(/[；;]/)).map((seg) => seg.trim()).filter(Boolean)
+      for (const part of parts) {
+        if (part.length < 2 || part.length > 300 || seen.has(part)) continue
+        seen.add(part)
+        out.push({ id: 'c' + (out.length + 1), text: part, on: true })
+        if (out.length >= 40) break
+      }
+      if (out.length >= 40) break
+      continue
+    }
     if (seen.has(line)) continue
     seen.add(line)
     out.push({ id: 'c' + (out.length + 1), text: line, on: true })
@@ -114,6 +133,13 @@ export function fromTavern(input) {
   if (personality) persona.stance = personality
   const contracts = linesToContracts(systemPrompt)
   if (contracts.length) persona.contracts = contracts
+  else if (systemPrompt) {
+    // 声明撑不起兑现：一条契约都没出来时不许留「system_prompt → 工作契约」这条
+    // 成功记录（原实现会留着，用户以为映射上了），并在报告里点名。
+    const i = mapped.indexOf('system_prompt → 工作契约')
+    if (i >= 0) mapped.splice(i, 1)
+    unmapped.push('data.system_prompt（整段没有可用的契约行：多为整段无换行或单行超长，请手工拆分）')
+  }
   if (postHistory) persona.suffix = postHistory
 
   // 往返保真：我们自己导出的卡把独有字段放在 extensions.whale_persona
