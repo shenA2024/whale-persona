@@ -90,6 +90,31 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 > agent-preset 名册，人设**不会**被注入——这是宿主的平面划分，不是本插件的 bug。
 > 想在 headless 里也带上人设，得走 preset 平面（web/客户端）或在 profile 里自行装配。
 
+### 全局模式（0.9.2）：所有模式 / 所有 profile 都生效
+
+上面那套是 **preset 平面**——只有绑定那份预设的会话有人设；headless 一次性任务、以及你显式选了
+官方「标准模式 / PTC」的会话都没有。要让**每个会话**都带上同一份人设，用本仓的**全局入口**
+\`@shenA2024/whale-persona/global\`：它不占官方具名槽位，改用自有段名（\`whale:persona-global\`），
+所以可以挂在家目录层：
+
+\`\`\`yaml
+# $DSH_HOME/cordis.patch.yml —— 一次覆盖 web / tui / headless 全部 profile
+- insert:
+    - id: whale-persona-global
+      name: '@shenA2024/whale-persona/global'
+\`\`\`
+
+两个入口共用同一套 \`core/\` 与同一份 \`config.json\`，渲染结果逐字一致，两套段名零交集
+（\`tests/global.mjs\` 的 G5/G9/G10 钉着）。差别只有覆盖面和"是否遮蔽官方人设"：
+
+| 事项 | 全局模式下的表现 |
+|---|---|
+| 遮蔽官方人设 | **不遮蔽**。官方 \`deployment:persona-prefix\` 仍在——若你的部署在 \`system-prompt\` 里配了 personaPrefix，提示词里会**两份人设并存**；全局模式下应把它置空：\`- id: system-prompt\` 配 \`config: { personaPrefix: '' }\` |
+| 覆盖范围 | 挂家目录层 = 所有 profile + 所有预设 + 子代理（跟随父会话）都拿同一份人设 |
+| 两个入口别同时挂 | 同时挂 = 同一份人设注入两遍 |
+| 生效条件 | **增删挂载行要重启宿主**；改配置照旧下一步生效 |
+| headless | 全局模式下 \`dsh --profile headless "..."\` 这类一次性任务**也有人设**（preset 模式下没有） |
+
 ## 它到底做什么（真实输出，可复现）
 
 `scripts/render-preview.mjs` 读的是运行期同一套 `core/`，输出逐字一致。
