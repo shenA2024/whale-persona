@@ -248,12 +248,12 @@ const toneCard = flatText(H.StyleCard(Object.assign({}, cardProps, {
   empty: '（没配就所有模型都用上面的通用文本）', notes: [], note: '语气是 opt-in 的。',
 })))
 const selfCardSame = [
-  '按模型指定自称', '1 条 · 逐模型覆盖上面两档',
+  '按模型指定自称', '1 条 · 按模型覆盖上面两档',
   '模型关键词，如 grok-4.7', '自称，如 小七', '+ 添加一条',
   '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面两档。例：关键词 grok-4.7 → 自称 小七，能命中 x-ai/grok-4.7-flash。',
   '关键词按子串匹配、忽略大小写；空关键词或空自称的行保存时会丢弃。',
 ].every((x) => selfCard.indexOf(x) >= 0)
-  && ['按模型指定自称', '0 条 · 逐模型覆盖上面两档', '（没配就只用上面两档）'].every((x) => selfCardEmpty.indexOf(x) >= 0)
+  && ['按模型指定自称', '0 条 · 按模型覆盖上面两档', '（没配就只用上面两档）'].every((x) => selfCardEmpty.indexOf(x) >= 0)
 t('N4 渲染：自称卡文案逐字未退化 + 形象 / 语气卡要件齐全（徽标 / 开关 / 通用文本 / 按模型表 / 预设按钮）',
   selfCardSame
   && ['形象（appearance）', '已启用', '1 条按模型覆盖 · 未命中回落通用文本', '总开关', '启用形象设定',
@@ -293,6 +293,40 @@ t('N6b 本地编辑器噪声块默认收起、要用的按钮留在折外',
   textOf(edDetails[0]).indexOf('它是本仓自带的独立本地面板') >= 0
   && textOf(edDetails[0]).indexOf('node scripts/ui.mjs --port 8787') >= 0
   && ccNodes.some((n) => typeof n.type === 'string' && n.type === 'button' && textOf(n).indexOf('+ 添加契约') >= 0))
+
+/* ─────────── 2026-09-19 追加：字段白名单与折叠跃迁（外部评审两轮踩出来的）─────────
+ * 触发来源：GLM 评审连续两轮报"清单与截图对不上"，回代码查出两处：
+ *   ① 宿主 payload 加了 inboxPending，但 client 的 normalize() 是显式字段白名单 —— 漏映射 = 静默丢字段；
+ *   ② 勾上「启用」开关后正文仍折叠 = 开着开关零注入。
+ */
+const memCardText = flatText(H.MemoryCard({
+  mem: { enabled: true, inbox: true, capture: 'on-demand', inboxLines: 3, inboxPending: 1, recent: [] },
+  value: [], enabled: true, capture: 'on-demand', disabled: false,
+  onToggleEnabled: noop, onCapture: noop, onPatch: noop, onRemove: noop, onAdd: noop,
+}))
+t('N11 收件箱口径：卡片显示「收件箱 N 行 · 待确认 K 条」（与横幅同一套词）:',
+  memCardText.indexOf('收件箱 3 行') >= 0 && memCardText.indexOf('待确认 1 条') >= 0)
+const ssTree = H.StyleSection({
+  enabled: false, title: '形象（appearance）', switchLabel: '启用形象设定',
+  switchHint: '默认关', text: '', rows: [], disabled: false,
+})
+const ssDetails = detailsOf(ssTree)
+t('N11 形象/语气子卡载入时不展开（只在开关"关→开"的跃迁上自动展开）:',
+  ssDetails.length >= 1 && ssDetails.every((n) => n.props.open !== true)
+  && flatText(ssTree).indexOf('通用文本') >= 0)
+t('N11 行尾注缩短（不再被 800px 宿主截断）:',
+  flatText(H.StyleSection({ enabled: true, title: 't', switchLabel: 's', switchHint: 'h', text: '', rows: [{ key: 'k', value: 'v' }], disabled: false }))
+    .indexOf('按模型 1 条') >= 0)
+
+/* 2026-09-19 追加：三段卡头的一次性展开钮 + 二级开关异常态徽标（外部评审第四轮） */
+const secCardText = flatText(H.SectionsCard({ sections: { prefix: 'A', thinking: '', suffix: '' }, tier: 'flash' }))
+t('N12 三段卡头有「全部展开」钮，且三段正文仍默认不渲染（只在卡头加按钮，不往行内塞文本）:',
+  secCardText.indexOf('全部展开') >= 0 && secCardText.indexOf('A') < 0
+  && secCardText.indexOf('人设前缀（prefix）') >= 0 && secCardText.indexOf('空 —— 不注入') >= 0)
+const stripBad = flatText(H.StatusStrip({ data: { tier: 'flash', configState: {} }, enabled: true, personaOn: false }))
+const stripOk = flatText(H.StatusStrip({ data: { tier: 'flash', configState: {} }, enabled: true, personaOn: true }))
+t('N12 二级开关异常态才出「人设段关」徽标（总开关开 + 人设段关）:',
+  stripBad.indexOf('人设段关') >= 0 && stripOk.indexOf('人设段关') < 0)
 
 // 基础层 CSS 的硬纪律：不碰宿主全局、不覆盖宿主变量、没有裸元素选择器与 !important、颜色只走宿主变量
 const cssSel = (H.css || '').split('}').filter((r) => r.indexOf('{') >= 0).map((r) => r.slice(0, r.indexOf('{')).trim())

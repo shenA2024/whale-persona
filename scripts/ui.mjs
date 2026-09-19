@@ -44,7 +44,10 @@ const FILE = configPath()
 
 const readRaw = () => readRawConfig(FILE)
 const writeMerged = (patch) => writeMergedConfig(patch, FILE)
-const render = (cfgRaw, capture, model, cwd) => renderSections(cfgRaw, { capture, model, cwd })
+// cwd 统一用与设置面板同一个占位：编辑器自己的 process.cwd() 与"会话的工作目录"毫无关系，
+// 显示出来只会误导（2026-09-19 外部评审：两个界面对 {{cwd}} 的渲染对不上）
+const CWD_LABEL = '<当前工作目录>'
+const render = (cfgRaw, capture, model, cwd) => renderSections(cfgRaw, { capture, model, cwd: cwd || CWD_LABEL })
 
 function json(res, code, payload) {
   res.writeHead(code, {
@@ -159,7 +162,7 @@ const server = createServer(async (req, res) => {
       return json(res, 200, {
         ok: true, file: FILE, exists: existsSync(FILE),
         raw, effective: cfg, defaults: DEFAULTS, tonePresets: TONE_PRESETS,
-        preview: render(raw, captureMode(cfg) === 'always' || true, 'flash', process.cwd()),
+        preview: render(raw, captureMode(cfg) === 'always' || true, 'flash', CWD_LABEL),
       })
     }
     if (p === '/api/preview' && req.method === 'POST') {
@@ -167,7 +170,7 @@ const server = createServer(async (req, res) => {
       if (ct.indexOf('application/json') === -1) return json(res, 415, { ok: false, error: 'content-type must be application/json' })
       const body = JSON.parse(await readBody(req))
       const capture = body.capture !== false
-      return json(res, 200, { ok: true, preview: render(body.config || {}, capture, body.model || 'flash', body.cwd || process.cwd()) })
+      return json(res, 200, { ok: true, preview: render(body.config || {}, capture, body.model || 'flash', body.cwd || CWD_LABEL) })
     }
     if (p === '/api/save' && req.method === 'POST') {
       const ct = String((req.headers['content-type'] || '')).toLowerCase()
@@ -175,7 +178,7 @@ const server = createServer(async (req, res) => {
       const body = JSON.parse(await readBody(req))
       const next = writeMerged(body.config || {})
       const cfg = mergeConfig(next)
-      return json(res, 200, { ok: true, file: FILE, config: next, preview: render(next, captureMode(cfg) === 'always' || true, 'flash', process.cwd()) })
+      return json(res, 200, { ok: true, file: FILE, config: next, preview: render(next, captureMode(cfg) === 'always' || true, 'flash', CWD_LABEL) })
     }
     return json(res, 404, { ok: false, error: 'not found' })
   } catch (e) {

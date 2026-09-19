@@ -176,6 +176,8 @@ function buildSummary(query) {
       manualEntries: manual.length,
       maxEntries,
       inboxLines: inbox.length,
+      // 与 core/edit.js 的提示同一口径：待确认候选数（横幅说"K 条待确认候选"，卡片说"M 行 · 待确认 K 条"）
+      inboxPending: inbox.filter((e) => e && e.status === 'proposed').length,
       recent: inbox.slice(-5).map((e) => ({ text: e.text, tag: e.tag || '' })),
     },
     sections,
