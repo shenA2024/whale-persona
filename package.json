@@ -1,6 +1,6 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Persona engine for AI coding harnesses (DeepSeek Harness; the ZCode adapter is frozen as of 0.9.0 and no longer developed): self-name per model, self-image (appearance) and reply tone per model (both opt-in), user address, stance, character, per-item work contracts, thinking-chain language, and a long-term memory inbox where AI entries only take effect after an explicit human confirm line (enforced in code). One shared config.json, zero runtime dependencies, never touches the network.",
   "type": "module",
   "main": "./adapters/dsh/index.js",

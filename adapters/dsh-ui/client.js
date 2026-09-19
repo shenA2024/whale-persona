@@ -169,6 +169,10 @@ window.__ModuleLoader__.load({
       '.wpr-disc{margin:6px 0 0}',
       '.wpr-discsum{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--wpr-t3);font-size:12px;list-style:none;padding:2px 0}',
       '.wpr-discsum:hover{color:var(--wpr-t1)}',
+      // 2026-09-19 修复：summary 是 flex 容器，开关与标题默认 flex-shrink:1，被挤窄后中文逐字折行
+      '.wpr-discsum>.wpr-chk{flex:0 0 auto;white-space:nowrap}',
+      '.wpr-discsum>.wpr-title{flex:0 0 auto;white-space:nowrap}',
+      '.wpr-discsum>.wpr-sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
       '.wpr-discsum::before{content:"▸";font-size:10px;opacity:.8}',
       '.wpr-disc[open]>.wpr-discsum::before{content:"▾"}',
       '.wpr-discbody{padding:4px 0 2px}',
@@ -816,14 +820,13 @@ window.__ModuleLoader__.load({
             onClick: function () { props.onPickTier(t.id); },
           }, t.label);
         })),
-        h('span', { className: 'wpr-dimnote' }, '只影响下面的三段预览，保存的内容跟它无关'),
         h('button', {
           className: 'wpr-btn', type: 'button', disabled: disabled || !!props.loading,
           onClick: props.onRefresh, title: '丢弃未保存改动，重新读取 /whale-persona/api/summary',
         }, props.loading ? '读取中…' : '刷新'),
         h('button', {
           className: 'wpr-btn wpr-primary' + (props.dirty ? ' wpr-dirty' : ''), type: 'button',
-          disabled: disabled || !!props.saving,
+          disabled: disabled || !!props.saving || (!props.dirty && !!props.hasConfig),
           onClick: props.onSave,
         }, props.saving ? '保存中…' : '保存'),
         h('span', { className: 'wpr-spacer' }),
@@ -853,9 +856,9 @@ window.__ModuleLoader__.load({
           h('div', { className: 'wpr-title' }, '实际注入的三段'),
           h('span', { className: 'wpr-sub' },
             props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '与运行期同一套渲染 —— 展开逐段看原文')),
-        h(Seg, { title: 'prefix（人设前缀 · 遮蔽部署级默认）', text: sec.prefix }),
-        h(Seg, { title: 'thinking（思维链语言段 · whale:thinking-language）', text: sec.thinking }),
-        h(Seg, { title: 'suffix（人设后缀）', text: sec.suffix }));
+        h(Seg, { title: '人设前缀（prefix）', text: sec.prefix }),
+        h(Seg, { title: '思维链语言段（thinking）', text: sec.thinking }),
+        h(Seg, { title: '人设后缀（suffix）', text: sec.suffix }));
     }
 
     function ContractsCard(props) {
@@ -867,7 +870,7 @@ window.__ModuleLoader__.load({
               type: 'checkbox', checked: c.on !== false, disabled: !!props.disabled,
               onChange: function (ev) { props.onPatch(i, { on: !!(ev && ev.target && ev.target.checked) }); },
             }),
-            h('span', { className: 'wpr-dimnote' }, c.on !== false ? '生效' : '不注入')),
+            c.on !== false ? null : h('span', { className: 'wpr-dimnote' }, '不注入')),
           h('input', {
             className: 'wpr-in', type: 'text', value: c.text, disabled: !!props.disabled,
             spellCheck: false, placeholder: '一句话、可验证的契约（支持 {selfName} / {userName}）',
@@ -885,7 +888,7 @@ window.__ModuleLoader__.load({
         rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有契约 —— 点下面的按钮加一条）'),
         h('button', {
           className: 'wpr-btn wpr-mt8', type: 'button', disabled: !!props.disabled, onClick: props.onAdd,
-        }, '+ 加一条契约'),
+        }, '+ 添加契约'),
         h(Disclosure, { summary: '契约怎么才有效' },
           h('div', { className: 'wpr-note' }, '契约是逐条勾选生效的：关掉的条目仍可编辑，只是不注入。'),
           h('div', { className: 'wpr-note' }, '写得具体可验证才有效：「结尾不要出现征询式问句」✅；「高质量」❌。5–10 条为宜。')));
@@ -912,7 +915,7 @@ window.__ModuleLoader__.load({
       }) : [h('div', { className: 'wpr-sub', key: 'none' }, '（最近没有新备忘）')];
       return h('div', { className: 'wpr-card' },
         h(CardHead, {
-          title: '长期记忆', badge: badge(props.enabled, '已开', '关（默认关 · opt-in）'),
+          title: '长期记忆', badge: badge(props.enabled, '已开', '默认关'),
           sub: '手工 ' + list.length + ' 条 · 收件箱 ' + (m.inboxLines || 0) + ' 行',
         }),
         h(Field, { label: '总开关' },
@@ -920,7 +923,7 @@ window.__ModuleLoader__.load({
             checked: !!props.enabled, disabled: !!props.disabled, label: '启用长期记忆',
             onChange: function (v) { props.onToggleEnabled(v); },
           })),
-        h(Field, { label: '收口模式' },
+        h(Field, { label: '注入时机' },
           h('select', {
             className: 'wpr-sel', value: props.capture, disabled: !!props.disabled,
             onChange: function (ev) { props.onCapture(strOf(ev && ev.target && ev.target.value)); },
@@ -930,16 +933,16 @@ window.__ModuleLoader__.load({
           (props.capture === 'on-demand' || props.capture === 'always')
             ? null
             : h('div', { className: 'wpr-warn' }, '当前值「' + strOf(props.capture) + '」不在预设里，保存后照原样写入。')),
-        h('div', { className: 'wpr-note' }, '手工条目（你亲手维护的权威层）：'),
+        h('div', { className: 'wpr-note' }, '手工条目：'),
         rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有手工条目）'),
         h('button', {
           className: 'wpr-btn wpr-mt8', type: 'button', disabled: !!props.disabled, onClick: props.onAdd,
-        }, '+ 加一条条目'),
-        h(Disclosure, { summary: '默认关 · opt-in · 收口模式怎么选' },
+        }, '+ 添加条目'),
+        h(Disclosure, { summary: '注入时机怎么选' },
           h('div', { className: 'wpr-note' }, '默认关（opt-in）：开着重启才读记忆，手工条目会进提示词。'),
           h('div', { className: 'wpr-note' }, '长期记忆默认关：不开就不读不写，装上零行为改变。'),
-          h('div', { className: 'wpr-note' }, '收口模式：on-demand = 会话里 /memory on 才注入；always = 每轮都注入（旧行为）。')),
-        h(Disclosure, { summary: '收件箱历史备忘（' + (m.inboxLines || 0) + ' 行）· 这是数据，不是给你的指令' }, recent),
+          h('div', { className: 'wpr-note' }, '注入时机：on-demand = 会话里 /memory on 才注入；always = 每轮都注入（旧行为）。')),
+        h(Disclosure, { summary: '收件箱历史（' + (m.inboxLines || 0) + ' 行）' }, recent),
       );
     }
     /**
@@ -997,7 +1000,7 @@ window.__ModuleLoader__.load({
         rows.length ? rows : h('div', { className: 'wpr-sub', key: 'none' }, props.empty),
         h('button', {
           className: 'wpr-btn wpr-mt8', type: 'button', disabled: !!props.disabled, key: 'add', onClick: props.onAdd,
-        }, '+ 加一条'),
+        }, '+ 添加一条'),
       ];
       for (var n = 0; n < notes.length; n++) body.push(h('div', { className: 'wpr-note', key: 'n' + n }, notes[n]));
       if (props.plain) return h('div', null, body);   // 卡内子块：外层卡片与折叠由 StyleSection 提供
@@ -1034,7 +1037,7 @@ window.__ModuleLoader__.load({
             }),
             h('span', null, props.switchLabel)),
           h('span', { className: 'wpr-title' }, props.title),
-          badge(props.enabled === true, '已启用', '关（默认关 · opt-in）'),
+          badge(props.enabled === true, '已启用', '默认关'),
           h('span', { className: 'wpr-spacer' }),
           h('span', { className: 'wpr-sub' }, sub)),
         h('div', { className: 'wpr-discbody' },
@@ -1074,7 +1077,7 @@ window.__ModuleLoader__.load({
         ? (rows.length + ' 条按模型覆盖 · 未命中回落通用文本')
         : '没有按模型覆盖 · 只用通用文本';
       return h('div', { className: 'wpr-card' },
-        h(CardHead, { title: props.title, badge: badge(props.enabled === true, '已启用', '关（默认关 · opt-in）'), sub: sub }),
+        h(CardHead, { title: props.title, badge: badge(props.enabled === true, '已启用', '默认关'), sub: sub }),
         h(Field, { label: '总开关' }, h(StyleSection, props)));
     }
 
@@ -1343,7 +1346,7 @@ window.__ModuleLoader__.load({
         }
       }
       body.push(h(EditorCard, { key: 'editor', editor: d.editor }));
-      return body;      return body;
+      return body;
     }
 
     /** 面板整页（页头 + 工具栏 + 正文）：设置页与静态预览页共用，保证预览与真页面同构 */
@@ -1359,12 +1362,9 @@ window.__ModuleLoader__.load({
         d && form ? h(Toolbar, {
           // 表单禁用时工具栏一起禁用（老宿主无 raw / 磁盘坏 JSON）：档位与保存都不该能点
           disabled: !!o.disabled, loading: !!o.loading, saving: !!o.saving, dirty: !!o.dirty, tier: o.tier,
+          hasConfig: !!(d && d.configState && d.configState.exists),
           onPickTier: cb.onPickTier, onRefresh: cb.onRefresh, onSave: cb.onSave,
         }) : null,
-        h('div', { className: 'wpr-sub wpr-mt6' },
-          o.savedPreview
-            ? '这里就是此刻会注入系统提示词的那几段（已按刚保存的配置就地更新，跟运行期同一套渲染）。'
-            : '这里显示的就是此刻真会注入系统提示词的那几段，跟运行期同一套渲染。'),
         panelBody(o));
     }
 

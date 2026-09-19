@@ -249,7 +249,7 @@ const toneCard = flatText(H.StyleCard(Object.assign({}, cardProps, {
 })))
 const selfCardSame = [
   '按模型指定自称', '1 条 · 逐模型覆盖上面两档',
-  '模型关键词，如 grok-4.7', '自称，如 小七', '+ 加一条',
+  '模型关键词，如 grok-4.7', '自称，如 小七', '+ 添加一条',
   '匹配顺序：精确命中 → 最长子串命中 → 都没中才回落到上面两档。例：关键词 grok-4.7 → 自称 小七，能命中 x-ai/grok-4.7-flash。',
   '关键词按子串匹配、忽略大小写；空关键词或空自称的行保存时会丢弃。',
 ].every((x) => selfCard.indexOf(x) >= 0)
@@ -257,8 +257,8 @@ const selfCardSame = [
 t('N4 渲染：自称卡文案逐字未退化 + 形象 / 语气卡要件齐全（徽标 / 开关 / 通用文本 / 按模型表 / 预设按钮）',
   selfCardSame
   && ['形象（appearance）', '已启用', '1 条按模型覆盖 · 未命中回落通用文本', '总开关', '启用形象设定',
-    '通用文本', '按模型覆盖', '+ 加一条', '匹配顺序'].every((x) => appearanceCard.indexOf(x) >= 0)
-  && ['回复语气（tone）', '关（默认关 · opt-in）', '启用回复语气', '预设', '严肃', '温柔', '关着的时候，下面填了内容也不会注入']
+    '通用文本', '按模型覆盖', '+ 添加一条', '匹配顺序'].every((x) => appearanceCard.indexOf(x) >= 0)
+  && ['回复语气（tone）', '默认关', '启用回复语气', '预设', '严肃', '温柔', '关着的时候，下面填了内容也不会注入']
     .every((x) => toneCard.indexOf(x) >= 0))
 
 /* ─────────── 0.9.1 追加：折叠默认收起（样式只一层的门在 tests/ui-css-scope.mjs 的 C1–C11）───
@@ -292,7 +292,7 @@ t('N6 折叠默认收起（details 一律没有 open），且内容仍在渲染�
 t('N6b 本地编辑器噪声块默认收起、要用的按钮留在折外',
   textOf(edDetails[0]).indexOf('它是本仓自带的独立本地面板') >= 0
   && textOf(edDetails[0]).indexOf('node scripts/ui.mjs --port 8787') >= 0
-  && ccNodes.some((n) => typeof n.type === 'string' && n.type === 'button' && textOf(n).indexOf('+ 加一条契约') >= 0))
+  && ccNodes.some((n) => typeof n.type === 'string' && n.type === 'button' && textOf(n).indexOf('+ 添加契约') >= 0))
 
 // 基础层 CSS 的硬纪律：不碰宿主全局、不覆盖宿主变量、没有裸元素选择器与 !important、颜色只走宿主变量
 const cssSel = (H.css || '').split('}').filter((r) => r.indexOf('{') >= 0).map((r) => r.slice(0, r.indexOf('{')).trim())
@@ -327,8 +327,8 @@ const secTree = H.SectionsCard({
 })
 const secText = textOf(secTree)
 t('N6c 三段预览默认收起（正文不渲染、摘要与字符数在）',
-  secText.indexOf('prefix（人设前缀 · 遮蔽部署级默认）') >= 0 && secText.indexOf('PREFIX-BODY') < 0
-  && secText.indexOf('thinking（思维链语言段 · whale:thinking-language）') >= 0 && secText.indexOf('THINK-BODY') < 0
+  secText.indexOf('人设前缀（prefix）') >= 0 && secText.indexOf('PREFIX-BODY') < 0
+  && secText.indexOf('思维链语言段（thinking）') >= 0 && secText.indexOf('THINK-BODY') < 0
   && secText.indexOf('11 字符') >= 0)
 
 // 整页渲染门：把 panelView 的整棵树**走一遍**（flatText 会真的调用每个函数组件）——
@@ -347,3 +347,18 @@ const wholeText = flatText(H.panelView({
 t('N9 整页渲染门：五组标题、状态条、折叠与本地编辑器都在（组件参数传错会当场抛）',
   ['已启用', '配置', '思维链', '我是谁', '我怎么说话', '我的硬约束', '我记住什么', '此刻注入什么',
     '本地编辑器（可选）', '形象与语气', '称呼与自称', '立场与后缀'].every((x) => wholeText.indexOf(x) >= 0))
+
+/* ─────────── 2026-09-19 追加：工具栏「保存」的可点条件（干净 DSH_HOME 实机核对带出来的）───
+ * 为什么不是「!dirty 就禁用」：磁盘上还没有配置文件时，面板是用户落出第一份配置的路径之一；
+ * 那一步 form 与 defaults 相同（dirty=false），一刀切禁用等于把这条路堵死。
+ */
+const tbSave = (p) => nodesOf(H.Toolbar(Object.assign({
+  disabled: false, loading: false, saving: false, tier: 'flash',
+  onPickTier: noop, onRefresh: noop, onSave: noop,
+}, p))).filter((n) => n.type === 'button' && textOf(n).indexOf('保存') >= 0)[0]
+t('N10 保存按钮：有配置文件且无改动才禁用；没配置文件时保持可点',
+  tbSave({ dirty: false, hasConfig: true }).props.disabled === true
+  && tbSave({ dirty: false, hasConfig: false }).props.disabled === false
+  && tbSave({ dirty: true, hasConfig: false }).props.disabled === false
+  && tbSave({ dirty: true, hasConfig: true }).props.disabled === false)
+
