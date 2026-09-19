@@ -1,6 +1,6 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "DeepSeek Harness adapter of whale-persona: registers the persona system-prompt sections (character, per-item work contracts, thinking-chain language, confirmation-gated long-term memory). Rendering core is shared at repo root core/ (also used by the ZCode adapter).",
   "type": "module",
   "main": "index.js",

@@ -86,14 +86,14 @@
   <!-- 状态条：总开关 / 思维链语言（与设置面板的顺序一致） -->
   <div class="card">
     <div class="row"><label>启用本插件人设</label><input type="checkbox" data-k="enabled" id="enabled"></div>
+    <div class="row"><label>注入人设段</label><input type="checkbox" data-p="enabled" id="pEnabled"></div>
     <div class="row"><label>思维链语言</label><select data-k="thinkingLanguage" id="thinkingLanguage"></select></div>
-    <details class="fold"><summary>说明：这两个开关各管什么</summary>
-      <p class="hint ml0">关掉总开关 = 完全没有人设（不是回到宿主默认人设）；卸载插件才是回到默认。思维链语言 off = 不干预（跟随模型）。本页是自己的一套颜色，不依赖也不覆盖别的插件。</p></details>
+    <details class="fold"><summary>说明：这三个开关各管什么</summary>
+      <p class="hint ml0">三个开关是两级：关掉「启用本插件人设」= 完全没有人设（不是回到宿主默认人设，卸载插件才是）；关掉「注入人设段」只停人设那一段（前后缀），长期记忆照旧。思维链语言 off = 不干预（跟随模型）。本页自己一套颜色，不依赖也不覆盖别的插件。</p></details>
   </div>
 
   <p class="grp">我是谁<span class="grphint">自称 · 称呼 · 立场</span></p>
   <div class="card"><h2>称呼与自称</h2>
-    <div class="row"><label>启用 persona 段</label><input type="checkbox" data-p="enabled" id="pEnabled"></div>
     <div class="row"><label>自称 · flash 档</label><input type="text" data-p="selfNameFlash" id="selfNameFlash"></div>
     <div class="row"><label>自称 · pro 档</label><input type="text" data-p="selfNamePro" id="selfNamePro"></div>
     <div class="row"><label>它怎么称呼你</label><input type="text" data-p="userName" id="userName"></div>
@@ -105,12 +105,12 @@
     <div class="row"><label>立场正文</label><textarea data-p="character" id="character" placeholder="整段自定义，支持 {selfName} / {userName}"></textarea></div>
     <div class="row"><label>后缀</label><input type="text" data-p="suffix" id="suffix" placeholder="追加在提示词末尾的一句，支持 {{cwd}}"></div>
     <details class="fold"><summary>说明：{{cwd}} 与其它变量</summary>
-      <p class="hint ml0">末尾句支持 {{cwd}}（会替换成当前工作目录）；其余 {{变量}} 原样保留不解析。</p></details>
+      <p class="hint ml0">末尾句支持 {{cwd}}：这里显示成 &lt;当前工作目录&gt;，会话里会替换成真实路径；其余 {{变量}} 原样保留不解析。</p></details>
   </div>
 
-  <p class="grp">我怎么说话<span class="grphint">形象 / 语气 · 都是 opt-in</span></p>
+  <p class="grp">我怎么说话<span class="grphint">形象 / 语气</span></p>
   <div class="card"><h2>形象与语气</h2>
-    <p class="hint ml0">两段都是 opt-in（默认关），注入在「立场正文」之后、「工作契约」之前；按模型覆盖命中优先，没命中回落通用文本。</p>
+    <p class="hint ml0">两段都出厂默认关，注入在「立场正文」之后、「工作契约」之前；按模型覆盖命中优先，没命中回落通用文本。</p>
     <h3>形象（appearance）</h3>
     <div class="row"><label>启用形象</label><input type="checkbox" id="aEnabled"></div>
     <div class="row"><label>通用形象</label><textarea id="aText" placeholder="例：你是一位 20 岁的女性，身高 1.75 m。支持 {selfName} / {userName} 占位符"></textarea></div>
@@ -135,11 +135,11 @@
       <p class="hint ml0">写得具体可验证才有效：「结尾不要出现征询式问句」✅；「高质量」❌。5–10 条为宜；关掉的条目仍可编辑，只是不注入。</p></details>
   </div>
 
-  <p class="grp">我记住什么<span class="grphint">长期记忆 · 默认关</span></p>
+  <p class="grp">我记住什么<span class="grphint">长期记忆</span></p>
   <div class="card"><h2>长期记忆</h2>
     <div class="row"><label>启用长期记忆</label><input type="checkbox" data-m="enabled" id="mEnabled"></div>
     <div class="row"><label>收件箱确认流</label><input type="checkbox" data-m="inbox" id="mInbox"></div>
-    <div class="row"><label>收口纪律</label><select data-m="capture" id="mCapture">
+    <div class="row"><label>入库纪律</label><select data-m="capture" id="mCapture">
       <option value="on-demand">on-demand（默认：会话里 /memory on 才注入）</option>
       <option value="always">always（每轮都注入）</option></select></div>
     <div class="row"><label>收件箱注入上限</label><input type="number" min="1" data-m="maxEntries" id="mMax"></div>
@@ -153,7 +153,7 @@
 <section>
   <p class="grp">此刻注入什么<span class="grphint">与运行期同一套渲染</span></p>
   <div class="card"><h2>实际注入的三段文本（实时预览）</h2>
-    <div class="row"><label class="shrink0 ml0">预览时视为收口开关已打开</label><input type="checkbox" id="previewCapture" checked></div>
+    <div class="row"><label class="shrink0 ml0">预览时计入入库纪律</label><input type="checkbox" id="previewCapture" checked></div>
     <details class="fold" open><summary>说明：预览不写盘</summary>
       <p class="hint ml0">预览不写盘，用同一套 core/ 渲染 —— 与运行期逐字一致。</p></details>
     <div id="warnings"></div>
@@ -180,7 +180,7 @@ function contractRow(c, i){
   cb.addEventListener("change", function(){ c.on = cb.checked; touched(); });
   row.appendChild(cb);
   row.appendChild(text(null, c.text, function(v){ c.text = v; touched(); }));
-  var del = document.createElement("button"); del.textContent = "删";
+  var del = document.createElement("button"); del.textContent = "删除";
   del.addEventListener("click", function(){ CFG.persona.contracts.splice(i,1); render(); touched(); });
   row.appendChild(del); return row;
 }
@@ -190,7 +190,7 @@ function entryRow(m, i){
   cb.addEventListener("change", function(){ m.on = cb.checked; touched(); });
   row.appendChild(cb);
   row.appendChild(text(null, m.text, function(v){ m.text = v; touched(); }));
-  var del = document.createElement("button"); del.textContent = "删";
+  var del = document.createElement("button"); del.textContent = "删除";
   del.addEventListener("click", function(){ CFG.memory.entries.splice(i,1); render(); touched(); });
   row.appendChild(del); return row;
 }
@@ -234,7 +234,7 @@ function styleRow(key, r, i){
   var v = document.createElement("input"); v.type = "text"; v.className = "v"; v.value = r.v || "";
   v.placeholder = "这个模型用这段文本（支持 {selfName} / {userName}）";
   v.addEventListener("input", function(){ styleRows[key][i].v = v.value; touched(); });
-  var del = document.createElement("button"); del.textContent = "删";
+  var del = document.createElement("button"); del.textContent = "删除";
   del.addEventListener("click", function(){ styleRows[key].splice(i, 1); styleOn[key] = true; renderStyles(); touched(); });
   row.appendChild(k); row.appendChild(v); row.appendChild(del); return row;
 }

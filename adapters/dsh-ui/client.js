@@ -102,7 +102,7 @@ window.__ModuleLoader__.load({
       '.wpr-head{display:flex;align-items:center;gap:8px}',
       '.wpr-h1{font-size:14px;font-weight:600;margin:0}',
       '.wpr-spacer{margin-left:auto}',
-      '.wpr-sub{color:var(--wpr-t2);font-size:12px}',
+      '.wpr-sub{color:var(--wpr-t2);font-size:11.5px}',
       '.wpr-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:2;',
       'padding:8px 0;background:var(--dsw-alias-bg-base,#141416);border-bottom:1px solid var(--wpr-line-soft)}',
       '.wpr-tier{display:inline-flex;border:1px solid var(--wpr-line);border-radius:var(--wpr-r-ctl);overflow:hidden;background:var(--wpr-inset-bg)}',
@@ -140,13 +140,14 @@ window.__ModuleLoader__.load({
       '.wpr-btn.wpr-primary:hover:not([disabled]){background:var(--wpr-accent-hover)}',
       '.wpr-btn.wpr-dirty{border-color:var(--wpr-accent);font-weight:600}',
       '.wpr-btn.wpr-icon{padding:0 8px}',
+      '.wpr-btn.wpr-danger{color:var(--wpr-err)}',
       '.wpr-chk{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none;font-size:12px}',
       '.wpr-chk input{width:14px;height:14px;margin:0;accent-color:var(--wpr-accent)}',
-      '.wpr-hint{color:var(--wpr-t3);font-size:12px;margin:2px 0 0}',
-      '.wpr-note{color:var(--wpr-t3);font-size:12px;margin:4px 0 0}',
+      '.wpr-hint{color:var(--wpr-t3);font-size:11px;margin:2px 0 0}',
+      '.wpr-note{color:var(--wpr-t3);font-size:11px;margin:4px 0 0}',
       '.wpr-warn{color:var(--wpr-warn);font-size:12px}',
       '.wpr-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;word-break:break-all;user-select:text;-webkit-user-select:text}',
-      '.wpr-dimnote{color:var(--wpr-t3);font-size:12px;white-space:nowrap}',
+      '.wpr-dimnote{color:var(--wpr-t3);font-size:11px;white-space:nowrap}',
       '.wpr-mt8{margin-top:8px}',
       '.wpr-mt6{margin-top:6px}',
       '.wpr-mt4{margin-top:4px}',
@@ -178,6 +179,8 @@ window.__ModuleLoader__.load({
       '.wpr-disc[open]>.wpr-discsum::before{content:"▾"}',
       '.wpr-discbody{padding:4px 0 2px}',
       '.wpr-subsec{margin:4px 0 0}',
+      // 展开态里行尾注被内容取代（回落规则卡内已写明），避免同句读两遍 + 800px 下的截断
+      '.wpr-subsec[open] .wpr-rownote{display:none}',
       // 行表（契约 / 手工条目 / 按模型覆盖）
       '.wpr-contract,.wpr-map-row{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid var(--wpr-line-soft)}',
       '.wpr-contract:first-child,.wpr-map-row:first-child{border-top:0}',
@@ -192,7 +195,7 @@ window.__ModuleLoader__.load({
       '.wpr-seghead{display:flex;align-items:center;gap:8px;width:100%;padding:6px 10px;border:0;background:transparent;color:inherit;font:inherit;font-size:12px;cursor:pointer;text-align:left}',
       '.wpr-seghead:hover{background:var(--wpr-hover)}',
       '.wpr-caret{font-size:9px;opacity:.7;width:10px;flex:none}',
-      '.wpr-pre{margin:0;padding:8px 10px;border-top:1px solid var(--wpr-line-soft);max-height:280px;overflow:auto;white-space:pre-wrap;',
+      '.wpr-pre{margin:0;padding:8px 10px;border-top:1px solid var(--wpr-line-soft);max-height:520px;overflow:auto;white-space:pre-wrap;',
       'word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.6;user-select:text;-webkit-user-select:text}',
       '.wpr-empty{color:var(--wpr-t3);font-style:italic}',
       '.wpr-off{opacity:.6}',
@@ -346,6 +349,9 @@ window.__ModuleLoader__.load({
         // 宿主上一次真实注入用的模型 id（界面上的模型显示名通常不是它，见 core/lastModel.js）
         seenModel: strOf(d && d.lastModel),
         enabled: !(d && d.enabled === false),
+        // 二级开关：人设段（persona.enabled，出厂 true）。面板平时不暴露它，只在异常态（总开关开 + 这段关）
+        // 显示一枚徽标 —— 否则用户会遇到"已启用却什么都不注入"而无从排查。
+        personaOn: !(raw.persona && raw.persona.enabled === false),
         exists: d && d.exists !== undefined ? !!d.exists : !!cs.exists,
         thinkingLanguage: strOf(d && d.thinkingLanguage) || 'off',
         selfName: objOf(d && d.selfName),
@@ -362,6 +368,9 @@ window.__ModuleLoader__.load({
           entries: numOf(mem.entries !== undefined ? mem.entries : mem.manualEntries),
           maxEntries: numOf(mem.maxEntries),
           inboxLines: numOf(mem.inboxLines),
+          // 宿主下发了 ≠ 面板拿得到：这里是一层显式字段白名单，漏一个字段就是"静默丢字段"
+          // （2026-09-19 实测：宿主 payload 有 inboxPending=1，但没在这里映射 → 卡片那句永远不显示）
+          inboxPending: numOf(mem.inboxPending),
           recent: recent,
         },
         warnings: seg.warnings,
@@ -748,6 +757,11 @@ window.__ModuleLoader__.load({
       var o = useState(false);
       var open = o[0];
       var setOpen = o[1];
+      // 卡头「全部展开/收起」用 force + token 推给三段：token 每次点都变，所以同方向连点也生效；
+      // 两下按钮之间每段仍能各自点开（不是受控组件）
+      useEffect(function () {
+        if (props.force !== undefined) setOpen(!!props.force);
+      }, [props.token]);
       var text = strOf(props.text);
       return h('div', { className: 'wpr-seg' },
         h('button', {
@@ -757,7 +771,7 @@ window.__ModuleLoader__.load({
           h('span', { className: 'wpr-caret' }, open ? '▾' : '▸'),
           h('span', { className: 'wpr-title' }, props.title),
           h('span', { className: 'wpr-spacer' }),
-          h('span', { className: 'wpr-dimnote' }, text ? (text.length + ' 字符') : '空段')),
+          h('span', { className: 'wpr-dimnote' }, text ? (text.length + ' 字符') : '空 —— 不注入')),
         open ? h('pre', { className: 'wpr-pre' + (text ? '' : ' wpr-empty') }, text ? text : EMPTY_SEG) : null);
     }
 
@@ -783,6 +797,10 @@ window.__ModuleLoader__.load({
             })),
           h('span', { className: 'wpr-dot' + (props.enabled ? ' wpr-dot-on' : '') }, '●'),
           h('span', null, props.enabled ? '已启用' : '已停用'),
+          // 异常态：总开关开着、人设段却被关掉了 —— 这时候三段都不注入，必须点名
+          (props.enabled && props.personaOn === false)
+            ? h('span', { className: 'wpr-badge wpr-off', title: 'config.json 里 persona.enabled=false：人设段不注入（总开关之外的二级开关）' }, '人设段关')
+            : null,
           h('span', { className: 'wpr-sep' }, '·'),
           h('span', null, label),
           h('span', { className: 'wpr-sep' }, '·'),
@@ -852,14 +870,25 @@ window.__ModuleLoader__.load({
 
     function SectionsCard(props) {
       var sec = props.sections || {};
+      // 2026-09-19 外部评审采纳：验证"我改完注入了什么"要逐个点开三段太啰嗦，卡头给一个一次性开关。
+      // 只在卡头加按钮 —— 永远不往折叠行里塞派生/截断文本（"与运行期逐字一致"是这块的卖点）。
+      var all = useState(false);
+      var allOpen = all[0];
+      var setAllOpen = all[1];
+      var tickState = useState(0);
+      var tick = tickState[0];
+      var setTick = tickState[1];
+      function toggleAll() { setAllOpen(!allOpen); setTick(tick + 1); }
       return h('div', { className: 'wpr-card' },
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '实际注入的三段'),
           h('span', { className: 'wpr-sub' },
-            props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '与运行期同一套渲染 —— 展开逐段看原文')),
-        h(Seg, { title: '人设前缀（prefix）', text: sec.prefix }),
-        h(Seg, { title: '思维链语言段（thinking）', text: sec.thinking }),
-        h(Seg, { title: '人设后缀（suffix）', text: sec.suffix }));
+            props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '与运行期同一套渲染 —— 展开逐段看原文'),
+          h('span', { className: 'wpr-spacer' }),
+          h('button', { className: 'wpr-btn wpr-icon', type: 'button', onClick: toggleAll }, allOpen ? '全部收起' : '全部展开')),
+        h(Seg, { key: 'p', title: '人设前缀（prefix）', text: sec.prefix, force: allOpen, token: tick }),
+        h(Seg, { key: 't', title: '思维链语言段（thinking）', text: sec.thinking, force: allOpen, token: tick }),
+        h(Seg, { key: 's', title: '人设后缀（suffix）', text: sec.suffix, force: allOpen, token: tick }));
     }
 
     /**
@@ -943,14 +972,16 @@ window.__ModuleLoader__.load({
       }
 
       var rows = s.presets.map(function (p, i) {
-        var meta = p.id + (p.contracts ? ' · 契约 ' + p.contracts + ' 条' : '') + (p.hasCharacter ? ' · 有正文' : '')
+        // 名称里已经写了"五条…"的（如「起点 · 五条通用工作契约」）不再追加「契约 5 条」——否则一行说两遍
+        var labelHasCount = /[0-9一二三四五六七八九十]+\s*条/.test(String(p.label || ''));
+        var meta = p.id + ((p.contracts && !labelHasCount) ? ' · 契约 ' + p.contracts + ' 条' : '') + (p.hasCharacter ? ' · 有正文' : '')
           + (p.hasTone ? ' · 有语气' : '') + (p.hasAppearance ? ' · 有形象' : '') + (p.author ? ' · ' + p.author : '');
         return h('div', { className: 'wpr-contract', key: 'p' + i },
           h('span', { className: 'wpr-sub' }, (p.label || p.id) + ' — ' + meta),
-          h('button', { className: 'wpr-btn', type: 'button', disabled: s.busy, title: '应用这个预设（现状先自动存为 autosave）', onClick: function () { post('apply', { id: p.id }, '已应用 ' + p.id + ' · 下一步生效'); } }, '应用'),
+          h('button', { className: 'wpr-btn wpr-primary', type: 'button', disabled: s.busy, title: '应用这个预设（现状先自动存为 autosave）', onClick: function () { post('apply', { id: p.id }, '已应用 ' + p.id + ' · 下一步生效'); } }, '应用'),
           h('button', { className: 'wpr-btn', type: 'button', disabled: s.busy, title: '导出为酒馆 v2 角色卡（可拿去分享/导入其它客户端）', onClick: function () { download(p.id, 'tavern'); } }, '导出卡'),
           h('button', { className: 'wpr-btn', type: 'button', disabled: s.busy, title: '导出为本引擎预设文件', onClick: function () { download(p.id, 'whale'); } }, '导出'),
-          h('button', { className: 'wpr-btn wpr-icon', type: 'button', disabled: s.busy, title: '删除这个预设文件（不可撤销）', onClick: function () { post('delete', { id: p.id }, '已删除 ' + p.id); } }, '删除'));
+          h('button', { className: 'wpr-btn wpr-icon wpr-danger', type: 'button', disabled: s.busy, title: '删除这个预设文件（不可撤销）', onClick: function () { post('delete', { id: p.id }, '已删除 ' + p.id); } }, '删除'));
       });
 
       var report = null;
@@ -968,25 +999,28 @@ window.__ModuleLoader__.load({
           sub: arrOf(s.presets).length + ' 个 · 应用后下一步生效 · 目录 ' + (s.dir || '（读取中）'),
         }),
         s.msg ? h('div', { className: s.bad ? 'wpr-warn' : 'wpr-sub' }, s.msg) : null,
-        rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有预设文件 —— 点下面的「存为预设」，或导入一张卡）'),
-        h(Field, { label: '存为预设（把当前人设文件化，可分享）' },
+        rows.length ? rows : h('div', { className: 'wpr-sub' }, '（还没有预设文件 —— 展开下面的「存为预设 · 导入」即可创建或导入）'),
+        // 2026-09-19 外部评审采纳：这两个表单偶尔才用，常驻展开白占约 300px 纵向；默认收进折叠块。
+        // 预设列表行保持常显（那才是要扫的）；注意 Disclosure 的内容仍在渲染树里，勿改成条件渲染。
+        h(Disclosure, { summary: '存为预设 · 导入酒馆角色卡 / 本引擎预设' },
+        h(Field, { label: '存为预设' },
           h(TextInput, { value: s.newId, disabled: s.busy, placeholder: 'id：只能字母数字_-', onChange: function (v) { upd({ newId: v }); } }),
           h(TextInput, { value: s.newLabel, disabled: s.busy, placeholder: '显示名（可留空）', onChange: function (v) { upd({ newLabel: v }); } }),
           h('button', {
             className: 'wpr-btn wpr-mt4', type: 'button', disabled: s.busy,
             onClick: function () { post('save', { id: s.newId, label: s.newLabel || s.newId }, '已存为预设 ' + s.newId); },
           }, '存为预设')),
-        h(Field, { label: '导入（酒馆角色卡 v1/v2 JSON，或本引擎预设）' },
+        h(Field, { label: '导入' },
           h('textarea', {
             className: 'wpr-in', rows: 3, value: s.paste, spellCheck: false,
-            placeholder: '把卡的 JSON 粘到这里，或选一个 .json 文件',
+            placeholder: '把酒馆角色卡（v1/v2 JSON）粘到这里，或选一个 .json 文件',
             onChange: function (ev) { upd({ paste: strOf(ev && ev.target && ev.target.value) }); },
           }),
           h('input', { className: 'wpr-in wpr-mt4', type: 'file', accept: '.json,application/json', onChange: pickFile }),
           h('button', {
             className: 'wpr-btn wpr-mt4', type: 'button', disabled: s.busy,
             onClick: function () { post('import', { json: s.paste }, '导入完成（不会自动应用）'); },
-          }, '导入')),
+          }, '导入'))),
         report,
         h(Disclosure, { summary: '预设是什么 · 与酒馆卡怎么对应 · 边界在哪' },
           h('div', { className: 'wpr-note' }, '预设 = 一个人格快照文件（character / 契约 / 自称 / 称呼 / 立场 / 语气 / 形象 / 思维链语言），放在上面的目录里，复制给别人即可分享。'),
@@ -1053,7 +1087,8 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'wpr-card' },
         h(CardHead, {
           title: '长期记忆', badge: badge(props.enabled, '已开', '默认关'),
-          sub: '手工 ' + list.length + ' 条 · 收件箱 ' + (m.inboxLines || 0) + ' 行',
+          sub: '手工 ' + list.length + ' 条 · 收件箱 ' + (m.inboxLines || 0) + ' 行'
+            + (m.inboxPending ? (' · 待确认 ' + m.inboxPending + ' 条') : ''),
         }),
         h(Field, { label: '总开关' },
           h(CheckBox, {
@@ -1076,8 +1111,7 @@ window.__ModuleLoader__.load({
           className: 'wpr-btn wpr-mt8', type: 'button', disabled: !!props.disabled, onClick: props.onAdd,
         }, '+ 添加条目'),
         h(Disclosure, { summary: '注入时机怎么选' },
-          h('div', { className: 'wpr-note' }, '默认关（opt-in）：开着重启才读记忆，手工条目会进提示词。'),
-          h('div', { className: 'wpr-note' }, '长期记忆默认关：不开就不读不写，装上零行为改变。'),
+          h('div', { className: 'wpr-note' }, '开着重启才读记忆，手工条目会进提示词；不开则不读不写，装上零行为改变。'),
           h('div', { className: 'wpr-note' }, '注入时机：on-demand = 会话里 /memory on 才注入；always = 每轮都注入（旧行为）。')),
         h(Disclosure, { summary: '收件箱历史（' + (m.inboxLines || 0) + ' 行）' }, recent),
       );
@@ -1088,7 +1122,7 @@ window.__ModuleLoader__.load({
      */
     var SELF_NAME_CARD = {
       title: '按模型指定自称',
-      subtitle: function (n) { return n + ' 条 · 逐模型覆盖上面两档'; },
+      subtitle: function (n) { return n + ' 条 · 按模型覆盖上面两档'; },
       empty: '（没配就只用上面两档）',
       keyPlaceholder: '模型关键词，如 grok-4.7',
       valuePlaceholder: '自称，如 小七',
@@ -1159,10 +1193,22 @@ window.__ModuleLoader__.load({
     function StyleSection(props) {
       var rows = arrOf(props.rows);
       var presets = arrOf(props.presets);
-      var sub = rows.length
-        ? (rows.length + ' 条按模型覆盖 · 未命中回落通用文本')
-        : '没有按模型覆盖 · 只用通用文本';
-      return h('details', { className: 'wpr-disc wpr-subsec' },
+      // 行尾注：2026-09-19 外部评审采纳 —— 原句在 800px 宿主里被截断（"1 条按模型覆…"），
+      // 缩短到 4 个字以内；展开子卡时它还由 CSS 隐藏（同样的回落规则卡内已经说了）。
+      var sub = rows.length ? ('按模型 ' + rows.length + ' 条') : '无覆盖';
+      // 勾上「启用」的那一下自动展开：原来勾完开关却看不到下面要填的东西 = 开着开关零注入。
+      // 载入时不展开（已经配好的卡不该再占半屏），只在「关 → 开」的跃迁上展开。
+      var prevState = useState(props.enabled === true);
+      var prevEnabled = prevState[0];
+      var setPrevEnabled = prevState[1];
+      var openState = useState(false);
+      var opened = openState[0];
+      var setOpened = openState[1];
+      useEffect(function () {
+        if (props.enabled === true && prevEnabled === false) setOpened(true);
+        if (prevEnabled !== props.enabled) setPrevEnabled(props.enabled === true);
+      }, [props.enabled]);
+      return h('details', { className: 'wpr-disc wpr-subsec', open: opened === true ? true : undefined },
         h('summary', { className: 'wpr-discsum' },
           h('label', {
             className: 'wpr-chk',
@@ -1176,7 +1222,7 @@ window.__ModuleLoader__.load({
           h('span', { className: 'wpr-title' }, props.title),
           badge(props.enabled === true, '已启用', '默认关'),
           h('span', { className: 'wpr-spacer' }),
-          h('span', { className: 'wpr-sub' }, sub)),
+          h('span', { className: 'wpr-sub wpr-rownote' }, sub)),
         h('div', { className: 'wpr-discbody' },
           h('div', { className: 'wpr-hint' }, props.switchHint),
           h(Field, { label: '通用文本' },
@@ -1226,7 +1272,7 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'wpr-card' },
         h(CardHead, {
           title: '形象与语气',
-          sub: '两段都是 opt-in（默认关）· 注入在「立场正文」之后、「工作契约」之前',
+          sub: '注入在「立场正文」之后、「工作契约」之前',
         }),
         h(Field, { label: '总开关' },
           h('div', { className: 'wpr-fbody' },
@@ -1343,19 +1389,15 @@ window.__ModuleLoader__.load({
       body.push(h(Banner, { key: 'banner', status: sv, notes: notes }));
       // ① 顶部状态条（总开关 / 档位 / 思维链 / 配置路径都在这一张里，全页只出现一次）
       body.push(h(StatusStrip, {
-        key: 'status', data: d, enabled: form.enabled, thinkingLanguage: form.thinkingLanguage, disabled: disabled,
+        key: 'status', data: d, enabled: form.enabled, personaOn: d.personaOn !== false, thinkingLanguage: form.thinkingLanguage, disabled: disabled,
         onToggleEnabled: function (v) { cb.patchForm({ enabled: v }); },
         onThinking: function (v) { cb.patchForm({ thinkingLanguage: v }); },
       }));
 
-      // ①′ 人设预设（0.10.0）—— 一整组：切换 / 另存 / 导入导出；应用后走 cb.onRetry 重读面板
-      body.push(h(GroupTitle, { key: 'g0', text: '人设预设', hint: '可切换 · 可分享 · 可导入酒馆卡' }));
-      body.push(h(PresetCard, { key: 'presets', onApplied: cb.onRetry }));
-
       // ② 我是谁 —— 自称两档 / 按模型指定自称 / 称呼 / 立场与后缀
       body.push(h(GroupTitle, { key: 'g1', text: '我是谁', hint: '自称 · 称呼 · 立场' }));
       body.push(h('div', { className: 'wpr-card', key: 'who' },
-        h(CardHead, { title: '称呼与自称', sub: '改动先落在本地，点「保存」才写入' }),
+        h(CardHead, { title: '称呼与自称' }),
         h(Field, { label: '自称 · flash 档' },
           h(TextInput, { value: form.selfNameFlash, disabled: disabled, onChange: function (v) { cb.patchForm({ selfNameFlash: v }); } })),
         h(Field, { label: '自称 · pro 档' },
@@ -1380,11 +1422,15 @@ window.__ModuleLoader__.load({
       body.push(h('div', { className: 'wpr-card', key: 'stance' },
         h(CardHead, { title: '立场与后缀' }),
         h(Field, { label: '立场（一句话）' },
-          h(TextInput, { value: form.stance, disabled: disabled, onChange: function (v) { cb.patchForm({ stance: v }); } })),
+          h(TextInput, {
+            value: form.stance, disabled: disabled,
+            placeholder: '例：{userName} 的编程搭档，直来直去。（选填；与下面正文都在就都注入）',
+            onChange: function (v) { cb.patchForm({ stance: v }); },
+          })),
         h(Field, { label: '立场正文' },
           h(TextInput, {
             multiline: true, value: form.character, disabled: disabled,
-            placeholder: '整段自定义，支持 {selfName} / {userName}',
+            placeholder: '整段自定义，支持 {selfName} / {userName}；与上一行都在就都注入，留空只注入上一行',
             onChange: function (v) { cb.patchForm({ character: v }); },
           })),
         h(Field, { label: '后缀' },
@@ -1393,10 +1439,10 @@ window.__ModuleLoader__.load({
             onChange: function (v) { cb.patchForm({ suffix: v }); },
           })),
         h(Disclosure, { summary: '说明：{{cwd}} 与其它变量' },
-          h('div', { className: 'wpr-note' }, '支持 {{cwd}}（当前工作目录）；其余 {{变量}} 原样保留不解析。'))));
+          h('div', { className: 'wpr-note' }, '支持 {{cwd}}：设置页拿不到会话的工作目录，所以这里显示成 <当前工作目录>，会话里会被替换成真实路径；其余 {{变量}} 原样保留不解析。'))));
 
       // ③ 我怎么说话 —— 形象 + 语气合成一张卡，两个可折叠小节
-      body.push(h(GroupTitle, { key: 'g2', text: '我怎么说话', hint: '形象 / 语气 · 都是 opt-in' }));
+      body.push(h(GroupTitle, { key: 'g2', text: '我怎么说话', hint: '形象 / 语气' }));
       body.push(h(VoiceCard, {
         key: 'voice',
         sections: [
@@ -1404,7 +1450,7 @@ window.__ModuleLoader__.load({
             key: 'appearance',
             title: '形象（appearance）',
             switchLabel: '启用形象设定',
-            switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
+            switchHint: '出厂默认关：关着的时候，下面填了内容也不会注入。',
             enabled: form.appearanceEnabled,
             text: form.appearanceText,
             placeholder: '例：你是一位 20 岁的女性，身高 1.75 m。',
@@ -1415,7 +1461,7 @@ window.__ModuleLoader__.load({
             notes: [
               '形象是「你是谁／长什么样」的既定事实：不必解释、不要否认，也不要反复强调或拿它加戏；被问到年龄/性别/长相时照它回答。',
             ].concat(modelNotes),
-            note: '形象是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
+            note: '关着时填的内容会留在配置里，打开开关即可生效。',
             disabled: disabled,
             onToggleEnabled: function (v) { cb.patchForm({ appearanceEnabled: v }); },
             onText: function (v) { cb.patchForm({ appearanceText: v }); },
@@ -1427,7 +1473,7 @@ window.__ModuleLoader__.load({
             key: 'tone',
             title: '回复语气（tone）',
             switchLabel: '启用回复语气',
-            switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
+            switchHint: '出厂默认关：关着的时候，下面填了内容也不会注入。',
             enabled: form.toneEnabled,
             text: form.toneText,
             placeholder: '例：语气温柔有耐心：先接住对方的处境再给方案，但该说的问题照样直说。',
@@ -1440,7 +1486,7 @@ window.__ModuleLoader__.load({
             notes: [
               '语气只改措辞与节奏：不改变结论、证据标准与工作契约。',
             ].concat(modelNotes),
-            note: '语气是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',
+            note: '关着时填的内容会留在配置里，打开开关即可生效。',
             disabled: disabled,
             onToggleEnabled: function (v) { cb.patchForm({ toneEnabled: v }); },
             onText: function (v) { cb.patchForm({ toneText: v }); },
@@ -1461,7 +1507,7 @@ window.__ModuleLoader__.load({
       }));
 
       // ⑤ 我记住什么 —— 长期记忆（开关与条目在同一张卡里：原来拆两张既重复又不同步）
-      body.push(h(GroupTitle, { key: 'g4', text: '我记住什么', hint: '长期记忆 · 默认关' }));
+      body.push(h(GroupTitle, { key: 'g4', text: '我记住什么', hint: '长期记忆' }));
       body.push(h(MemoryCard, {
         key: 'memory', mem: d.memory, value: form.entries,
         enabled: form.memoryEnabled, capture: form.memoryCapture, disabled: disabled,
@@ -1486,6 +1532,12 @@ window.__ModuleLoader__.load({
           body.push(h('div', { className: 'wpr-alert', key: 'pw' + sj }, '⚠ ' + shown.warnings[sj]));
         }
       }
+      // ⑦ 人设预设（0.10.0）—— 整组垫底：切换 / 另存 / 导入导出；应用后走 cb.onRetry 重读面板。
+      // 2026-09-19 外部评审采纳：这是"偶尔用一次"的功能，压在首屏会把每天要改的
+      // 称呼/立场挤到折叠以下；整组下沉到面板末尾，首屏留给高频项。
+      body.push(h(GroupTitle, { key: 'g0', text: '人设预设', hint: '可切换 · 可分享 · 可导入酒馆卡' }));
+      body.push(h(PresetCard, { key: 'presets', onApplied: cb.onRetry }));
+
       body.push(h(EditorCard, { key: 'editor', editor: d.editor }));
       return body;
     }
