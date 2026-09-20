@@ -3,6 +3,33 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.12.3（2026-09-20）
+
+### 安全：把「条件反射正则」的信任边界写成文档与提示（CodeQL 告警 #1 的处置）
+
+触发来源：2026-09-20 GitHub Code scanning 报 `#1 js/regex-injection [high]` @ `scripts/reflex/new.mjs:70`
+（原文 `This regular expression is constructed from a command-line argument`）。
+
+判定：**不是注入面**。这条命令是用户在本机给自己建规则用的工具，正则由本人（或本人的 AI 代笔）写，
+信任边界与规则文件 / `config.json` 完全一致（SECURITY.md 早已写明「能写到这两个文件的人，就能影响 AI 行为」）。
+它真正指的是**自伤式 ReDoS**：灾难性回溯的形状会让该步匹配变慢（不抛错、不炸会话，但会卡）。
+为了扫描器变绿去删掉那个编译校验，是拿真功能换安静 —— 不这么做。
+
+- `scripts/reflex/new.mjs` 与 `adapters/dsh/reflex/match.js` 两处 `new RegExp` 旁边写清信任边界与处置依据；
+- `scripts/reflex/check.mjs` 新增 `looksCatastrophic()`：建规则期对「嵌套量词 / 歧义分支套量词」给 WARN（只提示、不拦写盘）；
+- `tests/reflex-rules.mjs` 新增 T6 两条断言钉住它（闸门 15 → 17 项）；
+- `.github/SECURITY.md`「已知设计约束」补同类边界一条 + 英文段同步；
+- 告警按「接受的边界」关闭（`won't fix`，备注含提交号与文档位置）。
+
+### 验证
+
+```
+npm test     # 15 套 exit 0（reflex-rules 17 项、reflex 55 项、路径存在性 5 项）
+npm run sec  # PASS true {"fail":0,"suspect":0,"skip":4}
+实测：node scripts/reflex.mjs new --text '(a+)+$' --pos aaaa --neg bbb --yes → 输出含「灾难性回溯」且退出码 0（警告不拦）
+告警复核：code-scanning/alerts?state=open → 0
+```
+
 ## v0.12.2（2026-09-20）
 
 ### 隐私：公开仓脱敏（测试夹具与注释里的私人词汇），并把脱敏审计补进发布闸门
