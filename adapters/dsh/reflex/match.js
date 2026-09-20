@@ -43,6 +43,8 @@ export function normalize(text) {
     .trim()
 }
 
+/** 规则里的正则**由用户自己写**（信任边界同 config.json）：不做沙箱；编译/执行失败一律当「没命中」放行。
+ *  灾难性回溯是已知边界（会卡顿但不抛错），建规则期由 scripts/reflex/check.mjs 给提示。 */
 function reMatch(pattern, text) {
   if (!pattern) return false
   try {

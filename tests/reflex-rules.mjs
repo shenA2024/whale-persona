@@ -82,5 +82,13 @@ check('T4 文件零变化', readFileSync(rulesFile, 'utf8') === before)
 r = runNew(['--id', 'old-rule', '--tier', 'flash', '--nearAny', '报数', '--reply', 'x', '--pos', '报数', '--yes'])
 check('T5 重复 id 被拦下', r.code === 1 && r.out.includes('已存在'))
 
+// T6 灾难性回溯形状 → 体检给 WARN（提示而非拦下：正则是用户自己写的，信任边界同 config.json）
+r = runNew([
+  '--id', 'born-redos', '--tier', 'flash', '--text', '(a+)+$',
+  '--reply', 'x', '--pos', 'aaaa', '--neg', 'bbb', '--yes',
+])
+check('T6 嵌套量词被提示为灾难性回溯', r.out.includes('灾难性回溯'))
+check('T6 只是警告、不拦写盘', r.code === 0 && r.out.includes('WARN'))
+
 console.log('-- newrule 闸门：' + (failed ? failed + '/' + checks + ' 项失败' : checks + ' 项全过'))
 process.exit(failed ? 1 : 0)

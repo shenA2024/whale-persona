@@ -12,6 +12,13 @@ import { readFileSync, existsSync } from 'node:fs'
 import { rulesPath } from '../../adapters/dsh/reflex/rules.js'
 import { reflexTest } from '../../adapters/dsh/reflex/state.js'
 
+/** 粗判灾难性回溯（ReDoS 形状）：分组里已有量词、分组外又套量词，或含歧义分支的分组再套量词。
+ *  只提示、不拦写盘 —— 信任边界见 .github/SECURITY.md「已知设计约束」（正则是你自己写的，不做沙箱）。 */
+function looksCatastrophic(re) {
+  if (typeof re !== 'string' || !re || re.length > 300) return false
+  return /\(([^()]*[+*][^()]*)\)\s*[+*]/.test(re) || /\(([^()]*\|[^()]*)\)\s*[+*]/.test(re)
+}
+
 const argv = process.argv.slice(2)
 const argOf = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : null }
 const file = rulesPath()
@@ -37,6 +44,7 @@ rules.forEach((r, i) => {
   for (const k of ['text', 'textNot', 'model']) {
     if (!w[k]) continue;
     try { new RegExp(w[k], 'i') } catch (e) { errors.push(at + ' when.' + k + ' 正则编译失败：' + e.message) }
+    if (looksCatastrophic(w[k])) warns.push(at + ' when.' + k + ' 像灾难性回溯（嵌套量词），长消息上会卡顿：' + w[k])
   }
   if (!w.tier && !w.text && !w.model) warns.push(at + ' 没有任何条件（会命中所有消息）');
   if (r.oncePerSession !== undefined && typeof r.oncePerSession !== 'boolean') warns.push(at + ' oncePerSession 不是布尔');

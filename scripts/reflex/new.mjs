@@ -65,6 +65,9 @@ if (!text && !nearAny.length && !keywords.length) errors.push('缺触发条件�
 if (!pos.length) errors.push('缺 --pos（至少一条"这句话必须命中"的正例，访谈第 1 问）')
 if (!neg.length) warns.push('没给 --neg（"这句话绝不该命中"的反例）—— 没有反例就没法证明不会误伤，建议补')
 if (keywords.length && !(minHits > 0)) warns.push('给了 --keywords 但没给 --minHits，按默认 2 处理（词袋至少要两个词同时出现）')
+// 只做「能不能编译」的校验。这里 new RegExp 的输入**就是用户自己写的正则** —— 这条命令是给本人（或本人的 AI）
+// 在本机跑的工具，与规则文件同信任模型，不构成注入面（2026-09-20 CodeQL js/regex-injection 告警 #1 的处置说明见
+// .github/SECURITY.md「已知设计约束」）。灾难性回溯只在建规则期提示：scripts/reflex/check.mjs。
 for (const [label, re] of [['--text', text], ['--textNot', textNot]]) {
   if (!re) continue
   try { new RegExp(re, 'i') } catch (e) { errors.push(label + ' 正则编译失败：' + e.message) }
