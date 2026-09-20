@@ -3,6 +3,33 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.12.1（2026-09-20）
+
+### 修复：把「文案里的路径与数量」变成机器判据（第三方评审走读查出的漂移）
+
+触发来源：2026-09-20 维护者转来第三方 AI（GLM5.3）对 v0.12.0 的走读报告 —— 只读载荷里的提示让 AI 跑
+一个不存在的命令 `tools/check.mjs`（本仓没有 `tools/` 目录）、`reflex/rules.js` 头注释把规则文件落点写成 `whale-suite/`、
+两处 `spawnSync` 未显式写 `shell:false`。复核时又查出同类漂移：跑法注释写成旧文件名、示例与 README 里的落点、
+以及「8 套测试 / 11 组探针」这类写死的数量口径（实际 15 套 / 12 组）。
+
+- 三处路径与落点文案改成实际值；两处 `spawnSync` 补 `shell: false`（安全探针嫌疑项清零）；
+- 新增门禁 `tests/paths.mjs`：扫生产面（`core/` `adapters/` `scripts/`）与文档面（`tests/` `qa/` `docs/` `examples/` `.github/` 与根三件文档），
+  抽出 `node <路径>` 引用，按「文件所在目录 → 仓库根」两级解析后校验存在性，缺一个即失败并点名 `文件:行号`；
+  自带 `--selftest`（种死引用必被抓、活引用必放过）；已接进 `npm test`（第 15 套）；
+- `CONTRIBUTING.md` / `README.md` / `.github/workflows/ci.yml` / 探针头注释的数量口径同步；
+- `package-lock.json` 的版本号从 0.9.1 补齐到本版（与根包 lockstep）；
+- 取舍：`/reflex/state` 的 `hint` 字段**保留**（读该 JSON 的 AI 需要它），只把命令改对 —— 它现在也被新门禁盯着。
+
+### 验证
+
+```
+npm test     # 15 套 exit 0（新增 tests/paths.mjs 4 项：自测 2 + P1 扫 120 条引用 + P2 扫描面非空）
+npm run sec  # PASS true {"fail":0,"suspect":0,"skip":4}（0.12.0 时 suspect:1）；--selftest 仍抓 6 类违规
+反证：把 state.js 文案改回旧值 → node tests/paths.mjs exit 1 并点名 adapters/dsh/reflex/state.js:114；还原后 exit 0
+```
+
+（本版不发 npm：发布通道仍是 GitHub Release 附件。）
+
 ## v0.12.0（2026-09-20）
 
 ### 新能力：条件反射层（reflex）并入本插件
