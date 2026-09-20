@@ -40,6 +40,8 @@ per-step request slimming and per-step tool narrowing — the rule table is pers
 | 工作契约 | 逐条可勾选，`on:false` 即停用；写得具体可验证才有效 |
 | 思维链语言 | 只改**思考**语言，不改答复语言（`off` / `zh-CN` / `en` …） |
 | 长期记忆 | 手工条目（权威层）+ 收件箱（AI 提议 → **人确认** → 只追加式入库） |
+| 分类路由（0.13.0） | 同一道确认闸门推广到**记忆之外**：条目标 `kind`（`pitfall` / `idea` …），**人确认那一刻**按 `memory.sinks` 路由只追加式落进目标文件；不注入提示词、幂等、无路由会报出来；默认空表 = 零行为改变 |
+| 注入体积（0.13.0） | 计量每段字符数与合计（走与渲染**同一条通路**），面板与 CLI 可见；`budget` 超限时可选注入一行提醒 —— **只提醒，永不自动裁剪** |
 | 条件反射（reflex） | 自己写规则，命中即在代码层注入一步指令（正则 / 近似 / 词袋三通道）；匹配不花 token，可选把这一步的请求瘦身、把工具裁到白名单；默认**零规则** |
 | 两个编辑入口 | DSH「设置 → 人设」可编辑面板 + 本仓自带本地编辑器页；**同一套读写纪律** |
 | 零行为改变 | 不写配置 = 三段全空，装上不改变任何行为（有单测钉住） |
@@ -435,13 +437,68 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 | 直接改文件 | `$DSH_HOME/whale-persona/config.json`（ZCode 侧读同一份，定位链见 [adapters/zcode/README.md](adapters/zcode/README.md)）：整体读改写，别只发一个字段 |
 | 对 AI 说（技能） | 装 `skills/whale-persona` 后直接说「给你设个形象：…」「语气温柔点」「用某个模型时形象换成…」，技能会读配置、给前后对照、确认后写回。**只有你明确要求时才改这两段** —— 人设是提示词注入通道，AI 不许自行为自己加设定 |
 
+## 分类路由（0.13.0）：同一道闸门，用在记忆之外
+
+记忆收件箱解决的是"AI 不能替你决定记什么"。但你每天真正在沉淀的还有**坑卡、想法、待落位的笔记**——
+这些以前只靠提示词里的君子协定（"别忘了写坑卡"），恰恰是本插件要消灭的那种东西。分类路由把**同一道
+代码级闸门**覆盖到它们：
+
+```jsonc
+// config.json
+"memory": {
+  "enabled": true,
+  "sinks": {
+    "pitfall": { "path": "D:/notes/坑库.md", "header": "## 坑库\n" },
+    "idea":    { "path": "D:/notes/想法.jsonl", "format": "jsonl" },
+    "note":    { "path": "D:/notes/随手.md", "format": "plain", "template": "{date} {text}" }
+  }
+}
+```
+
+AI 只能写 `status:"proposed"` 的候选（多一个 `"kind":"pitfall"`）；**落盘发生在你确认的那一刻**：
+
+```bash
+node scripts/memory.mjs            # 看有哪些候选、各自 kind 与路由、落到哪
+node scripts/memory.mjs confirm 2  # 确认第 2 条：先追加 confirm 行，再按路由追加进目标文件，然后出队
+```
+
+规则与边界：
+
+- `kind` 缺省 = `"memory"`（注入型，行为与 0.12.x **逐字节相同**）；非 memory 的条目**永不注入提示词**；
+- 三种格式：`md`（默认，模板 `- {text}（{date}）`）/ `plain` / `jsonl`；占位符 `{text} {date} {kind} {tag} {source}`；
+- **幂等**：同 kind + 同正文 + 同目标只写一次（判据在 `sink-log.jsonl`，可审计）；
+- **只追加**：目标文件里已有内容永不被改写；写失败降级为报告，不抛、不半写；
+- 没配路由的 kind 会在确认时被**显式点名**（不静默吞掉）；`kind` 只留 `[a-z0-9_-]`；
+- 【入库纪律】只在**配了路由**时才多出「分类路由」那一段 —— 没配，提示词里一个字都不出现。
+
+## 注入体积（0.13.0）：先把"花了多少"量出来
+
+```bash
+node scripts/inject-size.mjs --cwd D:/<private-repo>     # 用上次会话真实模型计量（--tier/--model/--json 可覆盖）
+```
+
+实测本仓维护者的一份真实配置：
+
+```
+人设正文  1689  74.7%      历史备忘   407  18%
+入库纪律     0     0%      末尾段      37   1.6%
+思考语言   127   5.6%      ------------------
+合计      2260 字符
+```
+
+- 数字来自 `core/measure.js`，走**与渲染同一条通路**（不是另算一份近似值）——面板、CLI、运行期对得上；
+- 设置面板「实际注入的三段」卡头直接显示合计字符数，展开可看分段明细与预算状态；
+- `budget: { enabled, max, warnInPrompt }` 默认关；开了且超限时可在末尾段注入**一行提醒**让 AI 主动告诉你，
+  **永不自动裁剪**（裁你的配置是越权）。
+
 ## 记忆：AI 只能提议，生效必须人确认
 
 这是本插件和其他"自动记忆"方案最大的差别，也是 **0.8.0 起由代码强制**的：
 
 - AI 写进收件箱的每一行都必须是 `{"text":"…","status":"proposed"}` —— **候选，永不参与注入**；
 - 唯一让它生效的动作是**人**追加一行 `{"op":"confirm","ref":"条目原文"}`：
-  `node scripts/memory.mjs confirm <序号>`（设置面板也能点）；
+  `node scripts/memory.mjs confirm <序号>`（**只有这条 CLI 路径**——两个面板目前都不提供确认按钮，
+  面板只读地显示"待确认 K 条"）；
 - 其他命令：`status`（列出条目与序号）/ `reject`（否决）/ `adopt`（把 0.8.0 之前的老格式条目一次性确认）/
   `log`（打原始行，审计用）；
 - 文件**物理只追加**：确认、否决、替换（`supersede`）、删去（`drop`）都是追加一行操作行，
@@ -536,7 +593,8 @@ CSP 走响应头 + meta 双份，`script-src`/`style-src` 不含 `unsafe-inline`
 ## 仓库结构
 
 ```text
-core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱 / 收口开关 / 语气预设
+core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱(kind) / 收口开关 /
+                 沉降路由(sinks) / 注入体积计量(measure) / 语气预设
 examples/        可直接跑的示例：demo-config.json、demo-inbox.jsonl、empty-config.json
 adapters/dsh/    DSH 宿主半身：注册 persona-prefix/suffix（官方具名槽位）+ whale:thinking-language
 adapters/dsh/reflex/  条件反射层：规则命中即在代码层注入一步指令（默认零规则）+ 可选的步级工具裁剪
@@ -546,10 +604,12 @@ scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设�
                  sync-core.mjs     core → zcode vendor 副本同步（改 core 后必跑）
                  render-preview.mjs 把配置渲染成"实际注入的三段文本"并打印
                  ui.mjs + ui.html 本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
-                 memory.mjs       长期记忆确认台（status/confirm/reject/adopt/log）
+                 memory.mjs       长期记忆确认台（status/confirm/reject/adopt/log；确认即按 kind 沉降）
+                inject-size.mjs  注入体积体检（分段字符数 + 预算判定；--json 机器可读）
                  reflex.mjs       条件反射：show / check / new（规则体检闸门 + 建规则，体检不过自动回滚）
-tests/           14 个测试文件：DSH 冒烟 / 记忆收件箱 / 模型名匹配 / 形象与语气 / 设置面板 / ZCode hook / 本地编辑器 API
-                 ＋ 条件反射两组（reflex.mjs 55 条行为、reflex-rules.mjs 15 条建规则闸门）
+tests/           17 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
+                 设置面板 / ZCode hook / 本地编辑器 API / 路径存在性门禁
+                 ＋ 条件反射两组（reflex.mjs 55 条行为、reflex-rules.mjs 17 条建规则闸门）
 qa/              安全审查：probes/probe-security.js（探针）+ security-审查.md（台账与人工复核项）
 ```
 

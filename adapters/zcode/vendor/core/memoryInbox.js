@@ -18,6 +18,8 @@
  *      proposed **永不注入**——AI 写进去也只是一条待确认候选。
  *      让候选生效的唯一动作是人工追加一行操作行：{"op":"confirm","ref":"原文","at":...}
  *      （scripts/memory.mjs confirm / 设置面板按钮）。AI 没有被授予这个动作。
+ * ⑥ 类别（0.13.0）：事实行可带 kind —— 缺省 'memory' 为注入型；其余 kind 为**沉降型**，
+ *   确认后由 core/sinks.js 按 memory.sinks 路由落盘，且永不注入（readInjected 只收 memory 类）。
  * 条目文本在读取时折叠换行——防止带 \n 的条目从「数据」列表项里伪造成新指令行。
  * 读法带 mtime 缓存（与 store 同款纪律），任何异常返回空数组。
  *
@@ -49,6 +51,24 @@ const fold = (s) => (s === undefined || s === null ? '' : String(s).trim().repla
  */
 export const STATUS = { proposed: 'proposed', confirmed: 'confirmed', legacy: 'legacy' }
 
+/**
+ * 条目类别（0.13.0）。缺省 = 'memory'：它是**注入型**，确认后进【历史备忘】。
+ * 其余 kind（pitfall / idea / placement …）是**沉降型**：确认后按 memory.sinks 路由只追加式落盘，
+ * 永不注入提示词（见 core/sinks.js）。没有 kind 字段的老行一律当 'memory' —— 老行为逐字节不变。
+ */
+export const MEMORY_KIND = 'memory'
+
+/** kind 归一化：小写、只留 [a-z0-9_-]（防花样 kind 变成路径花样）；空 = 未指定 */
+export function normKind(v) {
+  return String(v == null ? '' : v).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+}
+
+/** 条目的有效 kind（未指定 → memory） */
+export function kindOf(entry) {
+  const k = normKind(entry && entry.kind)
+  return k || MEMORY_KIND
+}
+
 /** status 解析：只认 'confirmed'；'proposed' 与一切未知值都算未确认（宁可不注入，不可误注入） */
 function statusOf(raw) {
   const s = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
@@ -69,7 +89,7 @@ function parseLine(line) {
       const ref = fold(o.ref)
       const text = fold(o.text)
       if (!ref || !text) return null
-      return { op, ref, text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status) }
+      return { op, ref, text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind) }
     }
     if (op === 'drop' || op === 'reject' || op === 'confirm') {
       const ref = fold(o.ref)
@@ -79,7 +99,7 @@ function parseLine(line) {
     if (op) return null // 未知 op：只跳过该行，不牵连整箱
     const text = fold(o.text)
     if (!text) return null
-    return { op: '', text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status) }
+    return { op: '', text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind) }
   } catch {
     return null // 坏行跳过，不牵连整箱
   }
@@ -92,7 +112,7 @@ export function replayInbox(lines) {
     const o = parseLine(line)
     if (!o) continue
     if (!o.op) {
-      entries.push({ text: o.text, at: o.at, tag: o.tag, status: o.status })
+      entries.push({ text: o.text, at: o.at, tag: o.tag, status: o.status, kind: o.kind || MEMORY_KIND })
       continue
     }
     const i = entries.findIndex((e) => e.text === o.ref)
@@ -108,6 +128,8 @@ export function replayInbox(lines) {
       entries.push({
         text: o.text, at: o.at, tag: o.tag || old.tag || '',
         status: o.status === STATUS.legacy ? old.status : o.status,
+        // 没写 kind 的 supersede 沿用旧条目的 kind（人工改写不该把沉降条目变成注入条目，反之亦然）
+        kind: o.kind || old.kind || MEMORY_KIND,
       })
     }
   }
@@ -164,7 +186,9 @@ export function pickRelevant(entries, max, cwd) {
  */
 export function readInjected(file, opts) {
   const allowLegacy = !!(opts && opts.allowLegacy)
-  return readInbox(file).filter((e) => e.status === STATUS.confirmed || (allowLegacy && e.status === STATUS.legacy))
+  // 只注入 memory 类：沉降类条目（kind 非 memory）即使已确认也不进提示词 —— 它们的去处是文件，不是每轮提示词
+  return readInbox(file).filter((e) => kindOf(e) === MEMORY_KIND)
+    .filter((e) => e.status === STATUS.confirmed || (allowLegacy && e.status === STATUS.legacy))
 }
 
 /** 待人工处理的条目（proposed 候选 + legacy 老格式），带重放视图序号，供 CLI / 面板确认或否决 */

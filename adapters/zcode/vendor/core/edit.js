@@ -13,7 +13,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { DEFAULTS, mergeConfig } from './defaults.js'
-import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from './prompt.js'
+import { buildPersonaPrompt, buildThinkingLanguage } from './prompt.js'
+// 末尾段与运行期同一条通路（含「注入超预算」提醒行）—— 预览说"实际注入的三段"就得真是那三段
+import { buildSuffixSection } from './measure.js'
 import { pickByModel } from './render.js'
 import { captureMode } from './capture.js'
 import { STATUS, readInbox, readPending, resolveInbox } from './memoryInbox.js'
@@ -137,7 +139,7 @@ export function renderSections(cfgRaw, opts) {
   return {
     prefix: safe(() => buildPersonaPrompt(cfg, model, cwd, { capture }), ''),
     thinking: safe(() => buildThinkingLanguage(cfg), ''),
-    suffix: safe(() => buildSuffix(cfg, cwd), ''),
+    suffix: safe(() => buildSuffixSection(cfg, model, cwd, capture), ''),
     mode: captureMode(cfg),
     capture,
     warnings: configWarnings(cfg, model),

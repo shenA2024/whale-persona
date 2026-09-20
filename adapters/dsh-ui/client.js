@@ -870,6 +870,17 @@ window.__ModuleLoader__.load({
 
     function SectionsCard(props) {
       var sec = props.sections || {};
+      // 注入体积（0.13.0）：字符数直接取**这段文本自身**的长度（面板算的 == 运行期注入的，不是估的）；
+      // 分段明细（人设/备忘/纪律）与预算判定来自 /summary 的 injection（与 CLI 共用 core/measure.js）。
+      var inj = props.injection || null;
+      var injBudget = (inj && inj.budget) ? inj.budget : null;
+      var totalChars = strOf(sec.prefix).length + strOf(sec.thinking).length + strOf(sec.suffix).length;
+      var budgetText = !injBudget ? ''
+        : !injBudget.enabled ? '预算未启用（budget.enabled=false）：只显示体积，不做提醒'
+        : !injBudget.max ? '已启用但没设上限（max=0）：只计量不提醒'
+        : injBudget.over
+          ? ('⚠ 超预算：' + inj.total + ' / ' + injBudget.max + ' 字符' + (injBudget.noteChars ? '（末尾段已注入提醒行）' : '（warnInPrompt=false：只在这里报）'))
+          : ('预算 ' + injBudget.max + ' 字符，余量 ' + (injBudget.max - inj.total));
       // 2026-09-19 外部评审采纳：验证"我改完注入了什么"要逐个点开三段太啰嗦，卡头给一个一次性开关。
       // 只在卡头加按钮 —— 永远不往折叠行里塞派生/截断文本（"与运行期逐字一致"是这块的卖点）。
       var all = useState(false);
@@ -883,12 +894,17 @@ window.__ModuleLoader__.load({
         h('div', { className: 'wpr-cardhead' },
           h('div', { className: 'wpr-title' }, '实际注入的三段'),
           h('span', { className: 'wpr-sub' },
-            props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '与运行期同一套渲染 —— 展开逐段看原文'),
+            (props.fromSave ? '已按服务端返回的就地更新 · ' + props.tier + ' 档' : '与运行期同一套渲染 —— 展开逐段看原文')
+            + ' · 合计 ' + totalChars + ' 字符'),
           h('span', { className: 'wpr-spacer' }),
           h('button', { className: 'wpr-btn wpr-icon', type: 'button', onClick: toggleAll }, allOpen ? '全部收起' : '全部展开')),
         h(Seg, { key: 'p', title: '人设前缀（prefix）', text: sec.prefix, force: allOpen, token: tick }),
         h(Seg, { key: 't', title: '思维链语言段（thinking）', text: sec.thinking, force: allOpen, token: tick }),
-        h(Seg, { key: 's', title: '人设后缀（suffix）', text: sec.suffix, force: allOpen, token: tick }));
+        h(Seg, { key: 's', title: '人设后缀（suffix）', text: sec.suffix, force: allOpen, token: tick }),
+        inj ? h(Disclosure, { summary: '注入体积（合计 ' + totalChars + ' 字符）' },
+          h('div', { className: 'wpr-note' }, '按 ' + strOf(inj.model) + ' 渲染计量；与 CLI（node scripts/inject-size.mjs）同一套算法：'),
+          arrOf(inj.parts).map(function (p, i) { return h('div', { className: 'wpr-sub', key: 'ip' + i }, p.label + '：' + p.chars + ' 字符'); }),
+          h('div', { className: 'wpr-note' }, budgetText)) : null);
     }
 
     /**
@@ -1525,7 +1541,7 @@ window.__ModuleLoader__.load({
       }));
       body.push(h(SectionsCard, {
         key: 'sections', sections: shown ? shown.sections : d.sections, warnings: shown ? shown.warnings : [],
-        tier: d.tier, fromSave: !!savedPreview,
+        tier: d.tier, fromSave: !!savedPreview, injection: d.injection,
       }));
       if (shown && shown.warnings && shown.warnings.length && savedPreview) {
         for (var sj = 0; sj < shown.warnings.length; sj++) {

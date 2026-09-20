@@ -6,6 +6,7 @@
  */
 import { renderPersona, tierOf } from './render.js'
 import { pickRelevant, readInjected, resolveInbox } from './memoryInbox.js'
+import { sinkRoutes } from './sinks.js'
 
 const LANG_NAMES = {
   'zh-CN': '简体中文',
@@ -72,6 +73,27 @@ function inboxData(cfg) {
 }
 
 /**
+ * 分类路由说明（0.13.0）：只在**用户配了沉降路由**时追加。
+ * 没有路由 = 这段一个字都不出现（默认零行为改变）；有路由才告诉 AI 还能提议什么、确认后会落到哪。
+ */
+function kindsLine(m, userName) {
+  try {
+    const routes = sinkRoutes(m)
+    const kinds = Object.keys(routes)
+    if (!kinds.length) return ''
+    const rows = kinds.map((k) => {
+      const r = routes[k]
+      return '- kind:"' + k + '" → 确认后追加到 ' + String(r.path).replace(/\\/g, '/')
+    })
+    return '\n**分类路由**（' + userName + '配了这些去处）：候选正文写法不变，只多一个 "kind" 字段；'
+      + 'kind 缺省 = "memory"（注入提示词）。带 kind 的候选**不进提示词**，' + userName + '确认后才被追加进对应文件：\n'
+      + rows.join('\n') + '\n'
+  } catch {
+    return ''
+  }
+}
+
+/**
  * 【入库纪律】（写入门控）：只在收口开关打开时注入——不需要总结记忆的会话就不背这段噪音。
  */
 function inboxDiscipline(cfg, active) {
@@ -102,8 +124,10 @@ function inboxDiscipline(cfg, active) {
       + 'ref 必须照抄上面【历史备忘】里的原文（一字不差）。追加后在回答里说明写入了哪几条候选。\n'
       + '**申报口径**：带 status:"proposed" 的行只是候选，不会进【历史备忘】（注入只认人工确认过的条目）——'
       + '所以别对' + name + '说「已记住」，要说「候选已入队，等你确认」。\n'
-      + '**确认权不在你手上**：让候选生效的唯一动作是' + name + '自己执行 node scripts/memory.mjs confirm <序号>（或设置面板点确认）。'
+      + '**确认权不在你手上**：让候选生效的唯一动作是' + name + '自己执行 node scripts/memory.mjs confirm <序号>。'
       + '你不许写 confirm / reject 行，也不许把 proposed 改成 confirmed —— 那是伪造确认。'
+      + '带 kind 的分类候选同样只写 status:"proposed"，落盘动作发生在' + name + '确认的那一刻。'
+      + kindsLine(m, name)
   } catch {
     return ''
   }
@@ -114,13 +138,23 @@ function inboxDiscipline(cfg, active) {
  * 【历史备忘】数据块常驻（已确认的记忆照常加载）；只有【入库纪律】受 opts.capture 门控——
  * 是否注入由宿主的**会话开关**决定（见 capture.js）。手工条目属于权威层，不受它控制。
  */
+export function buildPersonaParts(cfg, model, cwd, opts) {
+  const active = !!(opts && opts.capture === true)
+  const tier = tierOf(model)
+  const merged = withInbox(cfg, cwd)
+  return {
+    // model 一路透传：自称可以按具体模型指定（见 render.js 的 selfNameOf）
+    persona: renderPersona(merged, tier, model),
+    inbox: inboxData(merged),
+    discipline: inboxDiscipline(merged, active),
+  }
+}
+
+/** 人设前缀段全文 = 三段拼接（persona + 备忘数据 + 入库纪律）。分段口径收在 buildPersonaParts，计量与渲染共用一处。 */
 export function buildPersonaPrompt(cfg, model, cwd, opts) {
   try {
-    const active = !!(opts && opts.capture === true)
-    const tier = tierOf(model)
-    const merged = withInbox(cfg, cwd)
-    // model 一路透传：自称可以按具体模型指定（见 render.js 的 selfNameOf）
-    return renderPersona(merged, tier, model) + inboxData(merged) + inboxDiscipline(merged, active)
+    const parts = buildPersonaParts(cfg, model, cwd, opts)
+    return parts.persona + parts.inbox + parts.discipline
   } catch {
     return ''
   }

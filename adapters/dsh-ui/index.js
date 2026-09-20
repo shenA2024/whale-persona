@@ -17,6 +17,11 @@ import { configPath, createStore } from '../../core/store.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../core/prompt.js'
 import { captureMode } from '../../core/capture.js'
 import { readInbox, resolveInbox } from '../../core/memoryInbox.js'
+// 注入体积（0.13.0）：面板显示的字符数与预算判定必须和 CLI、运行期同一套（core/measure.js），
+// 所以这里只转发计量结果，绝不本地再算一份。
+import { measureInjection } from '../../core/measure.js'
+// 沉降路由（0.13.0）：面板只**读**路由与日志（写配置仍然只有本地编辑器或让 AI 改那两条路）
+import { readSinkLog, sinkLogFile, sinkRoutes } from '../../core/sinks.js'
 import { selfNameOf } from '../../core/render.js'
 // 语气预设的文案只有 core/presets.js 一份：面板（/summary）与本地编辑页都从这里取，两处各写一份必然漂移
 import { TONE_PRESETS } from '../../core/presets.js'
@@ -142,6 +147,10 @@ function buildSummary(query) {
 
   const memory = (cfg && cfg.memory) || {}
   const manual = Array.isArray(memory.entries) ? memory.entries.filter((e) => e && typeof e.text === 'string') : []
+  // 注入体积与三段用同一份 cfg / model / cwd / capture —— 数字对不上就是 bug，不是"口径差异"
+  const injection = measureInjection(cfg, { model, cwd: cwdLabel, capture })
+  const routes = sinkRoutes(memory)
+  const sinks = Object.keys(routes).map((k) => ({ kind: k, path: routes[k].path, format: routes[k].format }))
   const inbox = memory.inbox === false ? [] : readInbox(resolveInbox(memory.inboxPath))
   const maxEntries = Number(memory.maxEntries) > 0 ? Number(memory.maxEntries) : 30
 
@@ -184,6 +193,21 @@ function buildSummary(query) {
       recent: inbox.slice(-5).map((e) => ({ text: e.text, tag: e.tag || '' })),
     },
     sections,
+    // 注入体积（0.13.0）：parts 明细 + 预算判定；note = 会（或不会）注入末尾段的那行提醒
+    injection: {
+      model,
+      cwd: cwdLabel,
+      capture,
+      total: injection.total,
+      parts: injection.parts,
+      budget: injection.budget,
+    },
+    // 沉降路由（0.13.0）：面板只展示，不提供编辑（改配置仍走本地编辑器 / 让 AI 改）
+    sinks: {
+      routes: sinks,
+      logPath: sinkLogFile(memory),
+      sunk: readSinkLog(memory).length,
+    },
   }
 }
 

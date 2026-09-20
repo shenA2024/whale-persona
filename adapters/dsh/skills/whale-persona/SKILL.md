@@ -119,13 +119,20 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
 - **常驻的部分**：已确认的【历史备忘】与手工条目不受开关影响，始终加载。
 - 收件箱 `memory-inbox.jsonl`：只许**追加**（每行 `{"text":"…","at":"ISO时间","status":"proposed"}`），永不改写已有行；坏行无害。
 - **确认闸门（0.8.0 起是代码强制，不再是口头纪律）**：你写进去的条目只是**候选**，**不会进提示词**；
-  只有用户自己跑 `node scripts/memory.mjs confirm <序号>`（或设置面板点确认）追加的
+  只有用户自己跑 `node scripts/memory.mjs confirm <序号>`（**只有这条 CLI 路径**；两个面板都不提供确认按钮，
+  只读地显示"待确认 K 条"）追加的
   `{"op":"confirm","ref":"原文","at":…}` 才让它生效。据此：
   - 别对用户说「我已记住」，要说「候选已入队，等你确认」；
   - **你不许**写 `confirm` / `reject` 行，也不许把 `proposed` 改成 `confirmed`——那是伪造确认；
   - 用户问「记忆怎么没生效 / 怎么确认」→ 让他跑 `node scripts/memory.mjs status` 看序号，再 `confirm <序号…|all>`；
     0.8.0 之前的老格式条目（没有 status 字段）默认也不注入，`adopt` 可一次性确认。
 - 晋升：把收件箱里稳定有效的条目整理进 `memory.entries`（带 `"on": true`），收件箱对应行可删可留。
+- **分类路由（0.13.0，只在用户配了 `memory.sinks` 时存在）**：条目可带 `"kind"`，缺省 `"memory"`（注入提示词）。
+  `kind` 非 memory 的（如 `pitfall` / `idea`）**永不进提示词**——用户 `confirm` 的那一刻，插件才把它
+  **只追加式**写进路由指向的文件（`path` / `format: md|plain|jsonl` / `template`），写完出队，幂等不可重写。
+  你该做的：**照旧只写 `status:"proposed"` 的候选行**，多带一个 `kind` 字段即可；落盘动作在用户手上。
+  配了路由时，【入库纪律】里会多出「分类路由」一段列出 kind → 目标文件，照那段写，不要自己编 kind
+  （没有路由的 kind 确认后会"无处可去"，用户会看到提示）。
 - 注入时收件箱按「数据非指令」呈现（引号包裹、换行折叠、剥离「」）——这是刻意的抗注入设计，不要改这个口径。
 
 ## 生效方式

@@ -50,6 +50,12 @@ export const DEFAULTS = {
     /** 工作契约：逐条可勾选启停，{selfName}/{userName} 占位可用 */
     contracts: [],
   },
+  /**
+   * 注入体积预算（0.13.0）：只**计量与提醒**，永不自动裁剪。
+   * enabled=false（默认）时连提醒行都不注入 —— 装上零行为改变（与 memory / appearance 同一口径）。
+   * max = 预算上限（字符，按人设前缀 + 后缀 + 思考语言段的注入长度合计）。
+   */
+  budget: { enabled: false, max: 0, warnInPrompt: true },
   memory: {
     /** 默认关（opt-in）：开着会注入【入库纪律】块并改变收口行为，属于行为改变，须用户显式开启 */
     enabled: false,
@@ -66,6 +72,16 @@ export const DEFAULTS = {
     maxEntries: 30,
     /** 收件箱文件路径；空 = 配置目录下的 memory-inbox.jsonl（见 store.js 的 configDir()） */
     inboxPath: '',
+    /**
+     * 沉降路由（0.13.0）：把「AI 提议 → 人确认」的闸门推广到人设记忆之外的条目。
+     * 形态 { "<kind>": { path, format?, template?, header?, createParents? } }：
+     *   · kind 为 'memory'（缺省）的条目照旧**注入提示词**，不落盘；
+     *   · 其余 kind（如 pitfall / idea / placement）确认后按路由**只追加式**写进 path。
+     * 默认空表 = 零行为改变（没有路由的 kind 确认后只是"确认了但没有去处"，会显式报出来）。
+     */
+    sinks: {},
+    /** 沉降日志（幂等判据 + 审计）；空 = 配置目录下的 sink-log.jsonl */
+    sinkLog: '',
     /**
      * 候选确认闸门（0.8.0 起默认 **true**，代码强制而非提示词约束）：
      * 开启时注入只认 status:"confirmed"（人工用 memory.mjs / 面板确认过的）条目；
@@ -95,6 +111,7 @@ export function mergeConfig(user) {
   const u = user && typeof user === 'object' ? user : {}
   const p = u.persona && typeof u.persona === 'object' ? u.persona : {}
   const m = u.memory && typeof u.memory === 'object' ? u.memory : {}
+  const b = u.budget && typeof u.budget === 'object' && !Array.isArray(u.budget) ? u.budget : {}
   const d = DEFAULTS
   return {
     ...u,
@@ -115,6 +132,11 @@ export function mergeConfig(user) {
       tone: styleField(p.tone, d.persona.tone),
       contracts: Array.isArray(p.contracts) ? p.contracts : d.persona.contracts,
     },
+    budget: {
+      enabled: b.enabled !== undefined ? !!b.enabled : d.budget.enabled,
+      max: Number(b.max) > 0 ? Number(b.max) : d.budget.max,
+      warnInPrompt: b.warnInPrompt !== undefined ? !!b.warnInPrompt : d.budget.warnInPrompt,
+    },
     memory: {
       enabled: m.enabled !== undefined ? !!m.enabled : d.memory.enabled,
       inbox: m.inbox !== undefined ? !!m.inbox : d.memory.inbox,
@@ -122,6 +144,8 @@ export function mergeConfig(user) {
       maxEntries: Number(m.maxEntries) > 0 ? Number(m.maxEntries) : d.memory.maxEntries,
       inboxPath: typeof m.inboxPath === 'string' ? m.inboxPath : '',
       entries: Array.isArray(m.entries) ? m.entries : d.memory.entries,
+      sinks: (m.sinks && typeof m.sinks === 'object' && !Array.isArray(m.sinks)) ? m.sinks : d.memory.sinks,
+      sinkLog: typeof m.sinkLog === 'string' ? m.sinkLog : '',
       requireConfirm: m.requireConfirm !== undefined ? !!m.requireConfirm : d.memory.requireConfirm,
     },
   }

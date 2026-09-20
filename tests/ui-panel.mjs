@@ -70,6 +70,15 @@ t('P9 raw 可供表单回填（含未知键）', !!a.json && !!a.json.raw && !!a
 t('P9b defaults 出厂值下发', !!a.json && !!a.json.defaults && a.json.defaults.persona !== undefined)
 t('P9c configValid=true', !!a.json && a.json.configValid === true)
 t('P10 换档渲染', (await call('/whale-persona/api/summary?tier=pro')).json.selfName.pro === '首席助手')
+// 注入体积（0.13.0）：面板给的数字必须与它自己下发的那三段**对得上**（差一个字符就是 bug）
+const inj = a.json.injection
+const secLen = a.json.sections.prefix.length + a.json.sections.thinking.length + a.json.sections.suffix.length
+t('P9d 注入体积口径：合计 == 三段实长之和（含预算提醒行）',
+  !!inj && inj.total + inj.budget.noteChars === secLen)
+t('P9e 注入体积：分段明细齐全、预算默认关',
+  !!inj && inj.parts.map((p) => p.key).join(',') === 'persona,inbox,discipline,suffix,thinking'
+  && inj.budget.enabled === false && inj.budget.note === '')
+t('P9f 面板下发只读的沉降路由视图', !!a.json.sinks && Array.isArray(a.json.sinks.routes) && !!a.json.sinks.logPath)
 t('P11 非 loopback host 拒答', (await call('/whale-persona/api/summary', { host: 'evil.example.com:3081' })).code === 403)
 t('P12 换端口仍放行（不绑死 3080）', (await call('/whale-persona/api/summary', { host: '127.0.0.1:9999' })).code === 200)
 t('P13 未知路径 404', (await call('/whale-persona/api/nope')).code === 404)
@@ -364,6 +373,24 @@ t('N6c 三段预览默认收起（正文不渲染、摘要与字符数在）',
   secText.indexOf('人设前缀（prefix）') >= 0 && secText.indexOf('PREFIX-BODY') < 0
   && secText.indexOf('思维链语言段（thinking）') >= 0 && secText.indexOf('THINK-BODY') < 0
   && secText.indexOf('11 字符') >= 0)
+
+// 注入体积（0.13.0）：卡头有合计字符数；带 injection 时多一个折叠块（分段明细 + 预算状态）
+const injTree = H.SectionsCard({
+  sections: { prefix: 'PREFIX-BODY', thinking: 'THINK-BODY', suffix: 'SUFFIX-BODY' },
+  warnings: [], tier: 'flash', fromSave: false,
+  injection: {
+    model: 'deepseek-flash', total: 32,
+    parts: [{ key: 'persona', label: '人设正文', chars: 11 }, { key: 'suffix', label: '末尾段', chars: 11 }],
+    budget: { enabled: true, max: 10, over: true, noteChars: 40, note: 'x' },
+  },
+})
+const injText = textOf(injTree)
+t('N6d 注入体积卡头给合计字符数（= 三段实长之和）', injText.indexOf('合计 32 字符') >= 0)
+t('N6e 注入体积折叠块列分段明细与超预算状态',
+  injText.indexOf('人设正文：11 字符') >= 0 && injText.indexOf('超预算') >= 0)
+t('N6f 没有 injection 时不渲染这块（老宿主兼容）',
+  textOf(H.SectionsCard({ sections: { prefix: 'A', thinking: 'B', suffix: 'C' }, warnings: [], tier: 'flash', fromSave: false }))
+    .indexOf('注入体积') < 0)
 
 // 整页渲染门：把 panelView 的整棵树**走一遍**（flatText 会真的调用每个函数组件）——
 // 单个组件测试抓不到「父级把 props 传错/传漏」，整页走一遍才会当场抛。

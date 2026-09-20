@@ -19,7 +19,9 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { mergeConfig } from '../core/defaults.js'
-import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../core/prompt.js'
+import { buildPersonaPrompt, buildThinkingLanguage } from '../core/prompt.js'
+// 末尾段走与运行期同一条通路（含可选的「注入超预算」提醒行）—— 本命令承诺"与运行期逐字一致"
+import { buildSuffixSection } from '../core/measure.js'
 import { captureMode } from '../core/capture.js'
 import { configPath } from '../core/store.js'
 
@@ -56,7 +58,7 @@ const block = (title, text) => {
 
 block('deployment:persona-prefix', buildPersonaPrompt(cfg, model, cwd, { capture }))
 block('whale:thinking-language', buildThinkingLanguage(cfg))
-block('deployment:persona-suffix', buildSuffix(cfg, cwd))
+block('deployment:persona-suffix', buildSuffixSection(cfg, model, cwd, capture))
 
 console.log('')
 console.log('--- 概要 ---')

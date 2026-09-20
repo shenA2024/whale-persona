@@ -1,6 +1,6 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.12.4",
+  "version": "0.13.0",
   "description": "Persona engine for AI coding harnesses (DeepSeek Harness; the ZCode adapter is retired as of 2026-09-19 and kept for history only): self-name per model, self-image (appearance) and reply tone per model (both opt-in), user address, stance, character, per-item work contracts, thinking-chain language, a long-term memory inbox where AI entries only take effect after an explicit human confirm line (enforced in code), and a shareable persona-preset library that imports SillyTavern character cards (v1/v2 JSON; unmappable fields are reported, never faked). One shared config.json, zero runtime dependencies, never touches the network.",
   "type": "module",
   "main": "./adapters/dsh/index.js",
@@ -24,12 +24,13 @@
     "whale-persona-dsh": "./scripts/install-dsh.mjs"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/global.mjs && node tests/presets.mjs && node tests/tavern.mjs && node tests/inbox.mjs && node tests/model-names.mjs && node tests/style-fields.mjs && node tests/ui-panel.mjs && node tests/ui-css-scope.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs && node tests/install-contract.mjs && node tests/reflex.mjs && node tests/reflex-rules.mjs && node tests/paths.mjs",
+    "test": "node tests/smoke.mjs && node tests/global.mjs && node tests/presets.mjs && node tests/tavern.mjs && node tests/inbox.mjs && node tests/sink.mjs && node tests/inject-size.mjs && node tests/model-names.mjs && node tests/style-fields.mjs && node tests/ui-panel.mjs && node tests/ui-css-scope.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs && node tests/install-contract.mjs && node tests/reflex.mjs && node tests/reflex-rules.mjs && node tests/paths.mjs",
     "sec": "node qa/probes/probe-security.js && node qa/probes/probe-security.js --selftest",
     "install-dsh": "node scripts/install-dsh.mjs",
     "render": "node scripts/render-preview.mjs",
     "ui": "node scripts/ui.mjs",
     "memory": "node scripts/memory.mjs",
+    "inject-size": "node scripts/inject-size.mjs",
     "sync-core": "node scripts/sync-core.mjs"
   },
   "files": [

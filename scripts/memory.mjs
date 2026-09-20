@@ -11,6 +11,7 @@
  *   node scripts/memory.mjs                 # = status：列出全部条目、标出待确认
  *   node scripts/memory.mjs confirm 2 3     # 确认第 2、3 条（序号取 status 的输出）
  *   node scripts/memory.mjs confirm all     # 确认全部待确认条目
+ *                                           # 带 kind 的条目（pitfall / idea …）在确认这一刻按 memory.sinks 路由落盘
  *   node scripts/memory.mjs reject 4        # 否决第 4 条（移出视图，物理行保留）
  *   node scripts/memory.mjs adopt           # 把老格式（没有 status 字段）条目一次性确认
  *   node scripts/memory.mjs log             # 打印原始行 + 行号（审计用）
@@ -21,7 +22,8 @@
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { configPath, createStore } from '../core/store.js'
-import { STATUS, confirmOpFor, readInbox, rejectOpFor, resolveInbox } from '../core/memoryInbox.js'
+import { MEMORY_KIND, STATUS, confirmOpFor, kindOf, readInbox, rejectOpFor, resolveInbox } from '../core/memoryInbox.js'
+import { readSinkLog, sinkConfirmed, sinkLogFile, sinkRoutes } from '../core/sinks.js'
 
 const argv = process.argv.slice(2)
 const dry = argv.includes('--dry-run')
@@ -53,12 +55,23 @@ function show() {
   console.log('收件箱  ：' + FILE.replace(/\\/g, '/') + (existsSync(FILE) ? '' : '  (还不存在)'))
   if (mem.enabled !== true) console.log('注意    ：配置里 memory.enabled 不是 true —— 条目不会注入。')
   if (mem.requireConfirm === false) console.log('注意    ：memory.requireConfirm = false（放行老格式条目）；proposed 候选仍然不注入。')
+  const routes = sinkRoutes(mem)
+  const kinds = Object.keys(routes)
+  if (kinds.length) {
+    console.log('沉降路由：')
+    for (const k of kinds) console.log('  kind:"' + k + '" → ' + String(routes[k].path).replace(/\\/g, '/') + '  (' + routes[k].format + ')')
+    console.log('沉降日志：' + sinkLogFile(mem).replace(/\\/g, '/') + '（已落 ' + readSinkLog(mem).length + ' 条）')
+  } else {
+    console.log('沉降路由：(未配置) —— 只有 kind:"memory" 的条目会注入提示词；其它 kind 确认后无处可去。')
+  }
   const list = entries()
   if (!list.length) { console.log('\n(收件箱为空)'); return }
   console.log('\n共 ' + list.length + ' 条：')
   list.forEach((e, i) => {
     const tag = e.tag ? '  {tag: ' + e.tag + '}' : ''
-    console.log('  [' + String(i).padStart(3, ' ') + '] ' + (MARK[e.status] || '[?]') + ' ' + e.text + tag)
+    const k = kindOf(e)
+    const mark = k === MEMORY_KIND ? '' : ' <' + k + (routes[k] ? ' → 沉降' : ' → 无路由') + '>'
+    console.log('  [' + String(i).padStart(3, ' ') + '] ' + (MARK[e.status] || '[?]') + mark + ' ' + e.text + tag)
   })
   const pending = list.filter((e) => e.status !== STATUS.confirmed)
   if (pending.length) {
@@ -110,8 +123,14 @@ function confirm(onlyLegacy) {
     const op = confirmOpFor(lines, i)
     if (op) ops.push(op)
   }
-  append(ops)
+  // 确认 = 生效。带 kind 的条目在这一刻沉降到目标文件（AI 没有这个动作，只有人确认才触发）。
+  const sunk = sinkConfirmed(mem, lines, idx, { source: 'memory.mjs' })
+  append(ops.concat(sunk.dropLines))
   console.log((dry ? '将确认 ' : '已确认 ') + ops.length + ' 条。')
+  for (const s of sunk.sunk) console.log('  ↳ 已沉降 kind:"' + s.kind + '" → ' + String(s.path).replace(/\\/g, '/') + '（+' + s.bytes + ' 字节）')
+  for (const s of sunk.skipped) console.log('  ↳ 跳过（' + s.reason + '）：kind:"' + s.kind + '"')
+  for (const s of sunk.noRoute) console.log('  ! kind:"' + s.kind + '" 没有沉降路由 —— 已确认但无处可去：' + s.text.slice(0, 40) + '（在 memory.sinks 里给它配 path）')
+  for (const s of sunk.errors) console.log('  ! 沉降失败 kind:"' + (s.kind || '?') + '："' + s.error + '"')
   if (!dry) show()
 }
 

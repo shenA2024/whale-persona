@@ -3,6 +3,54 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.13.0（2026-09-20）
+
+### 新增：把「AI 提议 → 人确认」的闸门推广到人设记忆之外（分类路由 / 沉降）
+
+触发来源：2026-09-20 维护者问「下一步加什么功能、要不要学竞品」。核过同类后发现：竞品的差异集中在
+**角色数量与跨平台**（agency-agents 153,680★ / 中文版 20,817★、20 个工具），而"提议—确认"这条代码级
+闸门**没有对标**；但本插件这条闸门当时只服务人设记忆，维护者每天真正在做的沉淀（坑卡、思想回填、落位）
+仍然只靠提示词里的君子协定——"别忘了写坑卡"这种话，恰恰是本插件存在的理由所要消灭的。
+
+- 收件箱事实行新增可选 `kind`：缺省 `"memory"`（注入型，行为**逐字节不变**）；
+  `kind` 非 memory 的条目（`pitfall` / `idea` / …）是**沉降型**——`readInjected` 只收 memory 类，
+  即使已确认也**永不进提示词**（它们的去处是文件，不是每轮提示词）；
+- `memory.sinks` 路由表：`{ "<kind>": { path, format?: "md"|"plain"|"jsonl", template?, header?, createParents? } }`，
+  默认空表 = 零行为改变；模板占位符 `{text} {date} {kind} {tag} {source}`；
+- **落盘只发生在人工确认这一刻**（`node scripts/memory.mjs confirm <序号>`）：先追加 confirm 行，
+  再按路由**只追加式**写目标文件，成功后追加 drop 行（收件箱是队列，入库即出队）；
+  幂等靠 `sink-log.jsonl`（同 kind + 同正文 + 同目标不重复写）；没有路由的 kind 会显式报出来（不静默吞掉）；
+  写失败降级为报告（不抛、不半写）；kind 归一化只留 `[a-z0-9_-]`（防花样 kind 变成路径花样）；
+- 【入库纪律】只在**配了路由**时追加「分类路由」一段（没配 = 一个字都不出现）。
+
+### 新增：注入体积计量与预算（只提醒，永不自动裁剪）
+
+触发来源：同一天的对照实测——本插件一直讲"省 token"，但改之前**没人看得见**自己的配置每轮注入多少。
+维护者本机实测：合计 2,260 字符，其中人设正文 1,689（74.7%）、历史备忘 407、末尾段 37、思考语言 127。
+
+- `core/measure.js`：计量走**与渲染同一条通路**（`buildPersonaParts` / `buildSuffix` / `buildThinkingLanguage`），
+  不是另算一份近似值；`budget: { enabled: false, max: 0, warnInPrompt: true }` 默认关（装上零行为改变）；
+- 超预算且 `warnInPrompt` 时，在末尾段注入一行提醒（让 AI 主动告知用户），`budget.note` 不计入 `total`（防自涨）；
+- CLI `node scripts/inject-size.mjs`（`--tier/--model/--cwd/--capture/--json`），未指定模型时用
+  `last-model.json` 里**上次会话真实用的 id**（界面显示名不是它）；
+- 设置面板「实际注入的三段」卡头显示合计字符数，并多一个折叠块列出分段明细与预算状态（/summary 新增 `injection`、
+  `sinks` 字段，只读）。
+
+### 验证
+
+```
+npm test     # 17 套 exit 0（新增 tests/sink.mjs 28 项、tests/inject-size.mjs 17 项；
+             #  tests/inbox.mjs 等 15 套老断言全绿 = 无 kind 的老行行为不变）
+             # ui-panel 新增 P9d/P9e/P9f、N6d/N6e/N6f：面板给的合计 == 它下发那三段的实长之和
+             # zcode-hook Z7：sync-core 后 vendor 副本与 core 一致
+npm run sec  # PASS true fail=0 suspect=0 skip=4（新增 S13 SEC_SINK：
+             #  分类条目永不进提示词 + 渲染路径零写盘副作用；同轮修掉 S8 靠 process.env
+             #  定位的老毛病 —— 它是异步探针，同步探针插在它的 await 之间改 DSH_HOME 就会读串台）
+node scripts/inject-size.mjs --cwd D:/<private-repo>
+             # 实测本机真实配置：人设正文 1689 / 历史备忘 407 / 末尾段 37 / 思考语言 127 = 合计 2260 字符
+node scripts/memory.mjs   # 状态台新增「沉降路由」「沉降日志」与逐条 kind 标注
+```
+
 ## v0.12.4（2026-09-20）
 
 ### 修复：CI 连续 6 次红的根因 —— 路径门禁按「磁盘存在性」判，而不是「git 跟踪集」

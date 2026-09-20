@@ -20,6 +20,7 @@
  *   S8  SEC_GATE      记忆闸门（功能探针，真跑一次渲染）：proposed 不进注入，confirmed 才进
  *   S9  SEC_SECRET    仓库里没有真实凭据
  *   S10 SEC_IGNORE    .gitignore 挡住依赖/生成物/大素材/日志/环境文件
+ *   S13 SEC_SINK      分类路由（0.13.0）：kind 非 memory 的条目永不进提示词；渲染路径不得有写盘副作用
  *   S11 SEC_BINARY    版本库里没有二进制大件
  *   S12 SEC_ORIGIN    本地页真起服务打三个 Origin（行为测试）：非 loopback 必须 403
  *
@@ -161,22 +162,57 @@ guard('S8', () => {
   const home = mkdtempSync(path.join(os.tmpdir(), 'wpr-sec-'))
   const dir = path.join(home, 'whale-persona')
   mkdirSync(dir, { recursive: true })
-  writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ enabled: true, persona: { enabled: true, userName: '审', selfNameFlash: '审', character: 'x' }, memory: { enabled: true, entries: [{ text: 'SEC-MANUAL-条目' }] } }), 'utf8')
+  // inboxPath 用绝对路径：本探针的读取不再依赖 process.env —— 同进程里后续同步探针会改 DSH_HOME，
+  // 而 S8 是异步的（await 期间会被插队），靠 env 定位就会读串台（2026-09-20 加 S13 时当场踩到）。
+  const cfgPath = path.join(dir, 'config.json')
+  writeFileSync(cfgPath, JSON.stringify({ enabled: true, persona: { enabled: true, userName: '审', selfNameFlash: '审', character: 'x' }, memory: { enabled: true, entries: [{ text: 'SEC-MANUAL-条目' }], inboxPath: path.join(dir, 'memory-inbox.jsonl') } }), 'utf8')
   writeFileSync(path.join(dir, 'memory-inbox.jsonl'), [
     JSON.stringify({ text: 'SEC-CONFIRMED-条目', status: 'confirmed', at: '2026-09-19T00:00:00Z' }),
     JSON.stringify({ text: 'SEC-PROPOSED-条目', status: 'proposed', at: '2026-09-19T00:00:00Z' }),
   ].join('\n') + '\n', 'utf8')
-  process.env.DSH_HOME = home
-  process.env.DSH_WHALE_CONFIG = path.join(dir, 'config.json')
+  // 不再依赖 process.env 定位：S8 是异步的（await 期间会被后面的同步探针插队改 DSH_HOME），
+  // 走 env 就会读串台（2026-09-20 加 S13 时当场踩到）。配置文件与收件箱都用绝对路径。
   return (async () => {
     const { buildPersonaPrompt } = await import(pathToFileURL(path.join(ROOT, 'core', 'prompt.js')).href)
     const { mergeConfig } = await import(pathToFileURL(path.join(ROOT, 'core', 'defaults.js')).href)
-    const cfg = mergeConfig(JSON.parse(readFileSync(process.env.DSH_WHALE_CONFIG, 'utf8')))
+    const cfg = mergeConfig(JSON.parse(readFileSync(cfgPath, 'utf8')))
     const out = String(buildPersonaPrompt(cfg, 'deepseek-flash', home, {}) || '')
     t('S8', out.indexOf('SEC-PROPOSED-条目') < 0 && out.indexOf('SEC-CONFIRMED-条目') >= 0 && out.indexOf('SEC-MANUAL-条目') >= 0,
       'proposed进了=' + (out.indexOf('SEC-PROPOSED-条目') >= 0) + ' confirmed进了=' + (out.indexOf('SEC-CONFIRMED-条目') >= 0) + ' 手工条目进了=' + (out.indexOf('SEC-MANUAL-条目') >= 0))
     rmSync(home, { recursive: true, force: true })
   })().catch((e) => { skip('S8', 'probe-error', String(e.message).slice(0, 80)) })
+})
+
+guard('S13', () => {
+  // SEC_SINK（0.13.0）：把"AI 只能提议"这条判据延伸到记忆之外 ——
+  // ① 分类条目（kind 非 memory）无论 proposed 还是 confirmed 都不进提示词；
+  // ② 渲染路径**不得有任何写盘副作用**：渲染完目标沉降文件仍不存在（落盘只可能发生在人工确认那一刻）。
+  const home = mkdtempSync(path.join(os.tmpdir(), 'wpr-sec-sink-'))
+  const dir = path.join(home, 'whale-persona')
+  const target = path.join(home, 'sunk', 'sec-sink.md')
+  mkdirSync(dir, { recursive: true })
+  const cfgPath = path.join(dir, 'config.json')
+  // 全绝对路径、不碰 process.env —— 异步探针靠 env 定位会被后续同步探针插队改掉
+  writeFileSync(cfgPath, JSON.stringify({
+    enabled: true,
+    persona: { enabled: true, userName: '审', selfNameFlash: '审', character: 'x' },
+    memory: { enabled: true, inboxPath: path.join(dir, 'memory-inbox.jsonl'), sinks: { pitfall: { path: target } } },
+  }), 'utf8')
+  writeFileSync(path.join(dir, 'memory-inbox.jsonl'), [
+    JSON.stringify({ text: 'SEC-PITFALL-CONFIRMED', kind: 'pitfall', status: 'confirmed', at: '2026-09-20T00:00:00Z' }),
+    JSON.stringify({ text: 'SEC-PITFALL-PROPOSED', kind: 'pitfall', status: 'proposed', at: '2026-09-20T00:00:00Z' }),
+  ].join('\n') + '\n', 'utf8')
+  return (async () => {
+    const { buildPersonaPrompt } = await import(pathToFileURL(path.join(ROOT, 'core', 'prompt.js')).href)
+    const { mergeConfig } = await import(pathToFileURL(path.join(ROOT, 'core', 'defaults.js')).href)
+    const cfg = mergeConfig(JSON.parse(readFileSync(cfgPath, 'utf8')))
+    const out = String(buildPersonaPrompt(cfg, 'deepseek-flash', home, { capture: true }) || '')
+    const inPrompt = (s) => out.indexOf(s) >= 0
+    t('S13', !inPrompt('SEC-PITFALL-PROPOSED') && !inPrompt('SEC-PITFALL-CONFIRMED') && !existsSync(target),
+      'proposed进了=' + inPrompt('SEC-PITFALL-PROPOSED') + ' confirmed进了=' + inPrompt('SEC-PITFALL-CONFIRMED')
+      + ' 渲染写出了文件=' + existsSync(target) + ' 路由已下发=' + inPrompt('pitfall'))
+    rmSync(home, { recursive: true, force: true })
+  })().catch((e) => { skip('S13', 'probe-error', String(e.message).slice(0, 80)) })
 })
 
 guard('S9', () => {

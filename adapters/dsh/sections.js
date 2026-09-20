@@ -9,7 +9,10 @@
  */
 import { createStore } from '../../core/store.js'
 import { captureActive, runMemoryCommand } from '../../core/capture.js'
-import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../../core/prompt.js'
+import { buildPersonaPrompt, buildThinkingLanguage } from '../../core/prompt.js'
+// 末尾段走 core/measure.js 的 buildSuffixSection：用户 suffix + 可选「注入超预算」提醒行。
+// 计量与渲染共用这一条通路，面板/CLI 的数字因此不会与真实注入脱钩（tests/inject-size.mjs 钉住）。
+import { buildSuffixSection } from '../../core/measure.js'
 // 记下宿主**真实**用的模型 id：界面显示名与它就常常不是一个东西（见 core/lastModel.js 头注）
 import { recordModel } from '../../core/lastModel.js'
 
@@ -76,7 +79,9 @@ export function registerPersonaSections(ctx, names) {
     interpolate: false,
     text: (context) => {
       try {
-        return buildSuffix(store.get(), readContext(context).cwd)
+        const { agent, model, cwd } = readContext(context)
+        const cfg = store.get()
+        return buildSuffixSection(cfg, model, cwd, captureActive(cfg, agent))
       } catch {
         return ''
       }
