@@ -15,7 +15,7 @@
 - 四处全部换中性占位（`甲档答复／乙档答复`、`甲档名／乙档名`、档位注释改为直接描述档位判定）；
   测试目的不变（按档位只注入一套、不串档；按模型选自称），回归条数不变；
 - `core/render.js` 改后已跑 `node scripts/sync-core.mjs` 同步 vendor 副本（测试 Z7 校验）；
-- 审计词表补上 `<relationship>|<relationship>`（原词表只有 `<maintainer>|鲸鱼|<relationship>|<relationship>|<relationship>|<private-repo>`，漏了这两个泛称谓）；
+- 审计词表补齐（原词表只覆盖真名与模式名，漏了泛称谓）——**词表本身不写进公开仓**，只落本机纲领；
 - **已发布的 tag 不重写**（删不干净、且已公开），改为删除旧 tag 与旧 Release，公开面只保留本版；
 - 私人文本仍留在 main 的历史提交里（GitHub 代码搜索不索引历史）；要彻底抹掉需重写历史，
   代价是全库引用的提交号集体悬空，故本次不做。
@@ -30,7 +30,7 @@
 ### 验证
 
 ```
-git grep -E '<maintainer>|鲸鱼|<relationship>|<relationship>|<relationship>|<relationship>|<relationship>|<private-repo>|<user>'   # 4 处命中，全部是「鲸鱼模式」这一模式名
+git grep -E '<本机私人词表，见领域纲领>'   # 4 处命中，全部是「鲸鱼模式」这一模式名
 npm test     # 15 套 exit 0（Z7 校验 vendor 副本已同步）
 npm run sec  # PASS true {"fail":0,"suspect":0,"skip":4}
 ```
