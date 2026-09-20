@@ -8,6 +8,8 @@
 把 AI 编码助手的**人设**变成一份可开关、可编辑、可记忆的配置：自称（按模型分档）、对用户的称呼、
 关系立场、性格正文、逐条可勾选的工作契约、思维链语言，以及**带代码级确认闸门**的长期记忆。
 一份 `config.json` + 一个收件箱文件，**DSH 与 ZCode 两个宿主共用同一个人设**。
+0.12.0 起还带一层**条件反射**：自己写规则，命中时由插件在代码层注入一步指令（匹配不花 token），
+可选把这一步的请求瘦身、把工具裁到白名单 —— 规则是个人资产，默认**零规则**。
 > **维护状态（2026-09-19）**：主宿主是 **DeepSeek Harness**；**ZCode 适配器停止开发**（维护者 2026-09-19 拍板：
 > 「ZCode 已经决定不再制作了」）。该目录仅作历史保留 —— 不再开发、不再真机回归、出问题不优先修；
 > 0.10.0 起的预设库 / 酒馆卡 / `dsh.bundle` 都与它无关。完整取舍与"删还是留"的待决项见 [docs/维护状态.md](docs/维护状态.md)。
@@ -21,7 +23,9 @@ conclusions, evidence standards or the work contract), both opt-in and off by de
 overridable per model, and a long-term memory inbox whose entries only take effect after an explicit human `confirm` line
 (enforced in code, not just in the prompt). Dual adapters: DeepSeek Harness (system-prompt sections
 + settings panel) and ZCode (plugin hook + skill). MIT, no runtime dependencies, never touches the
-network; any error degrades to an empty section.
+network; any error degrades to an empty section. Since 0.12.0 it also ships a conditioned-reflex layer:
+user-written rules matched in code inject a one-step directive (no model call for matching), with optional
+per-step request slimming and per-step tool narrowing — the rule table is personal and empty by default.
 
 ---
 
@@ -57,7 +61,7 @@ node scripts/install-dsh.mjs             # 真装
 **没有 git，或者 clone 不动？** 用本仓 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
 
 ```powershell
-dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.11.4/shenA2024-whale-persona-0.11.4.tgz
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.12.0/shenA2024-whale-persona-0.12.0.tgz
 ```
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
@@ -502,7 +506,8 @@ DSH 里另有**只读**面板「设置 → 条件反射」：列规则（档位/
 
 | 入口 | 怎么开 | 说明 |
 |---|---|---|
-| 宿主设置面板 | DSH「设置 → 人设」（装 `@shenA2024/whale-persona-ui`） | 左改右预览，保存走 `POST /whale-persona/api/config` |
+| 宿主设置面板 · 人设 | DSH「设置 → 人设」（装 `@shenA2024/whale-persona-ui`） | 左改右预览，保存走 `POST /whale-persona/api/config` |
+| 宿主设置面板 · 条件反射 | DSH「设置 → 条件反射」（同一个包，0.12.0 起） | **只读**：列规则、命中台账、试命中（不写配置；改规则用 `scripts/reflex.mjs`） |
 | 本地编辑器页 | `node scripts/ui.mjs` → http://127.0.0.1:8787 | 两个宿主的用户都能用；只绑 127.0.0.1 |
 
 它还会主动点名**配了却不生效**的项，例如：设了自称但全文没用 `{selfName}` 占位符；
@@ -530,14 +535,17 @@ CSP 走响应头 + meta 双份，`script-src`/`style-src` 不含 `unsafe-inline`
 core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱 / 收口开关 / 语气预设
 examples/        可直接跑的示例：demo-config.json、demo-inbox.jsonl、empty-config.json
 adapters/dsh/    DSH 宿主半身：注册 persona-prefix/suffix（官方具名槽位）+ whale:thinking-language
-adapters/dsh-ui/ DSH 设置面板（宿主路由 + 浏览器半身）
+adapters/dsh/reflex/  条件反射层：规则命中即在代码层注入一步指令（默认零规则）+ 可选的步级工具裁剪
+adapters/dsh-ui/ DSH 设置面板（宿主路由 + 浏览器半身；含「条件反射」只读页）
 adapters/zcode/  ZCode 插件：UserPromptSubmit hook + whale-persona 管理技能
 scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设默认/拷技能/自检）
                  sync-core.mjs     core → zcode vendor 副本同步（改 core 后必跑）
                  render-preview.mjs 把配置渲染成"实际注入的三段文本"并打印
                  ui.mjs + ui.html 本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
                  memory.mjs       长期记忆确认台（status/confirm/reject/adopt/log）
-tests/           七套测试：DSH 冒烟 / 记忆收件箱 / 模型名匹配 / 形象与语气 / 设置面板 / ZCode hook / 本地编辑器 API
+                 reflex.mjs       条件反射：show / check / new（规则体检闸门 + 建规则，体检不过自动回滚）
+tests/           14 个测试文件：DSH 冒烟 / 记忆收件箱 / 模型名匹配 / 形象与语气 / 设置面板 / ZCode hook / 本地编辑器 API
+                 ＋ 条件反射两组（reflex.mjs 55 条行为、reflex-rules.mjs 15 条建规则闸门）
 qa/              安全审查：probes/probe-security.js（探针）+ security-审查.md（台账与人工复核项）
 ```
 
@@ -548,7 +556,7 @@ qa/              安全审查：probes/probe-security.js（探针）+ security-�
 
 ```bash
 node scripts/sync-core.mjs          # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
-npm test                            # 仓库根跑全部七套测试（含记忆闸门 T18-T22、CSP U5、形象/语气 L1-L5）
+npm test                            # 仓库根跑全部测试（14 个文件；含记忆闸门 T18-T22、CSP U5、形象/语气 L1-L5、条件反射 70 条）
 npm run sec                         # 安全探针：11 组断言 + 自测（探针自己也要能被证明有牙）
 npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 ```
