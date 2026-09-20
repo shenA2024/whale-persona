@@ -3,6 +3,27 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.14.2（2026-09-21）
+
+### 修复：docs/ 没随包分发，README 里的链接对 tarball 用户是死的
+
+触发来源：2026-09-21 收口复查（维护者问"有没有缺东西没发布"）。README 两处指向
+`docs/维护状态.md`（"取舍见…"），而 `package.json` 的 `files` 白名单没有 `docs` ——
+按 **tarball**（本仓的主要分发通道）安装的人点那个链接就是死链；GitHub 上却是好的，
+所以一直没被察觉。`qa/`、`examples/` 都在白名单里，`docs/` 漏了属不一致。
+
+- `package.json`：`files` 加 `docs`（维护状态.md 是公开的取舍记录，随包分发无隐私问题，
+  隐私门禁 S14 本来就覆盖它）。
+- README 一键安装命令升到 v0.14.2（发布清单第 3 节：标签必须选本次版本号，选错 = 404）。
+
+### 验证
+
+```
+npm test     # 18 套 exit 0
+npm run sec  # PASS true（S14 隐私 + S15 写面 13/13）
+npm pack --dry-run | Select-String docs   # 能看到 docs/维护状态.md 进包
+```
+
 ## v0.14.1（2026-09-21）
 
 ### 修复：文档写面落后于代码（第三方走读发现）+ 新增 S15 写面同步门禁

@@ -84,7 +84,7 @@ node scripts/install-dsh.mjs             # 真装
 **没有 git，或者 clone 不动？** 用本仓 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
 
 ```powershell
-dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.14.1/shenA2024-whale-persona-0.14.1.tgz
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.14.2/shenA2024-whale-persona-0.14.2.tgz
 ```
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
