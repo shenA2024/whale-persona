@@ -26,7 +26,7 @@
  * 无法自动化项（SEC_SKIP，不计失败）: 记忆确认行的语义伪造、提示词注入逃逸的人工判定、
  *   宿主平面划分（headless 不注入人设）、第三方扫描复核。以上以 qa/security-审查.md 的人工核验为准。
  *
- * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 11 组；门禁以台账全项人工核验为准。
+ * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 12 组；门禁以台账全项人工核验为准。
  */
 import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'

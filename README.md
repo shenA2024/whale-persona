@@ -501,7 +501,7 @@ DSH 里另有**只读**面板「设置 → 条件反射」：列规则（档位/
 改规则走上面那条命令，或直接让 AI 改文件后跑 `check`。
 
 **诚实边界**：宿主没有"直接产出回答并结束回合"的出口，所以本层给的是**一步极短回答**，不是"不问模型"；
-词袋通道只做**形式匹配**（不懂语义），所以它自带忽略条款；`$DSH_HOME/whale-suite/reflex.log.jsonl` 里只记
+词袋通道只做**形式匹配**（不懂语义），所以它自带忽略条款；`$DSH_HOME/whale-persona/reflex.log.jsonl` 里只记
 规则 id、档位、原话前 40 字 —— 不落盘任何对话内容。
 
 ## 图形界面
@@ -560,8 +560,8 @@ qa/              安全审查：probes/probe-security.js（探针）+ security-�
 
 ```bash
 node scripts/sync-core.mjs          # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
-npm test                            # 仓库根跑全部测试（14 个文件；含记忆闸门 T18-T22、CSP U5、形象/语气 L1-L5、条件反射 70 条）
-npm run sec                         # 安全探针：11 组断言 + 自测（探针自己也要能被证明有牙）
+npm test                            # 仓库根跑全部测试（15 个文件；含记忆闸门 T18-T22、CSP U5、形象/语气 L1-L5、条件反射 70 条、命令路径存在性）
+npm run sec                         # 安全探针：12 组断言 + 自测（探针自己也要能被证明有牙）
 npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 ```
 
@@ -572,7 +572,7 @@ npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 - **安装器运行期零 shell**：自己定位 `@deepseek-ai/dsh/lib/bin.js` 交给 `process.execPath` 以数组传参执行，
   `--profile` / `--base` 走白名单校验，消掉命令注入面；
 - **本地页有 CSP**：一次性 nonce，无 `unsafe-inline`；异常细节只进终端，不回传堆栈；
-- **本地安全探针**：`npm run sec` —— `qa/probes/probe-security.js` 11 组可自动化检查（零依赖 / 零外联 / 无 shell / 路径白名单 / CSP / 注入面 / loopback / 记忆闸门功能探针 / 凭据 / .gitignore / 二进制），带 `--selftest` 证明探针本身有牙；人工复核项与历史班次见 [qa/security-审查.md](qa/security-审查.md)；
+- **本地安全探针**：`npm run sec` —— `qa/probes/probe-security.js` 12 组可自动化检查（零依赖 / 零外联 / 无 shell / 路径白名单 / CSP / 注入面 / loopback / 记忆闸门功能探针 / 凭据 / .gitignore / 二进制 / 本地页 Origin 行为），带 `--selftest` 证明探针本身有牙；人工复核项与历史班次见 [qa/security-审查.md](qa/security-审查.md)；
 - 详细策略与漏洞上报方式：[.github/SECURITY.md](.github/SECURITY.md)。
 
 ### 第三方扫描结果与处置（2026-09-18）

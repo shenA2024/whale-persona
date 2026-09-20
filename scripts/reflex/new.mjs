@@ -139,7 +139,7 @@ const next = Object.assign({}, cfg, { rules: existing.concat([rule]) })
 writeFileSync(file, JSON.stringify(next, null, 2) + '\n', 'utf8')
 
 // 闸门：写盘后立刻按同一份体检脚本复核；不过就回滚（绝不留没验过的规则）
-const chk = spawnSync(process.execPath, [path.join(HERE, 'check.mjs')], { encoding: 'utf8' })
+const chk = spawnSync(process.execPath, [path.join(HERE, 'check.mjs')], { encoding: 'utf8', shell: false })
 const out = String(chk.stdout || '') + String(chk.stderr || '')
 console.log('== 体检（node scripts/reflex.mjs check）==')
 console.log(out.trim())

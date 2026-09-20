@@ -1,5 +1,5 @@
 {
-  "_note": "出厂示例（开源仓零个人内容）。复制到 $DSH_HOME/whale-suite/reflex.json 后按自己情况改。when.tier: flash | pro | any；when.text 是正则（不区分大小写）；then.reply 是要求模型照抄的一句，then.directive 是补充约束，then.extra 追加在你自己的上下文里。",
+  "_note": "出厂示例（开源仓零个人内容）。复制到 $DSH_HOME/whale-persona/reflex.json 后按自己情况改（早期布局 $DSH_HOME/whale-suite/ 里已有 config.json 时用那个目录）。when.tier: flash | pro | any；when.text 是正则（不区分大小写）；then.reply 是要求模型照抄的一句，then.directive 是补充约束，then.extra 追加在你自己的上下文里。",
   "enabled": true,
   "dryRun": true,
   "rules": [

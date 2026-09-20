@@ -27,5 +27,5 @@ if (!cmd || cmd === '-h' || cmd === '--help' || cmd === 'help' || KNOWN.indexOf(
   process.exit(cmd ? 2 : 0)
 }
 
-const r = spawnSync(process.execPath, [path.join(HERE, 'reflex', cmd + '.mjs')].concat(process.argv.slice(3)), { stdio: 'inherit' })
+const r = spawnSync(process.execPath, [path.join(HERE, 'reflex', cmd + '.mjs')].concat(process.argv.slice(3)), { stdio: 'inherit', shell: false })
 process.exit(r.status === null ? 1 : r.status)

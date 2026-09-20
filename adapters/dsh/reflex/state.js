@@ -111,6 +111,6 @@ export function reflexState() {
     effective: cfg.enabled && rules.length > 0,
     shell: process.env.DSH_REFLEX_OFF === '1' ? 'off-by-env' : 'normal',
     log: logStats(path.join(configDir(), 'reflex.log.jsonl')),
-    hint: '只读展示。要改：把「帮我加一条条件反射：<什么时候>→<怎么做>」交给你的 AI；改完让它跑 node tools/check.mjs（退出码 0 才算改完）。',
+    hint: '只读展示。要改：把「帮我加一条条件反射：<什么时候>→<怎么做>」交给你的 AI；改完让它跑 node scripts/reflex.mjs check（退出码 0 才算改完）。',
   }
 }

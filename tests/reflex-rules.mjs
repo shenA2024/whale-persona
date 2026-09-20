@@ -2,7 +2,7 @@
  * 造规则的闸门回归（2026-09-20 加，触发来源：访谈式创建立项）。
  * 判据：①不写 --yes = 只试不写（文件零变化）；②正反例都干净才写盘；
  *   ③反例被硬命中 → 非零退出且**文件零变化**（宁可不加，也不留会误伤的规则）。
- * 跑法：node tests/newrule.mjs（退出码非 0 = 有失败）
+ * 跑法：node tests/reflex-rules.mjs（退出码非 0 = 有失败）
  */
 import { mkdtempSync, readFileSync, writeFileSync, readdirSync } from 'node:fs'
 import os from 'node:os'

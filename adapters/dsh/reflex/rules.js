@@ -1,5 +1,6 @@
 /**
- * 规则表读写：默认落在 $DSH_HOME/whale-suite/reflex.json（可用 DSH_REFLEX_RULES 覆盖）。
+ * 规则表读写：默认落在 $DSH_HOME/whale-persona/reflex.json（早期布局 $DSH_HOME/whale-suite/ 里已有
+ * config.json 时沿用那个目录；可用 DSH_REFLEX_RULES 覆盖）。
  *
  * 为什么不塞进 config.json：config.json 是套件总配置（人设/工坊/toolscope 共用），
  * 反射规则是**会频繁手改的个人资产**，单独一个文件更好改、更好备份、更好整份分享。
