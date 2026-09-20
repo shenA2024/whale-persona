@@ -1718,6 +1718,123 @@ window.__ModuleLoader__.load({
     }
 
 
+    /* ── 条件反射（reflex，2026-09-20 并入人设插件）───────────────────────── */
+
+    var REFLEX_STATE_API = '/whale-persona/api/reflex/state';
+    var REFLEX_TEST_API = '/whale-persona/api/reflex/test';
+    var RX_MUTED = 'var(--dsw-alias-text-2,#98a2ae)';
+    var RX_CARD = { border: '1px solid rgba(255,255,255,.10)', borderRadius: '10px', padding: '10px 12px', marginBottom: '10px', background: 'rgba(255,255,255,.03)' };
+    var RX_CHIP = { display: 'inline-block', padding: '1px 8px', borderRadius: '999px', fontSize: '12px', marginRight: '6px', border: '1px solid rgba(255,255,255,.14)' };
+    var RX_CODE = { fontFamily: 'ui-monospace,Consolas,monospace', fontSize: '12px', wordBreak: 'break-all' };
+    var RX_BTN = { padding: '3px 10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,.18)', background: 'transparent', color: 'inherit', cursor: 'pointer' };
+    var RX_INPUT = { width: '100%', marginTop: '6px', padding: '5px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,.18)', background: 'rgba(0,0,0,.18)', color: 'inherit' };
+
+    function rxTone(text, tone) {
+      var st = Object.assign({}, RX_CHIP);
+      if (tone === 'on') st.background = 'rgba(76,141,255,.20)';
+      if (tone === 'off') st.opacity = .55;
+      if (tone === 'bad') { st.background = 'rgba(255,90,90,.18)'; st.borderColor = 'rgba(255,90,90,.45)'; }
+      return h('span', { style: st }, text);
+    }
+
+    function rxActionText(r) {
+      if (r.reply) return '照抄「' + r.reply + '」';
+      return '注入约束' + (r.directive ? '：' + r.directive : '');
+    }
+
+    function rxChannelText(r) {
+      return '通道：正则'
+        + ((r.nearAny && r.nearAny.length) ? ' ＋ 近似 ' + r.nearAny.length + ' 条' : '')
+        + ((r.keywords && r.keywords.length) ? ' ＋ 词袋 ' + r.keywords.length + ' 词（≥' + r.minHits + ' 命中算软命中）' : '');
+    }
+
+    /**
+     * 条件反射面板：**只读**。
+     * 设计取舍（2026-09-20）：面板只说真话 —— 区分"文件里写的"与"当前生效的"，
+     * 试命中按 flash/pro/其它 三档各判一次（跨档报出），不给假状态。
+     * 不给输入框、不给开关：规则是个人资产，改规则走"让 AI 改文件 + scripts/reflex.mjs 体检"。
+     */
+    function ReflexPanel() {
+      var s = React.useState(null); var st = s[0]; var setSt = s[1];
+      var e1 = React.useState(''); var err = e1[0]; var setErr = e1[1];
+      var q = React.useState(''); var query = q[0]; var setQuery = q[1];
+      var tr = React.useState(null); var trial = tr[0]; var setTrial = tr[1];
+      var timer = React.useRef(null);
+
+      function load() {
+        fetch(REFLEX_STATE_API, { cache: 'no-store' }).then(function (r) { return r.json(); })
+          .then(function (j) { setSt(j); setErr(''); })
+          .catch(function (x) { setErr(String((x && x.message) || x)); });
+      }
+      React.useEffect(function () { load(); }, []);
+
+      if (err) return h('div', { style: RX_CARD }, '读不到条件反射状态：' + err);
+      if (!st) return h('div', { style: { color: RX_MUTED } }, '读取中…');
+
+      var rows = (st.rules || []).map(function (r) {
+        return h('div', { key: r.id, style: RX_CARD },
+          h('div', null, rxTone(r.tier === 'any' ? '任意档' : r.tier, 'on'), r.oncePerSession ? rxTone('每会话一次', 'off') : null, h('b', null, r.id)),
+          h('div', { style: { color: RX_MUTED, marginTop: '4px', fontSize: '13px' } }, '触发：', h('span', { style: RX_CODE }, r.text || (r.model ? 'model~' + r.model : '(无条件)'))),
+          h('div', { style: { marginTop: '4px', fontSize: '13px' } }, '动作：', rxActionText(r)),
+          (r.tools && r.tools.length) ? h('div', { style: { marginTop: '4px', fontSize: '12px', color: RX_MUTED } }, '本步只留工具：' + r.tools.join(' / ') + '（规则文件里 toolNarrowing=true 才生效）') : null,
+          h('div', { style: { color: RX_MUTED, marginTop: '4px', fontSize: '12px' } }, rxChannelText(r) + '　|　已命中 ' + ((st.log && st.log.byRule && st.log.byRule[r.id]) || 0) + ' 次'));
+      });
+
+      var last = st.log && st.log.last;
+      return h('div', { style: { maxWidth: '860px' } },
+        h('div', { style: RX_CARD },
+          h('div', null,
+            rxTone(st.effective ? '生效中' : '当前无规则生效', st.effective ? 'on' : 'bad'),
+            rxTone(st.enabled ? '总开关：开' : '总开关：关', st.enabled ? 'on' : 'off'),
+            rxTone(st.dryRun ? 'dryRun（只记账不动作）' : 'dryRun：关', st.dryRun ? 'bad' : 'off'),
+            st.shell === 'off-by-env' ? rxTone('环境变量已全关', 'bad') : null),
+          st.broken ? h('div', { style: { color: '#ff8a8a', marginTop: '6px' } }, '规则文件坏了：' + st.broken + '（现在一条都不生效，去修文件）') : null,
+          !st.fileExists ? h('div', { style: { color: RX_MUTED, marginTop: '6px' } }, '还没有规则文件（装上零行为改变）：' + st.file) : null,
+          st.fileExists && !st.broken && st.fileRuleCount !== (st.rules || []).length
+            ? h('div', { style: { color: '#ffd479', marginTop: '6px' } }, '注意：文件里写了 ' + st.fileRuleCount + ' 条，实际生效 ' + (st.rules || []).length + ' 条（缺 id 或缺动作的条目被丢掉了）') : null,
+          h('div', { style: { color: RX_MUTED, marginTop: '6px', fontSize: '12px' } }, '规则文件：', h('span', { style: RX_CODE }, st.file)),
+          h('div', { style: { marginTop: '8px' } }, h('button', { onClick: load, style: RX_BTN }, '刷新'))),
+        rows.length ? h('div', null, rows) : h('div', { style: { color: RX_MUTED } }, '还没有任何条件反射。'),
+        h('div', { style: Object.assign({}, RX_CARD, { color: RX_MUTED, fontSize: '13px' }) },
+          h('div', null, '命中台账：fire ' + ((st.log && st.log.fire) || 0) + ' 次 / dry-run ' + ((st.log && st.log.dryRun) || 0) + ' 次'),
+          last ? h('div', { style: { marginTop: '4px' } }, '最近一次：' + last.t + ' ' + last.phase + ' ' + last.rule + (last.head ? '　原话「' + last.head + '」' : '')) : h('div', { style: { marginTop: '4px' } }, '还没有命中记录')),
+        h('div', { style: RX_CARD },
+          h('b', null, '试命中（只测，不改任何东西）'),
+          h('div', { style: { color: RX_MUTED, fontSize: '12px', marginTop: '4px' } }, '把你打算说的话粘进来，看会不会触发；不命中就说明该补规则或改说法。规则可分档写，这里按 flash / pro / 其它 三档各判一次。'),
+          h('input', {
+            value: query, placeholder: '例如：那你知道自己的身份吗？',
+            onChange: function (ev) {
+              var v = ev.target.value;
+              setQuery(v);
+              if (timer.current) clearTimeout(timer.current);
+              if (!v.trim()) { setTrial(null); return; }
+              timer.current = setTimeout(function () {
+                fetch(REFLEX_TEST_API + '?q=' + encodeURIComponent(v), { cache: 'no-store' })
+                  .then(function (r) { return r.json(); })
+                  .then(function (j) { setTrial(Object.assign({ query: v }, j)); })
+                  .catch(function (x) { setTrial({ query: v, error: String((x && x.message) || x) }); });
+              }, 300);
+            },
+            style: RX_INPUT,
+          }),
+          h('div', { style: { marginTop: '6px', fontSize: '13px' } }, (function () {
+            if (!query) return '还没输入';
+            if (!trial || trial.query !== query) return '判定中…';
+            if (trial.error) return '判不了：' + trial.error;
+            if (!trial.matched) return '不会命中任何规则 → 按原样问模型（已按 flash / pro / 其它 三档各判一次）';
+            var hits = trial.hits || [];
+            if (!hits.length) return '会命中：' + trial.ruleId + '（通道 ' + trial.why + ')';
+            return '会命中：' + hits.map(function (x) {
+              return x.ruleId + '（档位 ' + x.tier + '，通道 ' + x.why + (x.soft ? '，软命中：不符会自动忽略' : '') + '）';
+            }).join('；');
+          })())),
+        h('div', { style: Object.assign({}, RX_CARD, { fontSize: '13px' }) },
+          h('b', null, '这一页只读。要改就交给你的 AI：'),
+          h('div', { style: { marginTop: '4px' } }, '「帮我加一条条件反射：<什么时候> → <怎么做>」'),
+          h('div', { style: { marginTop: '4px', color: RX_MUTED } }, '改完让它跑 node scripts/reflex.mjs check（退出码 0 才算改完），本页点刷新即见。')));
+    }
+
+
     /* ── 装配 ───────────────────────────────────────────────────────────── */
 
     exports.inject = ['slots'];
@@ -1809,6 +1926,24 @@ window.__ModuleLoader__.load({
           return function () {};
         }
       }, 'whale-persona: settings section');
+
+      // 第二个整页：条件反射（只读）。插槽不存在也不连累设置页
+      ctx.effect(function () {
+        try {
+          return ctx.slots.inject('settings.section', function () {
+            return ctx.slots.register({
+              name: 'settings.section',
+              id: 'whale-persona-reflex',
+              order: 130,
+              label: function () { return '条件反射'; },
+            }, function WhaleReflexSettingsWithBoundary() {
+              return h(Boundary, null, h(ReflexPanel, null));
+            });
+          });
+        } catch (e) {
+          return function () {};
+        }
+      }, 'whale-persona: reflex section');
     };
 
     return module.exports;

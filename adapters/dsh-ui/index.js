@@ -30,6 +30,9 @@ import { detectCard, fromTavern, toTavern } from '../../core/tavernCard.js'
 import { readLastModel } from '../../core/lastModel.js'
 // 读写纪律与本地编辑器页（scripts/ui.mjs）**同一套**：只替换已知段、未知键保留、坏 JSON 拒写
 import { DEFAULTS, mergeConfig, readRawConfig, renderSections, writeMergedConfig } from '../../core/edit.js'
+// 条件反射层（reflex，2026-09-20 并入人设插件）：本路由只做两件事 —— 报状态、试命中。
+// 规则文件在用户自己那边，**本包不写规则**；写规则走"让 AI 改文件 + scripts/reflex.mjs 体检"那条路。
+import { reflexState, reflexTest } from '../dsh/reflex/index.js'
 
 export const name = '@shenA2024/whale-persona-ui'
 
@@ -327,6 +330,17 @@ export function apply(ctx) {
           }
 
           return send(404, { ok: false, error: 'unknown presets action: ' + action })
+        }
+        // ── 条件反射（reflex）：只读状态 + 试命中 ────────────────────────────────
+        if (url.pathname === API_PATH + '/reflex/state' && req.method === 'GET') {
+          try { return send(200, reflexState()) } catch (e) { return send(200, { ok: false, error: String((e && e.message) || e) }) }
+        }
+        if (url.pathname === API_PATH + '/reflex/test' && req.method === 'GET') {
+          // 不写档位 = 跨档试（flash → pro → 其它 各判一次）：规则按档位分写时，
+          // 只试一个档位会把"其实会命中"说成"不会命中"——面板不许说假话。
+          const q = url.searchParams.get('q') || ''
+          const tier = url.searchParams.get('tier') || ''
+          try { return send(200, { ok: true, query: q, ...reflexTest(q, tier, '') }) } catch (e) { return send(200, { ok: false, error: String((e && e.message) || e) }) }
         }
         if (url.pathname === API_PATH + '/health' && req.method === 'GET') {
           return send(200, { ok: true, exists: existsSync(configPath()) })

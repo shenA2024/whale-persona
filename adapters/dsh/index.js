@@ -19,6 +19,7 @@
  * 生效时机：段是装配期注册、text 是每步求值 —— 改配置下一步生效，改挂载要新会话。
  */
 import { registerPersonaSections, PRESET_SECTIONS } from './sections.js'
+import { registerReflex } from './reflex/index.js'
 
 export const name = '@shenA2024/whale-persona'
 
@@ -26,5 +27,9 @@ export const name = '@shenA2024/whale-persona'
 export const inject = ['systemPrompt']
 
 export function apply(ctx) {
+  // 条件反射层（reflex，2026-09-20 并入本插件）：默认**零规则** = 零行为改变；
+  // 它自己挂 agent/pre-step（命中即注入）与 agent/request（那一步可选瘦身），与段落注册互不依赖。
+  // 任何异常都只让这一层不生效，绝不影响人设段的装配（registerReflex 内部全 try/catch）。
+  try { registerReflex(ctx) } catch { /* 反射层坏了也要把人设装上 */ }
   return registerPersonaSections(ctx, PRESET_SECTIONS)
 }

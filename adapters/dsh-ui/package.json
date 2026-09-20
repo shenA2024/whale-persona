@@ -1,20 +1,40 @@
 {
   "name": "@shenA2024/whale-persona-ui",
-  "version": "0.11.4",
+  "version": "0.12.0",
   "description": "DSH settings panel for whale-persona: edit persona, contracts, thinking language and long-term memory on the left while the right side shows the exact text being injected into the system prompt right now. Same read/write discipline as the bundled local editor.",
   "type": "module",
   "main": "./index.js",
   "exports": {
-    ".": { "default": "./index.js" },
-    "./client": { "default": "./client.js" },
-    "./package.json": { "default": "./package.json" }
+    ".": {
+      "default": "./index.js"
+    },
+    "./client": {
+      "default": "./client.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
   },
   "dsh": {
-    "client": { "platform": "web" }
+    "client": {
+      "platform": "web"
+    }
   },
-  "files": ["index.js", "client.js", "README.md"],
-  "keywords": ["dsh", "dsh-plugin", "persona", "settings", "deepseek-harness"],
-  "engines": { "node": ">=20" },
+  "files": [
+    "index.js",
+    "client.js",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "persona",
+    "settings",
+    "deepseek-harness"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "private": false,
   "license": "MIT",
   "repository": {

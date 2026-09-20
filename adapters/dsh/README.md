@@ -277,3 +277,9 @@ cd adapters/dsh && npm test        # 或 node tests/smoke.mjs && node tests/inbo
 ## 许可
 
 MIT © 2026 shenA2024
+
+## 条件反射（reflex，0.12.0 并入）
+
+本适配器除人设段之外，还装配**条件反射层**（`reflex/`）：命中用户自己写的规则时，在 `agent/pre-step` 追加一条极短指令，
+并在 `agent/request` 里按需给那一步瘦身。规则文件在用户自己那边（`$DSH_HOME/whale-persona/reflex.json`，早期布局沿用 `whale-suite/`），
+**出厂空规则 = 装上零行为改变**。命令行入口 `node scripts/reflex.mjs <show|check|new>`；面板与只读路由在 `adapters/dsh-ui`。

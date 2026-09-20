@@ -1,0 +1,48 @@
+{
+  "_note": "出厂示例（开源仓零个人内容）。复制到 $DSH_HOME/whale-suite/reflex.json 后按自己情况改。when.tier: flash | pro | any；when.text 是正则（不区分大小写）；then.reply 是要求模型照抄的一句，then.directive 是补充约束，then.extra 追加在你自己的上下文里。",
+  "enabled": true,
+  "dryRun": true,
+  "rules": [
+    {
+      "id": "example-short-answer",
+      "priority": 100,
+      "when": {
+        "tier": "any",
+        "text": "^(你好|hi|hello)[!！。 ]*$"
+      },
+      "then": {
+        "reply": "你好，我在。",
+        "extra": "如果对方接下来有具体任务，直接开始做，不要反问。"
+      }
+    },
+    {
+      "id": "example-three-channels",
+      "priority": 80,
+      "when": {
+        "tier": "any",
+        "text": "^(你是不是|你是)(机器人|AI|模型)(吗|嘛)?[？?]*$",
+        "nearAny": ["你是机器人吗", "你是ai吗"],
+        "keywords": ["机器人", "模型", "身份"],
+        "minHits": 2,
+        "textNot": "接口|代码|测试",
+        "maxChars": 40
+      },
+      "then": {
+        "reply": "照抄这一句",
+        "directive": "就这一句，不要补充。"
+      }
+    },
+    {
+      "id": "example-no-tools",
+      "priority": 50,
+      "oncePerSession": true,
+      "when": {
+        "tier": "flash",
+        "text": "今天几号"
+      },
+      "then": {
+        "directive": "用一句话说明你无法确认实时日期，并提醒对方看系统时间；不要调用任何工具去查。"
+      }
+    }
+  ]
+}

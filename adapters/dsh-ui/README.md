@@ -116,3 +116,9 @@ node tests/ui-panel.mjs      # 宿主半身断言（读写路由、护栏、未�
 node tests/ui-css-scope.mjs  # 样式作用域门 C1–C6（只在 .wpr-* / 只用宿主变量 / 无 !important / 不碰 :root,html,body）+ C7–C11（不存在第二层样式与自带外观开关）
 node data/ui-design/preview-panel.mjs --state=filled --name=panel-after   # 静态预览出图（改版前后同机位对照用）
 ```
+
+## 条件反射面板与只读路由（0.12.0）
+
+第二个整页 `settings.section` id `whale-persona-reflex`（label「条件反射」，order 130）—— **只读**：列规则、命中台账、试命中。
+路由：`GET /whale-persona/api/reflex/state`（状态快照）与 `GET /whale-persona/api/reflex/test?q=&tier=`（试命中，不写档位 = 跨档试）。
+两条路由与既有 API 同栈、同 loopback 守卫；规则文件的**写**不在本包（由用户或 AI 改文件后跑 `scripts/reflex.mjs check`）。

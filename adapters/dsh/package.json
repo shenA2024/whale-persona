@@ -1,13 +1,19 @@
 {
   "name": "@shenA2024/whale-persona",
-  "version": "0.11.4",
+  "version": "0.12.0",
   "description": "DeepSeek Harness adapter of whale-persona: registers the persona system-prompt sections (character, per-item work contracts, thinking-chain language, confirmation-gated long-term memory). Rendering core is shared at repo root core/ (also used by the ZCode adapter).",
   "type": "module",
   "main": "index.js",
   "exports": {
-    ".": { "default": "./index.js" },
-    "./global": { "default": "./global.js" },
-    "./package.json": { "default": "./package.json" }
+    ".": {
+      "default": "./index.js"
+    },
+    "./global": {
+      "default": "./global.js"
+    },
+    "./package.json": {
+      "default": "./package.json"
+    }
   },
   "license": "MIT",
   "keywords": [
@@ -24,7 +30,8 @@
     "global.js",
     "sections.js",
     "README.md",
-    "skills"
+    "skills",
+    "reflex"
   ],
   "scripts": {
     "test": "node ../../tests/smoke.mjs && node ../../tests/global.mjs && node ../../tests/inbox.mjs && node ../../tests/zcode-hook.mjs && node ../../tests/ui.mjs",

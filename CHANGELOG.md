@@ -3,6 +3,36 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.12.0（2026-09-20）
+
+### 新能力：条件反射层（reflex）并入本插件
+
+触发来源：2026-09-20 维护者决定「条件反射本质上属于人设插件」——把原先独立开发的这一层并进本仓，
+让它随人设插件一起公开；并明确**只公开本仓**，其余配套项目保持私有。
+
+**它是什么**：用户自己写规则，命中规则时由插件**在代码层**给会话追加一条极短指令，让模型当步直答；
+匹配是纯代码（正则 / 归一化子串 / 词袋），**不调模型、不花 token**。
+
+- 新模块 `adapters/dsh/reflex/`（`index.js` / `match.js` / `rules.js` / `state.js` / `toolnarrow.js` / `log.js`），
+  由 `adapters/dsh/index.js` 装配；**零宿主依赖**（连注入消息都按宿主校验器要求自己造形状，不 import 宿主包）。
+- 规则文件 `$DSH_HOME/whale-persona/reflex.json`（早期布局 `whale-suite/` 沿用；`DSH_REFLEX_RULES` / `DSH_REFLEX_OFF` 可用）；
+  出厂**空规则**，仓库里只有不含个人内容的示例 `examples/reflex.example.json`。
+- 设置面板新增第二个整页「条件反射」（`settings.section` id `whale-persona-reflex`）：只读列规则 / 台账 / 试命中；
+  路由 `GET /whale-persona/api/reflex/state`、`GET /whale-persona/api/reflex/test`（只读、仅 loopback）。
+- 命令行 `node scripts/reflex.mjs <show|check|new>`：体检闸门（退出码 0 才算交付）、
+  建规则（先正反例试算，加 `--yes` 才写盘，**体检不过自动回滚**）。
+- 省 token 三件事：命中那一步的请求瘦身（**只在压得动推理时才压输出额度**）、
+  可选的**步级工具裁剪**（`then.tools` ＋ `toolNarrowing`，两步门、一步一裁、台账记 `savedChars`）。
+- 新增回归：`tests/reflex.mjs`（55 项行为）＋ `tests/reflex-rules.mjs`（15 项建规则闸门）。
+
+### 验证
+
+```
+npm test     # 14 套 exit 0（新增 tests/reflex.mjs 55 条、tests/reflex-rules.mjs 15 条）
+```
+
+（本版不发 npm：发布通道与节奏仍由维护者按需决定。）
+
 ## v0.11.4（2026-09-19）
 
 ### 改进（设置面板与本地编辑器：一轮可用性打磨）
