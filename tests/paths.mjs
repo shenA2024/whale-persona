@@ -11,8 +11,11 @@
  *   两处都说没有 → FAIL 并打印 `文件:行号 -> 路径`。两条解析规则是必要的：
  *   子包 package.json 里写的是 `node ../../tests/smoke.mjs`（相对子包），
  *   文档里写的是 `node scripts/ui.mjs`（相对仓库根）。
- * 扫描面：生产代码 core/ adapters/ scripts/；夹具与文档 tests/ qa/ docs/ examples/ 与根 README/CONTRIBUTING/CHANGELOG。
- * 自测：`--selftest` 在临时目录种一条死引用，断言本门禁会 FAIL（门禁自己也得有牙）。
+ * 扫描面：生产代码 core/ adapters/ scripts/；夹具与文档 tests/ qa/ docs/ examples/ .github/ 与根 README/CONTRIBUTING/CHANGELOG。
+ * 豁免：文档里**要引用一条错的命令**（"别跑这个"）时，在那一行写 `paths-gate:exempt`，本门禁跳过该行 ——
+ *   有出口，才不会有人为了写文档把整个门禁关掉。豁免是逐行的，不设全局开关。
+ * 自测：`--selftest` 在临时目录种一条死引用 +一条活引用 +一条带豁免标记的死引用，
+ *   断言门禁"只抓没豁免的那条"（门禁自己也得有牙）。
  * 跑法：node tests/paths.mjs（退出码非 0 = 有失败）；--selftest 只跑自测。
  */
 import { existsSync, readFileSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
@@ -29,6 +32,8 @@ const SKIP_DIRS = new Set(['node_modules', '.git', 'data', '.tmp', 'out', 'build
 const TEXT_EXT = new Set(['.js', '.mjs', '.cjs', '.json', '.md', '.html', '.yml', '.yaml'])
 const SCAN_DIRS = ['core', 'adapters', 'scripts', 'tests', 'qa', 'docs', 'examples', '.github']
 const SCAN_FILES = ['README.md', 'CONTRIBUTING.md', 'CHANGELOG.md']
+/** 行内出现本标记 = 该行是"引用错误命令"的文档，跳过（逐行豁免，无全局开关） */
+const EXEMPT = 'paths-gate:exempt'
 /** `node` 与路径之间只允许空白；路径里不许有 `<`/引号，避免把 `node <profile>/…` 这类占位符当引用 */
 const REF = /node\s+([A-Za-z0-9_][A-Za-z0-9_./@-]*\.(?:mjs|js|cjs))\b/g
 
@@ -62,6 +67,7 @@ export function scan(root) {
   for (const file of targets(root)) {
     const lines = readFileSync(file, 'utf8').split(/\r?\n/)
     for (let i = 0; i < lines.length; i++) {
+      if (lines[i].indexOf(EXEMPT) >= 0) continue
       REF.lastIndex = 0
       let m
       while ((m = REF.exec(lines[i])) !== null) {
@@ -99,12 +105,16 @@ function selftest() {
     // 把命令整串写成字面量会被自己判 FAIL，所以路径切开、运行时再拼出斜杠
     const deadRef = ['node', 'tools' + '/' + 'check.mjs'].join(' ')
     const liveRef = ['node', 'scripts' + '/' + 'real.mjs'].join(' ')
-    writeFileSync(path.join(tmp, 'README.md'), '跑法：' + deadRef + '（死引用）\n跑法：' + liveRef + '（活引用）\n', 'utf8')
+    writeFileSync(path.join(tmp, 'README.md'),
+      '跑法：' + deadRef + '（死引用）\n'
+      + '跑法：' + liveRef + '（活引用）\n'
+      + '别跑：' + deadRef + '（' + EXEMPT + '）\n', 'utf8')
     const r = scan(tmp)
     const caughtDead = r.misses.length === 1 && r.misses[0].ref === 'tools/check.mjs'
     const keptLive = r.refs === 2
     check('S1 自测：抓到死引用', caughtDead, JSON.stringify(r.misses))
     check('S2 自测：放过活引用', keptLive, 'refs=' + r.refs)
+    check('S3 自测：带豁免标记的行被跳过', r.misses.every((m) => m.where !== 'README.md:3'), JSON.stringify(r.misses))
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }
