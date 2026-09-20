@@ -223,12 +223,21 @@ guard('S14', () => {
   // 不是自觉。曾经真漏过一次：CHANGELOG / README / scripts/inject-size.mjs 里拿维护者的真实工作目录
   // 当命令行示例（--cwd），连测试都抓不到（功能与安全探针都不管"示例里写了谁的路径"）。
   // 词表在源码里拆开写 + 扫描时跳过本文件，避免探针自己命中自己。
+  // 词表一律用**字符码**拼出来：这样探针源码里读不到任何私人词，它就能（也应该）扫自己。
+  // 上一版把词拆成两半写（['徐','石'].join('')）—— 拆分不等于消除，文件里照样是那两个字，
+  // 而我又把它从扫描面里排除掉了，于是它成了唯一漏网的文件（2026-09-20 当场被抓）。
+  const fromCode = (codes) => String.fromCharCode.apply(null, codes)
   const pats = [
-    ['鲸', '鱼', '姐', '姐'].join(''),
-    ['徐', '石'].join(''),
-    ['DS', '与', '<maintainer>'].join(''),
-    ['Ti', 'Shi', 'Ci'].join(''),
-    ['Warm', 'stone'].join(''),
+    fromCode([0x9cb8, 0x9c7c, 0x59d0, 0x59d0]),           // 人设名（4 字）
+    fromCode([0x5f90, 0x77f3]),                            // 维护者姓名（2 字）
+    fromCode([0x59bb, 0x5b50]),                            // 关系词
+    fromCode([0x5f1f, 0x5f1f]),
+    fromCode([0x5b69, 0x5b50]),
+    fromCode([0x59d0, 0x59d0]),
+    fromCode([0x5988, 0x5988]),
+    fromCode([0x54, 0x69, 0x53, 0x68, 0x69, 0x43, 0x69]),  // 私有库名
+    fromCode([0x57, 0x61, 0x72, 0x6d, 0x73, 0x74, 0x6f, 0x6e, 0x65]), // 私有项目名
+    fromCode([0x33, 0x33, 0x35, 0x30, 0x33]),              // 本机用户名片段
   ]
   const self = rel(fileURLToPath(import.meta.url))
   const hits = []
@@ -241,7 +250,7 @@ guard('S14', () => {
     : null
   for (const p of (tracked || walk(ROOT, null))) {
     const r = rel(p)
-    if (r === self) continue
+    // 注意：**不跳过本文件** —— 词表已是字符码拼的，本文件自己就该是干净的（上一版的教训）
     if (!/\.(js|mjs|cjs|json|md|html|yml|yaml|txt)$/.test(r)) continue
     let txt = ''
     try { txt = readFileSync(p, 'utf8') } catch { continue }
