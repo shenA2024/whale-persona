@@ -22,6 +22,7 @@
  *   S10 SEC_IGNORE    .gitignore 挡住依赖/生成物/大素材/日志/环境文件
  *   S13 SEC_SINK      分类路由（0.13.0）：kind 非 memory 的条目永不进提示词；渲染路径不得有写盘副作用
  *   S14 SEC_PRIVACY   私人内容永不出海（0.13.0）：维护者的人名/关系/私有工作目录在公开仓里零出现
+ *   S15 SEC_WRITE     写面清单与代码同步（0.14.1）：会写盘的生产文件必须逐个登记在 SECURITY.md 里
  *   S11 SEC_BINARY    版本库里没有二进制大件
  *   S12 SEC_ORIGIN    本地页真起服务打三个 Origin（行为测试）：非 loopback 必须 403
  *
@@ -215,6 +216,28 @@ guard('S13', () => {
       + ' 渲染写出了文件=' + existsSync(target) + ' 路由已下发=' + inPrompt('pitfall'))
     rmSync(home, { recursive: true, force: true })
   })().catch((e) => { skip('S13', 'probe-error', String(e.message).slice(0, 80)) })
+})
+
+guard('S15', () => {
+  // SEC_WRITE（触发来源：2026-09-21 第三方走读指出 SECURITY.md 的写面描述落后于代码 ——
+  // 它声称只写 config + 收件箱，实际还写 reflex 台账 / 沉降目标 / sink-log / last-model / session-flags）。
+  // 判据：**会写盘的生产文件必须逐个被 SECURITY.md 点名**，否则当场红。
+  // 反向不判（文档里本来就该提到只读文件）；刻意不按行号比对（行号天天变），只比对文件集合。
+  const WRITE = /\b(writeFileSync|appendFileSync|createWriteStream|copyFileSync|renameSync|rmSync|unlinkSync|mkdirSync)\s*\(/
+  const doc = readFileSync(path.join(ROOT, '.github', 'SECURITY.md'), 'utf8')
+  const writers = []
+  for (const dir of ['core', 'adapters', 'scripts']) {
+    for (const p of walk(path.join(ROOT, dir), null)) {
+      const r = rel(p)
+      if (!/\.(js|mjs|cjs)$/.test(r) || r.includes('vendor/')) continue
+      let txt = ''
+      try { txt = readFileSync(p, 'utf8') } catch { continue }
+      if (WRITE.test(txt)) writers.push(r)
+    }
+  }
+  const missing = writers.filter((r) => !doc.includes(r))
+  t('S15', writers.length >= 8 && missing.length === 0,
+    '会写盘的生产文件 ' + writers.length + ' 个；未登记 ' + (missing.length ? JSON.stringify(missing) : '无'))
 })
 
 guard('S14', () => {

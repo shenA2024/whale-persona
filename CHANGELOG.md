@@ -3,6 +3,33 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.14.1（2026-09-21）
+
+### 修复：文档写面落后于代码（第三方走读发现）+ 新增 S15 写面同步门禁
+
+触发来源：2026-09-21 维护者转来第三方走读报告（GLM5.3）。它指出 `.github/SECURITY.md` 仍写
+"它写盘只有两处：config.json 与（只读的）记忆收件箱"，而 0.13.0 起实际写面已扩到
+reflex 台账 / 沉降目标文件 / sink-log / last-model / session-flags —— 属文档漂移。同报告还指出
+关联仓 `check.mjs` 的自检默认路径写死了维护者本机路径（S14 词表管不到"工具默认值"这类泄漏）。
+
+- **`.github/SECURITY.md` 写面清单**（中文表格 + 英文段）：逐项登记 13 个会写盘的生产文件及其触发时机；
+  同时改掉两处过时口径 —— 版本行（0.11.x → 0.14.x）、"设置面板也能确认记忆"（实际只有 CLI 一条路）。
+- **新增探针 S15（SEC_WRITE）**：扫 `core/|adapters/|scripts/` 里出现写/删调用的文件，
+  **任何一个没被 SECURITY.md 点名就红**。写这条时它当场抓出我自己漏登的两个：`core/edit.js`
+  （面板/本地编辑器的保存路径）与 `scripts/sync-core.mjs`（重建 vendor 副本）—— 门禁第一天就抓到了真东西。
+- **关联仓 `check.mjs`**：引擎路径改三级解析（`WHALE_HARNESS` 环境变量 → `--harness` 参数 →
+  已安装插件的 `$DSH_HOME/profiles/*/node_modules/@shenA2024/whale-persona`），拿不到就明确报错不猜；
+  公开仓里不再出现任何本机路径。
+
+### 验证
+
+```
+npm test     # 18 套 exit 0
+npm run sec  # PASS true {fail:0,suspect:0,skip:4}
+             #   S15：会写盘的生产文件 13 个；未登记 无（加 S15 之前是 13/2 未登记，当场抓出）
+node ../whale-persona-presets/check.mjs   # 内容包自检：16 张卡全过（引擎路径三级解析生效）
+```
+
 ## v0.14.0（2026-09-21）
 
 ### 新增：共存体检 + 撞名不再炸树（回应「会不会和别的插件冲突」）

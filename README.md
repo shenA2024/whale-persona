@@ -45,7 +45,7 @@ per-step request slimming and per-step tool narrowing — the rule table is pers
 | 条件反射（reflex） | 自己写规则，命中即在代码层注入一步指令（正则 / 近似 / 词袋三通道）；匹配不花 token，可选把这一步的请求瘦身、把工具裁到白名单；默认**零规则** |
 | 两个编辑入口 | DSH「设置 → 人设」可编辑面板 + 本仓自带本地编辑器页；**同一套读写纪律** |
 | 零行为改变 | 不写配置 = 三段全空，装上不改变任何行为（有单测钉住） |
-| 默认安全 | 不联网、不执行命令、不读你的工作目录；只读写自己的 config 与收件箱 |
+| 默认安全 | 不联网、不执行命令、不读你的工作目录；写面逐项登记在 [.github/SECURITY.md](.github/SECURITY.md)，并由安全探针 S15 与代码同步（新增写盘文件不登记 = 安全套件红） |
 
 ## 现成的人设，去关联仓拿（本体只做引擎）
 
@@ -685,12 +685,13 @@ npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 
 ## 安全与隐私
 
-- **不联网、不执行命令、不读工作目录**：只读写自己的 config 与收件箱；所有异常降级为空输出；
+- **不联网、不执行命令、不读工作目录**：写面**逐项登记**在 [.github/SECURITY.md](.github/SECURITY.md)（配置 / 预设库 / 会话开关 / 模型 id / 沉降目标 + 日志 / 条件反射规则与台账 / 安装器写 profile 与 preset / CLI 导出），
+  并由探针 **S15** 与代码双向对齐——**新增一个会写盘的文件而不登记，安全套件当场红**；所有异常降级为空输出；
 - **记忆入库是代码闸门**（0.8.0）：见上一节；
 - **安装器运行期零 shell**：自己定位 `@deepseek-ai/dsh/lib/bin.js` 交给 `process.execPath` 以数组传参执行，
   `--profile` / `--base` 走白名单校验，消掉命令注入面；
 - **本地页有 CSP**：一次性 nonce，无 `unsafe-inline`；异常细节只进终端，不回传堆栈；
-- **本地安全探针**：`npm run sec` —— `qa/probes/probe-security.js` 12 组可自动化检查（零依赖 / 零外联 / 无 shell / 路径白名单 / CSP / 注入面 / loopback / 记忆闸门功能探针 / 凭据 / .gitignore / 二进制 / 本地页 Origin 行为），带 `--selftest` 证明探针本身有牙；人工复核项与历史班次见 [qa/security-审查.md](qa/security-审查.md)；
+- **本地安全探针**：`npm run sec` —— `qa/probes/probe-security.js` 15 组可自动化检查（零依赖 / 零外联 / 无 shell / 路径白名单 / CSP / 注入面 / loopback / 记忆闸门功能探针 / 凭据 / .gitignore / 二进制 / 本地页 Origin 行为 / 沉降不注入与渲染零写盘 S13 / 私人内容零出海 S14 / 写面清单与代码同步 S15），带 `--selftest` 证明探针本身有牙；人工复核项与历史班次见 [qa/security-审查.md](qa/security-审查.md)；
 - 详细策略与漏洞上报方式：[.github/SECURITY.md](.github/SECURITY.md)。
 
 ### 第三方扫描结果与处置（2026-09-18）
