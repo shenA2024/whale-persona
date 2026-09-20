@@ -47,6 +47,27 @@ per-step request slimming and per-step tool narrowing — the rule table is pers
 | 零行为改变 | 不写配置 = 三段全空，装上不改变任何行为（有单测钉住） |
 | 默认安全 | 不联网、不执行命令、不读你的工作目录；只读写自己的 config 与收件箱 |
 
+## 现成的人设，去关联仓拿（本体只做引擎）
+
+本仓是**引擎**：出厂空白、零观点、默认不改变行为（有单测钉死）。
+想要"拿来就用"的起点——立场、身份正文、逐条可勾选的纪律——去关联仓：
+
+> **[whale-persona-presets](https://github.com/shenA2024/whale-persona-presets)** —— 16 张预设卡
+> （通用起步 / 证据优先 / 讲到你懂 / 去水改稿 / 严格评审 / 需求澄清 / 排障 / 重构 / 看数 /
+> 产品评审 / 陪练 / 资料整理 / 中译英 / 安全审查 / 提示词工程 / 多智能体分工）。
+
+导入通道就是本仓已有的那条，不需要装新东西：
+
+```bash
+node scripts/presets.mjs import starter-plus.json   # 下载的卡直接吃
+node scripts/presets.mjs list                       # 看有哪些
+node scripts/presets.mjs apply starter-plus         # 应用（应用前自动存 autosave，可切回）
+```
+
+两仓的分工是刻意的：**内容更新频繁、质量参差、还可能夹带第三方文本**，而引擎要的是"出厂空白 + 零行为改变"
+可被机器钉死（`npm test` 与 `npm run sec`）。混在一起，两边都会被拖坏。内容仓的每张卡都要过
+它自己的 `check.mjs`（结构 + 用真引擎导入一遍 + 隐私门禁）。
+
 ## 60 秒上手
 
 **① 装（DSH）** —— 一条命令：装插件 + 建预设 + 设默认 + 拷技能 + 自检
