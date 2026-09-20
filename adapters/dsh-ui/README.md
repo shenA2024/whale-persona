@@ -114,7 +114,8 @@ token 名取自 DSH 前端产物实测（`dsh-client-ui-theme` 的 `body[data-ds
 ```bash
 node tests/ui-panel.mjs      # 宿主半身断言（读写路由、护栏、未知键保留、坏 JSON 拒写、换档、字段口径、形象/语气卡与预设下发；折叠默认收起 N6/N6b/N6c、基础层 CSS 纪律 N7/N7b、磁盘残留 ui 段不被裁 N8）
 node tests/ui-css-scope.mjs  # 样式作用域门 C1–C6（只在 .wpr-* / 只用宿主变量 / 无 !important / 不碰 :root,html,body）+ C7–C11（不存在第二层样式与自带外观开关）
-node data/ui-design/preview-panel.mjs --state=filled --name=panel-after   # 静态预览出图（改版前后同机位对照用）
+# 最后一行是**本机维护者专用**：夹具在 data/ 下（.gitignore 忽略、不入库），仓库读者拿不到它 —— 故标 paths-gate:exempt
+node data/ui-design/preview-panel.mjs --state=filled --name=panel-after   # 静态预览出图（改版前后同机位对照用；paths-gate:exempt）
 ```
 
 ## 条件反射面板与只读路由（0.12.0）

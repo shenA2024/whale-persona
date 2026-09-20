@@ -19,6 +19,7 @@
  * 跑法：node tests/paths.mjs（退出码非 0 = 有失败）；--selftest 只跑自测。
  */
 import { existsSync, readFileSync, readdirSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -49,6 +50,16 @@ function walk(dir, acc) {
   return out
 }
 
+/** 仓库**跟踪**的文件集合（git ls-files）。判据必须用它，不能用磁盘存在性 ——
+ *  2026-09-20 CI 红了 6 次才想明白：本机 data/ 下有 gitignore 掉的夹具，existsSync 看得到、
+ *  干净 clone 看不到，于是「本机绿 / CI 红」。读者只可能跑到仓库里真有的文件。
+ *  非 git 目录（自测夹具）返回 null → 退回磁盘判据。 */
+function trackedSet(root) {
+  const r = spawnSync('git', ['-C', root, 'ls-files', '-z'], { encoding: 'utf8', shell: false })
+  if (r.status !== 0 || !r.stdout) return null
+  return new Set(r.stdout.split('\0').filter(Boolean).map((p) => path.resolve(root, p)))
+}
+
 /** 扫描面（root 可换成临时目录，供自测用） */
 export function targets(root) {
   const out = []
@@ -63,6 +74,8 @@ export function targets(root) {
 /** 返回 { refs, misses }：refs = 扫到的引用条数（0 说明扫描面坏了，门禁会自己报 P2 失败） */
 export function scan(root) {
   const misses = []
+  const tracked = trackedSet(root)
+  const has = (p) => (tracked ? tracked.has(p) : existsSync(p))
   let refs = 0
   for (const file of targets(root)) {
     const lines = readFileSync(file, 'utf8').split(/\r?\n/)
@@ -75,7 +88,7 @@ export function scan(root) {
         const ref = m[1]
         const byFile = path.resolve(path.dirname(file), ref)
         const byRoot = path.resolve(root, ref)
-        if (!existsSync(byFile) && !existsSync(byRoot)) {
+        if (!has(byFile) && !has(byRoot)) {
           misses.push({
             where: path.relative(root, file).split(path.sep).join('/') + ':' + (i + 1),
             ref,
@@ -84,7 +97,7 @@ export function scan(root) {
       }
     }
   }
-  return { refs, misses }
+  return { refs, misses, tracked: tracked ? tracked.size : null }
 }
 
 let checks = 0
@@ -128,6 +141,7 @@ function main() {
     check('P1 全部 node 命令引用的路径都存在', r.misses.length === 0,
       r.misses.length ? JSON.stringify(r.misses.slice(0, 8)) : '(扫到 ' + r.refs + ' 条引用)')
     check('P2 扫描面非空（防"扫了个寂寞"式的假通过）', r.refs >= 50, 'refs=' + r.refs)
+    check('P3 判据走的是 git 跟踪集（不是磁盘存在性）', typeof r.tracked === 'number' && r.tracked > 50, 'tracked=' + r.tracked)
   }
   console.log('-- 路径存在性：' + checks + ' 项' + (failed ? '，失败 ' + failed : '全过'))
   process.exit(failed ? 1 : 0)
