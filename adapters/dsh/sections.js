@@ -53,7 +53,24 @@ export function registerPersonaSections(ctx, names) {
   const ORDER_PREFIX = resolveOrder(ctx.systemPrompt, names.prefix.orderKey, names.prefix.order)
   const ORDER_SUFFIX = resolveOrder(ctx.systemPrompt, names.suffix.orderKey, names.suffix.order)
 
-  const disposePrefix = ctx.systemPrompt.section({
+  /**
+   * 段注册的**降级**包装（0.14.0，回应「会不会和别的插件冲突」）：
+   * 宿主对「同一平面里已存在的段名」是硬错 —— 一旦抛出，整棵插件树起不来，用户看到的是 DSH 打不开。
+   * 本插件的立场一贯是「最坏没有人设，也不能让你的会话炸掉」（与 core/ 的异常降级同一口径）：
+   * 注册失败**吞掉异常、只报告**，最多少一段。
+   * 注意：跨层遮蔽官方 persona 段是官方机制、根本不会抛，不在这里的射程内。
+   */
+  const failed = []
+  const safeSection = (spec) => {
+    try {
+      return ctx.systemPrompt.section(spec)
+    } catch (e) {
+      failed.push(spec.name + ' ← ' + String((e && e.message) || e))
+      return () => {}
+    }
+  }
+
+  const disposePrefix = safeSection({
     name: names.prefix.name,
     order: ORDER_PREFIX,
     // 正文由 core 渲染成品：关掉插值，既避免用户文本里的 {{}} 被误解析，也避免未知变量抛错
@@ -71,7 +88,7 @@ export function registerPersonaSections(ctx, names) {
     },
   })
 
-  const disposeSuffix = ctx.systemPrompt.section({
+  const disposeSuffix = safeSection({
     name: names.suffix.name,
     order: ORDER_SUFFIX,
     // 不走 interpolate:true —— 用户自定义 suffix 里一个未知 {{var}} 就会让新会话发不出
@@ -88,7 +105,7 @@ export function registerPersonaSections(ctx, names) {
     },
   })
 
-  const disposeThinkingLang = ctx.systemPrompt.section({
+  const disposeThinkingLang = safeSection({
     name: names.thinking.name,
     order: names.thinking.order,
     interpolate: false,
@@ -132,6 +149,14 @@ export function registerPersonaSections(ctx, names) {
     } catch {
       disposeFiber = null
     }
+  }
+
+  if (failed.length) {
+    try {
+      console.warn('[whale-persona] 段注册失败：这些段不会生效，但会话照常（不炸整棵树）。'
+        + '多半是同一平面里已经有同名段（另一个插件，或另一份本插件）；跑 node scripts/doctor.mjs 体检。\n  '
+        + failed.join('\n  '))
+    } catch { /* 连日志都打不了就算了 */ }
   }
 
   return () => {

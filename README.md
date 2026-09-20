@@ -611,6 +611,42 @@ CSP 走响应头 + meta 双份，`script-src`/`style-src` 不含 `unsafe-inline`
 
 共享：同一份 config schema、同一套渲染文案、同一个收件箱 —— 两个宿主看到的是同一个"人"。
 
+## 与其他插件共存（冲突怎么办）
+
+**先把话说清楚**：和官方 `@deepseek-ai/dsh-persona`「冲突」是**设计目的**，不是 bug —— 我们占的就是
+`deployment:persona-prefix` / `-suffix` 这两个官方具名槽位，靠**跨层遮蔽**（官方机制）让你的人设盖住部署级默认。
+真正会造成麻烦的只有两件事，且都能查：
+
+**① 同一平面里还有别人注册同名段** —— 宿主对同层重名是**硬错**。自 0.14.0 起我们**不再让它炸掉整棵树**：
+注册失败的段被吞掉并留一条 `console.warn`（最多少一段，不是 DSH 起不来），其它段照常工作。
+
+**② profile 里重复的 loader id**（`duplicate loader entry id`）—— 0.11.2 起安装脚本会自动清，
+重跑一次 `install-dsh.mjs` 即自愈。
+
+**体检一条命令**（只读，不改任何东西）：
+
+```bash
+node scripts/doctor.mjs            # 人读
+node scripts/doctor.mjs --json     # 机器读（退出码非 0 = 有冲突级问题）
+```
+
+它报四件事：我们占了哪些名字、已装插件里还有谁声明同一批名字（并区分**已挂载**与**只是躺在 node_modules**）、
+profile 里有没有重复 loader id、配置真源在哪。
+
+**我们占用的名字清单**（要装在一起，先对这张表）：
+
+| 类型 | 名字 |
+|---|---|
+| 段（preset 平面） | `deployment:persona-prefix`、`deployment:persona-suffix`、`whale:thinking-language` |
+| 段（全局入口 `./global`，自有名不占官方槽位） | `whale:persona-global`、`whale:persona-global-suffix`、`whale:global-thinking-language` |
+| 命令 | `memory` |
+| loader id | `whale-persona-ui`（设置面板那行） |
+| agent preset | `whale-persona`（安装脚本创建） |
+| 配置目录 | `$DSH_HOME/whale-persona/`（旧布局 `$DSH_HOME/whale-suite/` 存在时沿用） |
+
+**真撞了怎么办**：两者不要挂**同一平面**。要并存就让其中一方走 `@shenA2024/whale-persona/global`
+（自有段名、不占官方槽位），或把不用的那份从该平面摘掉。
+
 ## 仓库结构
 
 ```text
@@ -627,6 +663,7 @@ scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设�
                  ui.mjs + ui.html 本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
                  memory.mjs       长期记忆确认台（status/confirm/reject/adopt/log；确认即按 kind 沉降）
                 inject-size.mjs  注入体积体检（分段字符数 + 预算判定；--json 机器可读）
+                doctor.mjs       共存体检（我们占了哪些名字 / 谁在同平面抢名字 / 重复 loader id）
                  reflex.mjs       条件反射：show / check / new（规则体检闸门 + 建规则，体检不过自动回滚）
 tests/           17 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
                  设置面板 / ZCode hook / 本地编辑器 API / 路径存在性门禁
