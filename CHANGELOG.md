@@ -46,7 +46,7 @@ npm test     # 17 套 exit 0（新增 tests/sink.mjs 28 项、tests/inject-size.
 npm run sec  # PASS true fail=0 suspect=0 skip=4（新增 S13 SEC_SINK：
              #  分类条目永不进提示词 + 渲染路径零写盘副作用；同轮修掉 S8 靠 process.env
              #  定位的老毛病 —— 它是异步探针，同步探针插在它的 await 之间改 DSH_HOME 就会读串台）
-node scripts/inject-size.mjs --cwd D:/<private-repo>
+node scripts/inject-size.mjs --cwd D:/work/demo
              # 实测本机真实配置：人设正文 1689 / 历史备忘 407 / 末尾段 37 / 思考语言 127 = 合计 2260 字符
 node scripts/memory.mjs   # 状态台新增「沉降路由」「沉降日志」与逐条 kind 标注
 ```

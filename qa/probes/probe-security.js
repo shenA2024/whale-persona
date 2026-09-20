@@ -21,6 +21,7 @@
  *   S9  SEC_SECRET    仓库里没有真实凭据
  *   S10 SEC_IGNORE    .gitignore 挡住依赖/生成物/大素材/日志/环境文件
  *   S13 SEC_SINK      分类路由（0.13.0）：kind 非 memory 的条目永不进提示词；渲染路径不得有写盘副作用
+ *   S14 SEC_PRIVACY   私人内容永不出海（0.13.0）：维护者的人名/关系/私有工作目录在公开仓里零出现
  *   S11 SEC_BINARY    版本库里没有二进制大件
  *   S12 SEC_ORIGIN    本地页真起服务打三个 Origin（行为测试）：非 loopback 必须 403
  *
@@ -55,7 +56,8 @@ const guard = (id, fn) => { try { fn() } catch (e) { skip(id, 'probe-error', Str
 /** 异步探针（S12 要真起服务）登记到这里，结论处 await —— 必须声明在 guard 之前，否则 TDZ 报错 */
 let pending = Promise.resolve()
 
-const SKIP_DIRS = new Set(['node_modules', '.git', 'data', '.tmp', 'out', 'build', 'dist', '.inbox'])
+// .workbuddy = 本机私有工作笔记（含维护者私有路径与拍板记录），从不出海：磁盘判据下也要跳过
+const SKIP_DIRS = new Set(['node_modules', '.git', '.workbuddy', 'data', '.tmp', 'out', 'build', 'dist', '.inbox'])
 const PROD_EXT = new Set(['.js', '.mjs', '.html'])
 /** 生产源码 = core/ adapters/ scripts/（tests/ 是夹具，不算生产面） */
 function walk(dir, extSet, out) {
@@ -213,6 +215,40 @@ guard('S13', () => {
       + ' 渲染写出了文件=' + existsSync(target) + ' 路由已下发=' + inPrompt('pitfall'))
     rmSync(home, { recursive: true, force: true })
   })().catch((e) => { skip('S13', 'probe-error', String(e.message).slice(0, 80)) })
+})
+
+guard('S14', () => {
+  // SEC_PRIVACY（2026-09-20 维护者定下的红线）：
+  // 「我们自己的独特配置（人设正文、记忆、私有目录）永远不发出这个仓」——这句话必须是机器判据，
+  // 不是自觉。曾经真漏过一次：CHANGELOG / README / scripts/inject-size.mjs 里拿维护者的真实工作目录
+  // 当命令行示例（--cwd），连测试都抓不到（功能与安全探针都不管"示例里写了谁的路径"）。
+  // 词表在源码里拆开写 + 扫描时跳过本文件，避免探针自己命中自己。
+  const pats = [
+    ['鲸', '鱼', '姐', '姐'].join(''),
+    ['徐', '石'].join(''),
+    ['DS', '与', '<maintainer>'].join(''),
+    ['Ti', 'Shi', 'Ci'].join(''),
+    ['Warm', 'stone'].join(''),
+  ]
+  const self = rel(fileURLToPath(import.meta.url))
+  const hits = []
+  // 判据面 = **git 跟踪集**（= 会真的被推上去的那批），不是磁盘上的所有文件：
+  // 本机的 .workbuddy/memory/ 这类私有笔记本来就该写维护者的名字 —— 它们从不出海，不该判红。
+  // （同一个教训 2026-09-20 在 tests/paths.mjs 上吃过一次：磁盘判据会造成"本机红 / CI 绿"的错觉。）
+  const gitR = spawnSync('git', ['-C', ROOT, 'ls-files', '-z'], { encoding: 'utf8', shell: false })
+  const tracked = gitR.status === 0 && gitR.stdout
+    ? gitR.stdout.split('\0').filter(Boolean).map((p) => path.resolve(ROOT, p))
+    : null
+  for (const p of (tracked || walk(ROOT, null))) {
+    const r = rel(p)
+    if (r === self) continue
+    if (!/\.(js|mjs|cjs|json|md|html|yml|yaml|txt)$/.test(r)) continue
+    let txt = ''
+    try { txt = readFileSync(p, 'utf8') } catch { continue }
+    for (const pat of pats) if (txt.includes(pat)) hits.push(r + ' <- ' + pat)
+  }
+  t('S14', hits.length === 0, (tracked ? '扫描面=' + tracked.length + ' 个跟踪文件；' : '扫描面=磁盘；')
+    + (hits.length ? JSON.stringify(hits.slice(0, 5)) : '零命中（人名 / 关系 / 私有工作目录）'))
 })
 
 guard('S9', () => {

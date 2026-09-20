@@ -474,7 +474,7 @@ node scripts/memory.mjs confirm 2  # 确认第 2 条：先追加 confirm 行，�
 ## 注入体积（0.13.0）：先把"花了多少"量出来
 
 ```bash
-node scripts/inject-size.mjs --cwd D:/<private-repo>     # 用上次会话真实模型计量（--tier/--model/--json 可覆盖）
+node scripts/inject-size.mjs --cwd D:/work/demo   # 用上次会话真实模型计量（--tier/--model/--json 可覆盖）
 ```
 
 实测本仓维护者的一份真实配置：

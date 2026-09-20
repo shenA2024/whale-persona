@@ -10,7 +10,7 @@
  *   node scripts/inject-size.mjs                     # 用上次会话真实用的模型（last-model.json）计量
  *   node scripts/inject-size.mjs --tier pro          # 强制按 pro 档渲染（默认 flash 档）
  *   node scripts/inject-size.mjs --model glm-5.1     # 指定模型 id（影响自称/形象/语气的按模型覆盖）
- *   node scripts/inject-size.mjs --cwd D:/<private-repo>   # 指定工作目录（影响收件箱 tag 相关性选择）
+ *   node scripts/inject-size.mjs --cwd D:/work/demo  # 指定工作目录（影响收件箱 tag 相关性选择）
  *   node scripts/inject-size.mjs --capture on        # 当作「本会话已 /memory on」计量（默认按配置口径）
  *   node scripts/inject-size.mjs --json              # 机器可读
  *
