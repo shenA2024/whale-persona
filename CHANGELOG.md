@@ -3,6 +3,27 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.12.4（2026-09-20）
+
+### 修复：CI 连续 6 次红的根因 —— 路径门禁按「磁盘存在性」判，而不是「git 跟踪集」
+
+触发来源：2026-09-20 维护者看到 GitHub Actions 上 CI 从 #19（0.12.1）起连续 6 次红，四个矩阵腿都卡在「功能测试」：
+`FAIL P1 … [{"where":"adapters/dsh-ui/README.md:117","ref":"data/ui-design/preview-panel.mjs"}]`。
+
+- 门禁自己有洞：判据是 `existsSync`，而 `data/` 被 `.gitignore` 忽略 —— 本机有那份夹具、干净 clone 没有，
+  于是「本机绿 / CI 红」。改为按 **`git ls-files` 的跟踪集**判定（非 git 目录退回磁盘判据），
+  并加 P3 断言钉住「判据确实走跟踪集」（`tracked>50`）；
+- 被抓的那行是真漂移：`adapters/dsh-ui/README.md:117` 让读者跑一个 `data/` 下的本机夹具（仓库里没有），
+  已标明「本机维护者专用」并加 `paths-gate:exempt`。
+
+### 验证
+
+```
+改判据后**先在本机复现 CI 的失败**：FAIL P1 … README.md:117（与 CI 日志逐字一致，exit 1）
+修好后：路径存在性 6 项全过（125 条引用 / tracked=95）；npm test 15 套 exit 0；npm run sec PASS true
+CI：run #25 四条矩阵腿全绿（推完轮询到 completed 才认，不再只看本机）
+```
+
 ## v0.12.3（2026-09-20）
 
 ### 安全：把「条件反射正则」的信任边界写成文档与提示（CodeQL 告警 #1 的处置）
