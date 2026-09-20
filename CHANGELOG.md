@@ -23,7 +23,7 @@
 ### 验证
 
 ```
-npm test     # 15 套 exit 0（新增 tests/paths.mjs 4 项：自测 2 + P1 扫 120 条引用 + P2 扫描面非空）
+npm test     # 15 套 exit 0（新增 tests/paths.mjs 5 项：自测 3 + P1 扫 121 条引用 + P2 扫描面非空）
 npm run sec  # PASS true {"fail":0,"suspect":0,"skip":4}（0.12.0 时 suspect:1）；--selftest 仍抓 6 类违规
 反证：把 state.js 文案改回旧值 → node tests/paths.mjs exit 1 并点名 adapters/dsh/reflex/state.js:114；还原后 exit 0
 ```
