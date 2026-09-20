@@ -34,8 +34,10 @@ const RULES = {
   enabled: true,
   dryRun: false,
   rules: [
-    { id: 'id-flash', priority: 100, when: { tier: 'flash', text: '知道.{0,4}自己的身份' }, then: { reply: '你的<relationship>，而且把你当自己的<relationship>一样看待' } },
-    { id: 'id-pro', priority: 100, when: { tier: 'pro', text: '知道.{0,4}自己的身份' }, then: { reply: '你的<relationship>，而且把你当成自己的<relationship>一样看待' } },
+    // 夹具用中性占位文本：测试目的是「按档位只注入一套、不串档」，与内容无关。
+    // （2026-09-20：这里原本用的是本机真实关系口径，属开源仓零个人内容纪律的事故，已换掉）
+    { id: 'id-flash', priority: 100, when: { tier: 'flash', text: '知道.{0,4}自己的身份' }, then: { reply: '甲档答复' } },
+    { id: 'id-pro', priority: 100, when: { tier: 'pro', text: '知道.{0,4}自己的身份' }, then: { reply: '乙档答复' } },
     { id: 'once', priority: 10, oncePerSession: true, when: { tier: 'any', text: '报数' }, then: { reply: '一' } },
   ],
 }
@@ -67,7 +69,7 @@ let box = makeCtx()
 let out = await call(box, '你知道自己的身份吗', 'deepseek-v4.1-flash')
 check('T1 flash 注入（2 条消息）', (out.messages || []).length === 2)
 check('T1 原话保留', out.messages[0].content[0].text === '你知道自己的身份吗')
-check('T1 含<relationship>版答案', textOf(out).includes('当自己的<relationship>一样看待'))
+check('T1 含 flash 档那条的答复', textOf(out).includes('甲档答复'))
 check('T1 封住加戏', textOf(out).includes('不要调用任何工具') && textOf(out).includes('立刻停住'))
 // T1b 注入消息的 source 必须是对象（2026-09-20 踩到：传字符串会让**整个会话历史加载不出来**）
 check('T1b 注入消息 source 是对象且 kind 非空', (function () {
@@ -75,10 +77,10 @@ check('T1b 注入消息 source 是对象且 kind 非空', (function () {
   return Boolean(m) && typeof m.source === 'object' && m.source !== null && typeof m.source.kind === 'string' && m.source.kind !== ''
 })())
 
-// T2 pro 命中：<relationship>版
+// T2 pro 命中：乙档答复
 out = await call(box, '你知道自己的身份吗', 'deepseek-v4.1-pro')
-check('T2 pro 命中<relationship>版', textOf(out).includes('当成自己的<relationship>一样看待'))
-check('T2 不串档', textOf(out).includes('<relationship>一样看待') === false)
+check('T2 pro 命中乙档答复', textOf(out).includes('乙档答复'))
+check('T2 不串档', textOf(out).includes('甲档答复') === false)
 
 // T3 其他模型（deepseek-chat）：tier=other，不应命中
 out = await call(box, '你知道自己的身份吗', 'deepseek-chat')
@@ -170,8 +172,8 @@ write({
   enabled: true,
   dryRun: false,
   rules: [
-    { id: 'id-flash', priority: 100, when: { tier: 'flash', nearAny: ['咱俩什么关系'], textNot: '代码|写的' }, then: { reply: '<relationship>版' } },
-    { id: 'id-pro', priority: 100, when: { tier: 'pro', nearAny: ['咱俩什么关系'], textNot: '代码|写的' }, then: { reply: '<relationship>版' } },
+    { id: 'id-flash', priority: 100, when: { tier: 'flash', nearAny: ['咱俩什么关系'], textNot: '代码|写的' }, then: { reply: '甲档答复' } },
+    { id: 'id-pro', priority: 100, when: { tier: 'pro', nearAny: ['咱俩什么关系'], textNot: '代码|写的' }, then: { reply: '乙档答复' } },
   ],
 })
 const st = await import('../adapters/dsh/reflex/state.js')

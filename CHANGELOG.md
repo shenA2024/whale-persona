@@ -3,6 +3,38 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.12.2（2026-09-20）
+
+### 隐私：公开仓脱敏（测试夹具与注释里的私人词汇），并把脱敏审计补进发布闸门
+
+触发来源：2026-09-20 维护者问「你知道我做这个人设插件的初衷吗」→ 回读本机《领域纲领／人设》第 3 条纪律
+（每次对外发布前重跑脱敏审计）时发现：**这条纪律在 v0.12.0 / v0.12.1 两次发布前都没执行**，
+公开仓里带着本机私人词汇 —— `tests/reflex.mjs` 的夹具直接用了本机真实关系口径（第 37/38/70/78/80/81/173/174 行）、
+`scripts/reflex/new.mjs:7` 注释带私人称呼、`tests/model-names.mjs` 与本文件对应的 `core/render.js:10` 注释用本机自称做占位。
+
+- 四处全部换中性占位（`甲档答复／乙档答复`、`甲档名／乙档名`、档位注释改为直接描述档位判定）；
+  测试目的不变（按档位只注入一套、不串档；按模型选自称），回归条数不变；
+- `core/render.js` 改后已跑 `node scripts/sync-core.mjs` 同步 vendor 副本（测试 Z7 校验）；
+- 审计词表补上 `<relationship>|<relationship>`（原词表只有 `<maintainer>|鲸鱼|<relationship>|<relationship>|<relationship>|<private-repo>`，漏了这两个泛称谓）；
+- **已发布的 tag 不重写**（删不干净、且已公开），改为删除旧 tag 与旧 Release，公开面只保留本版；
+- 私人文本仍留在 main 的历史提交里（GitHub 代码搜索不索引历史）；要彻底抹掉需重写历史，
+  代价是全库引用的提交号集体悬空，故本次不做。
+
+### 修复：ZCode vendor 副本的同步守卫漏文件（顺带补上陈旧的 edit.js）
+
+- 跑 `node scripts/sync-core.mjs` 时发现 vendor 的 `edit.js` **陈旧了一个版本**（0.11.2 的「收件箱 N 行」口径修复没同步过去），
+  而测试 Z7 一直绿灯 —— 它的比对清单**写死了 5 个文件**，`edit.js` 不在里面；
+- Z7 改为**动态取 `core/` 下全部 `.js`** 逐个比对；反证：把 vendor 的 `capture.js` 改脏 → Z7 红（退出码 1），还原 → 绿；
+- vendor 的 `edit.js` 已由 sync-core 补齐，随本版发布。
+
+### 验证
+
+```
+git grep -E '<maintainer>|鲸鱼|<relationship>|<relationship>|<relationship>|<relationship>|<relationship>|<private-repo>|<user>'   # 4 处命中，全部是「鲸鱼模式」这一模式名
+npm test     # 15 套 exit 0（Z7 校验 vendor 副本已同步）
+npm run sec  # PASS true {"fail":0,"suspect":0,"skip":4}
+```
+
 ## v0.12.1（2026-09-20）
 
 ### 修复：把「文案里的路径与数量」变成机器判据（第三方评审走读查出的漂移）

@@ -17,8 +17,8 @@ const base = { enabled: true, persona: { selfNameFlash: '我', selfNamePro: '我
 const cfg = (patch) => mergeConfig(Object.assign({}, base, { persona: Object.assign({}, base.persona, patch) }))
 
 // ① 两档回落（老行为不能坏）
-t('N1 无表 → flash 档用 selfNameFlash', selfNameOf(cfg({ selfNameFlash: '<relationship>', selfNamePro: '<relationship>' }), 'flash', 'deepseek-v4-flash') === '<relationship>')
-t('N2 无表 → pro 档用 selfNamePro', selfNameOf(cfg({ selfNameFlash: '<relationship>', selfNamePro: '<relationship>' }), 'pro', 'deepseek-v4-pro') === '<relationship>')
+t('N1 无表 → flash 档用 selfNameFlash', selfNameOf(cfg({ selfNameFlash: '甲档名', selfNamePro: '乙档名' }), 'flash', 'deepseek-v4-flash') === '甲档名')
+t('N2 无表 → pro 档用 selfNamePro', selfNameOf(cfg({ selfNameFlash: '甲档名', selfNamePro: '乙档名' }), 'pro', 'deepseek-v4-pro') === '乙档名')
 
 // ② 精确命中（忽略大小写）
 t('N3 精确命中（原名）', selfNameOf(cfg({ selfNameByModel: { 'grok-4.7': '小七' } }), 'flash', 'grok-4.7') === '小七')
@@ -31,13 +31,13 @@ t('N7 子串命中（带后缀）', selfNameOf(cfg({ selfNameByModel: { 'grok-4.
 t('N8 最长子串优先', selfNameOf(cfg({ selfNameByModel: { 'grok': '大七', 'grok-4.7': '小七' } }), 'flash', 'x-ai/grok-4.7-flash') === '小七')
 
 // ④ 没命中就回落到档位（不是"没人设"）
-t('N9 未命中 → 回落档位', selfNameOf(cfg({ selfNameFlash: '<relationship>', selfNameByModel: { 'grok-4.7': '小七' } }), 'flash', 'glm-5.2') === '<relationship>')
+t('N9 未命中 → 回落档位', selfNameOf(cfg({ selfNameFlash: '甲档名', selfNameByModel: { 'grok-4.7': '小七' } }), 'flash', 'glm-5.2') === '甲档名')
 
 // ⑤ 脏数据不炸
 t('N10 空表', selfNameOf(cfg({ selfNameByModel: {} }), 'flash', 'x') === '我')
-t('N11 值为空白的条目被忽略', selfNameOf(cfg({ selfNameFlash: '<relationship>', selfNameByModel: { 'grok': '   ' } }), 'flash', 'grok-4.7') === '<relationship>')
+t('N11 值为空白的条目被忽略', selfNameOf(cfg({ selfNameFlash: '甲档名', selfNameByModel: { 'grok': '   ' } }), 'flash', 'grok-4.7') === '甲档名')
 t('N12 表不是对象（坏配置）不炸', selfNameOf(cfg({ selfNameByModel: ['grok'] }), 'flash', 'grok-4.7') === '我')
-t('N13 model 非字符串不炸', selfNameOf(cfg({ selfNameFlash: '<relationship>' }), 'flash', undefined) === '<relationship>')
+t('N13 model 非字符串不炸', selfNameOf(cfg({ selfNameFlash: '甲档名' }), 'flash', undefined) === '甲档名')
 
 // ⑥ mergeConfig 保留映射表、缺省补空表
 t('N14 默认值含空表', !!DEFAULTS.persona.selfNameByModel && Object.keys(DEFAULTS.persona.selfNameByModel).length === 0)
@@ -46,5 +46,5 @@ t('N15 表被保留', mergeConfig({ persona: { selfNameByModel: { 'a': 'A' } } }
 // ⑦ 端到端：三段正文里真的是按模型选的自称
 const prompt = buildPersonaPrompt(cfg({ selfNameByModel: { 'grok-4.7': '小七' } }), 'x-ai/grok-4.7-flash', '', {})
 t('N16 段落里用按模型的自称', prompt.indexOf('你是小七。') >= 0)
-const prompt2 = buildPersonaPrompt(cfg({ selfNameFlash: '<relationship>', selfNameByModel: { 'grok-4.7': '小七' } }), 'glm-5.2', '', {})
-t('N17 其他模型仍走档位', prompt2.indexOf('你是<relationship>。') >= 0 && prompt2.indexOf('小七') < 0)
+const prompt2 = buildPersonaPrompt(cfg({ selfNameFlash: '甲档名', selfNameByModel: { 'grok-4.7': '小七' } }), 'glm-5.2', '', {})
+t('N17 其他模型仍走档位', prompt2.indexOf('你是甲档名。') >= 0 && prompt2.indexOf('小七') < 0)

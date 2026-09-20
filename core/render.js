@@ -7,7 +7,7 @@
  *   所以这里直接算出最终字符串 —— 少一个变量，少一种炸法。
  */
 
-/** flash → <relationship> / pro → <relationship>（与旧 persona-whale-v2.js 的判定保持一致） */
+/** 档位判定：模型 id 含 pro → 'pro' 档，其余 → 'flash' 档（与旧 persona-whale-v2.js 的判定保持一致） */
 export function tierOf(model) {
   if (typeof model !== 'string') return 'flash'
   if (/pro/i.test(model)) return 'pro'

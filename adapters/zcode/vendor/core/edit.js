@@ -16,7 +16,7 @@ import { DEFAULTS, mergeConfig } from './defaults.js'
 import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from './prompt.js'
 import { pickByModel } from './render.js'
 import { captureMode } from './capture.js'
-import { STATUS, readPending, resolveInbox } from './memoryInbox.js'
+import { STATUS, readInbox, readPending, resolveInbox } from './memoryInbox.js'
 import { configPath } from './store.js'
 
 /** 写回时允许整体替换的已知段（其余键一律原样保留） */
@@ -99,10 +99,13 @@ export function configWarnings(cfg, model) {
   if (m.enabled === true && m.inbox !== false) {
     // 确认闸门（0.8.0）：待确认候选与老格式条目都不注入 —— 不点名的话，用户只会看到"记忆凭空少了"
     try {
+      // 口径必须与设置面板记忆卡上的「收件箱 N 行」是同一个数 = **全部条目数**，不是待确认数
+      // （0.11.2 的错误：分母写成了"待确认数"，于是横幅"1 行"与卡片"3 行"继续对不上）
+      const all = readInbox(resolveInbox(m.inboxPath))
       const pending = readPending(resolveInbox(m.inboxPath))
       const proposed = pending.filter((e) => e.status === STATUS.proposed).length
       const legacy = pending.filter((e) => e.status === STATUS.legacy).length
-      if (proposed) out.push('收件箱里有 ' + proposed + ' 条待确认候选：不注入。确认后才生效 —— node scripts/memory.mjs status 看序号，再 confirm <序号>。')
+      if (proposed) out.push('收件箱 ' + all.length + ' 行里有 ' + proposed + ' 条待确认候选：不注入。确认后才生效 —— node scripts/memory.mjs status 看序号，再 confirm <序号>。')
       if (legacy && m.requireConfirm !== false) out.push('收件箱里有 ' + legacy + ' 条老格式条目（没有 status）：0.8.0 起默认不注入。用 node scripts/memory.mjs adopt 一次性确认，或把 memory.requireConfirm 设为 false 放行。')
     } catch { /* 收件箱读不动就不提示 */ }
   }

@@ -1,6 +1,6 @@
 // ZCode 适配器测试：hook 脚本（stdin→additionalContext）、preview 模式、降级纪律、vendor 一致性
 import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
@@ -96,7 +96,9 @@ writeFileSync(cfgFile, JSON.stringify({
   const hash = (f) => createHash('sha256').update(readFileSync(f)).digest('hex')
   const coreDir = path.join(ROOT, 'core')
   const vendorDir = path.join(ROOT, 'adapters', 'zcode', 'vendor', 'core')
-  const files = ['defaults.js', 'render.js', 'store.js', 'memoryInbox.js', 'prompt.js']
+  // 清单**动态取 core/ 下全部 .js**：2026-09-20 踩到 —— 原来写死 5 个文件，edit.js 不在里面，
+// 于是 vendor 的 edit.js 陈旧了一个版本（0.11.2 的收件箱口径修复没同步）却一直绿灯。
+const files = readdirSync(coreDir).filter((f) => f.endsWith('.js')).sort()
   const allSame = files.every((f) => existsSync(path.join(vendorDir, f)) && hash(path.join(coreDir, f)) === hash(path.join(vendorDir, f)))
   t('Z7 vendor与core一致:', allSame)
 }
