@@ -40,6 +40,7 @@ https://github.com/shenA2024/whale-persona/security/advisories/new
 | `adapters/dsh/reflex/rules.js` | 首次建一份空的 `reflex.json` | 规则文件不存在时 |
 | `scripts/install-dsh.mjs` | profile 的 `package.json` / `cordis.patch.yml`、agent preset 的 `preset.yml` / `agent.cordis.yml` | **只在用户主动运行安装脚本时** |
 | `scripts/sync-core.mjs` | 重建 `adapters/zcode/vendor/core/` 副本（rm + cp） | **只在维护者跑 `npm run sync-core` 时**（开发工具，不随包分发执行） |
+| `scripts/pack-release.mjs` | `data/backup/release/*.tgz`（Release 附件）＋ `data/backup/pack-<tag>/`（git worktree 检出） | **只在维护者打 Release 附件时**（开发工具，不随包分发执行；退出码非 0 = 包不合格别发） |
 
 运行期插件本体**不写收件箱**：候选由宿主 AI 用它自己的文件工具提议，生效由你确认。
 

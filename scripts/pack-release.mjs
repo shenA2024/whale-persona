@@ -15,7 +15,7 @@
  * 用法：node scripts/pack-release.mjs v0.14.2 [--out <目录>]
  * 退出码非 0 = 包不合格，别发。
  */
-import { execFileSync, execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
@@ -34,10 +34,19 @@ const sh = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8' }
  * 而 `npm.cmd` 就是这种情况。绕法只有两条 —— shell:true 或显式走 cmd.exe；这里选后者（不经 shell 解析参数）。
  */
 const npmPack = (dir, dest) => {
-  const line = 'npm pack --silent --pack-destination "' + dest + '"'
-  // Windows 上必须经 shell（Node ≥20 拒绝直接 spawn .cmd，手工拼 cmd.exe 的参数转义又很脆），
-  // 参数里只有我们自己控的两个路径，且都加了引号 —— 不用 execFileSync 是因为它在这里反而更不可靠。
-  return execSync(line, { cwd: dir, encoding: 'utf8' })
+  // 不经 shell 调 npm：Node ≥20 起拒绝直接 spawn `.cmd`（EINVAL），而 `cmd.exe /d /s /c` 的
+  // 引号剥离会把带空格的路径咬坏（2026-09-21 实测：`/s` 吃掉末尾引号 → npm 拿到残缺路径直接失败）。
+  // 所以直接调 npm 自己的 JS 入口，参数走数组，一个 shell 都不经过。
+  // （安全探针 S3 禁止 `exec/execSync` 与 `shell:true`；本条就是为它改的。）
+  const args = ['pack', '--silent', '--pack-destination', dest]
+  const cli = process.env.npm_execpath && existsSync(process.env.npm_execpath)
+    ? process.env.npm_execpath
+    : [
+        path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+        path.join(path.dirname(process.execPath), 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+      ].find((p) => existsSync(p))
+  if (cli) return execFileSync(process.execPath, [cli, ...args], { cwd: dir, encoding: 'utf8' })
+  return execFileSync('npm', args, { cwd: dir, encoding: 'utf8' })
 }
 const fail = (msg) => { console.error('✗ ' + msg); process.exit(1) }
 
