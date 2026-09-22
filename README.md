@@ -90,7 +90,7 @@ node scripts/install-dsh.mjs             # 真装
 **两样都不行？** 用 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
 
 ```powershell
-dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.15.0/whale-persona-0.15.0.tgz
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.15.1/whale-persona-0.15.1.tgz
 ```
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
@@ -485,7 +485,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 "memory": {
   "enabled": true,
   "sinks": {
-    "pitfall": { "path": "D:/notes/坑库.md", "header": "## 坑库\n" },
+    "pitfall": { "path": "D:/notes/pitfalls.md", "header": "## Pitfalls\n" },
     "idea":    { "path": "D:/notes/想法.jsonl", "format": "jsonl" },
     "note":    { "path": "D:/notes/随手.md", "format": "plain", "template": "{date} {text}" }
   }

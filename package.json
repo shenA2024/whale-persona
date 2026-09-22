@@ -1,6 +1,6 @@
 {
   "name": "whale-persona",
-  "version": "0.15.0",
+  "version": "0.15.1",
   "description": "Persona engine for AI coding harnesses (DeepSeek Harness; the ZCode adapter is retired as of 2026-09-19 and kept for history only): self-name per model, self-image (appearance) and reply tone per model (both opt-in), user address, stance, character, per-item work contracts, thinking-chain language, a long-term memory inbox where AI entries only take effect after an explicit human confirm line (enforced in code), and a shareable persona-preset library that imports SillyTavern character cards (v1/v2 JSON; unmappable fields are reported, never faked). One shared config.json, zero runtime dependencies, never touches the network.",
   "type": "module",
   "main": "./adapters/dsh/index.js",

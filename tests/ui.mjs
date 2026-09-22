@@ -19,7 +19,9 @@ const t = (name, ok) => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 const child = spawn(process.execPath, [path.join(ROOT, 'scripts', 'ui.mjs'), '--port', String(PORT)], {
-  cwd: ROOT, env: { ...process.env, DSH_WHALE_CONFIG: cfgFile }, stdio: 'ignore',
+  // DSH_HOME 必须一起隔离到 tmp：preview 会读**真实收件箱**（$DSH_HOME/whale-persona/memory-inbox.jsonl），
+  // 本机只要有一条「待确认候选」，warnings 就非空、U2 就红 —— 本机红 CI 绿的隐式环境依赖（2026-09-22 实测）。
+  cwd: ROOT, env: { ...process.env, DSH_WHALE_CONFIG: cfgFile, DSH_HOME: tmp }, stdio: 'ignore',
 })
 
 async function ready() {
