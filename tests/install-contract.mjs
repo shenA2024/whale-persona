@@ -99,8 +99,12 @@ try {
   mkdirSync(presetDir, { recursive: true })
   writeFileSync(path.join(presetDir, 'agent.cordis.yml'), "# fixture\n- id: whale-persona\n  name: '" + LEGACY + "'\n", 'utf8')
 
-  const run = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'install-dsh.mjs'), '--home', home, '--source', ROOT, '--dry-run'], { encoding: 'utf8' })
+  // 必须显式给 DSH_BIN：安装脚本在"找不到 dsh 入口"时会提前 return（那是对的 —— 装不了就别先拆旧的），
+  // 于是 dropLegacy 根本不会跑到。CI 上没有 dsh，本机有 —— 不给就会得到"本机能过、CI 全红"的假绿。
+  const run = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'install-dsh.mjs'), '--home', home, '--source', ROOT, '--dry-run'],
+    { encoding: 'utf8', env: Object.assign({}, process.env, { DSH_BIN: process.execPath }) })
   const out = String(run.stdout || '')
+  t('I6 安装脚本正常退出（没有中途崩）:', run.status === 0)
   t('I6 认出旧包名残留并给出清理计划:', /清掉旧包名/.test(out) && out.includes(LEGACY))
   t('I6 认出 preset 里的旧包名并就地换名:', /preset 里的旧包名就地换成/.test(out))
   const after = JSON.parse(readFileSync(path.join(prof, 'package.json'), 'utf8'))
