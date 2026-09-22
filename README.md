@@ -29,6 +29,27 @@ per-step request slimming and per-step tool narrowing — the rule table is pers
 
 ---
 
+## 它解决什么问题
+
+你和编码 AI 之间那些**每次都要重说一遍**的事：它老忘、你得反复交代；同一件活今天一个风格明天一个风格；
+「别问我还要不要继续」这句话说过一百遍它还是问。
+
+whale-persona 把这些人设事实**变成一份你自己的配置**，每个会话自动带上。装完是空白的、装上不改变任何行为——
+要什么写什么。而它和别人不一样的一点：**记忆必须你确认才生效**（代码强制，不是提示词约束），
+AI 只能提议，改不了你的准则。
+
+**先看到效果，再决定装不装**（一条命令，只读，不碰你的任何配置）：
+
+```bash
+node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work/demo
+```
+
+它把「此刻实际注入系统提示词的三段文本」逐字打印出来——这就是装完你能得到的东西。
+
+想直接上手：往下跳到 [60 秒上手](#60-秒上手)。第三方要实现同样的格式：看 [SPEC.md](SPEC.md)。
+
+---
+
 ## 它给你什么
 
 | 能力 | 说明 |
@@ -668,6 +689,8 @@ profile 里有没有重复 loader id、配置真源在哪。
 ```text
 core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染 / 提示词构建 / 收件箱(kind) / 收口开关 /
                  沉降路由(sinks) / 注入体积计量(measure) / 语气预设
+SPEC.md          格式规范 v1：配置文件结构 + 注入文本装配契约 + 预设卡格式 + 酒馆卡映射。
+                 第三方照它就能读/写我们的文件并渲染出逐字一致的文本（只规定格式，不含任何内容）
 examples/        可直接跑的示例：demo-config.json、demo-inbox.jsonl、empty-config.json
 adapters/dsh/    DSH 宿主半身：注册 persona-prefix/suffix（官方具名槽位）+ whale:thinking-language
 adapters/dsh/reflex/  条件反射层：规则命中即在代码层注入一步指令（默认零规则）+ 可选的步级工具裁剪
@@ -681,7 +704,7 @@ scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设�
                 inject-size.mjs  注入体积体检（分段字符数 + 预算判定；--json 机器可读）
                 doctor.mjs       共存体检（我们占了哪些名字 / 谁在同平面抢名字 / 重复 loader id）
                  reflex.mjs       条件反射：show / check / new（规则体检闸门 + 建规则，体检不过自动回滚）
-tests/           17 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
+tests/           18 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
                  设置面板 / ZCode hook / 本地编辑器 API / 路径存在性门禁
                  ＋ 条件反射两组（reflex.mjs 55 条行为、reflex-rules.mjs 17 条建规则闸门）
 qa/              安全审查：probes/probe-security.js（探针）+ security-审查.md（台账与人工复核项）
