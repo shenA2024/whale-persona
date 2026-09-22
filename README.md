@@ -77,6 +77,10 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 > （通用起步 / 证据优先 / 讲到你懂 / 去水改稿 / 严格评审 / 需求澄清 / 排障 / 重构 / 看数 /
 > 产品评审 / 陪练 / 资料整理 / 中译英 / 安全审查 / 提示词工程 / 多智能体分工）。
 
+![关联仓的预设卡总览：每张卡的定位、分类与契约摘要](docs/images/presets.png)
+
+（上图由该仓的卡文件本身渲染：标题、描述、tags、契约逐条读出，没有手写内容。截图时该仓共 20 个卡文件。）
+
 导入通道就是本仓已有的那条，不需要装新东西：
 
 ```bash
@@ -172,6 +176,10 @@ node scripts/ui.mjs                     # http://127.0.0.1:8787
 # c) 命令行预览（输出与运行期逐字一致）：
 node scripts/render-preview.mjs --config examples/demo-config.json --capture
 ```
+
+![命令行预览的真实输出：渲染出的三段注入文本，与运行期逐字一致](docs/images/render-preview.png)
+
+（上图是 `node scripts/render-preview.mjs --config examples/demo-config.json` 的真实 stdout，不是手写的示例。）
 
 要改**形象**与**语气**（两段都是 opt-in、默认关）也一样：对 AI 说「给你设个形象：20 岁的女性，身高 1.75 m」
 或「语气温柔点」，或者直接写 `persona.appearance` / `persona.tone` —— 结构、匹配规则与注入文本见下面的
@@ -628,6 +636,10 @@ DSH 里另有**只读**面板「设置 → 条件反射」：列规则（档位/
 | 宿主设置面板 · 人设 | DSH「设置 → 人设」（装 `whale-persona-ui`） | 左改右预览，保存走 `POST /whale-persona/api/config` |
 | 宿主设置面板 · 条件反射 | DSH「设置 → 条件反射」（同一个包，0.12.0 起） | **只读**：列规则、命中台账、试命中（不写配置；改规则用 `scripts/reflex.mjs`） |
 | 本地编辑器页 | `node scripts/ui.mjs` → http://127.0.0.1:8787 | 两个宿主的用户都能用；只绑 127.0.0.1 |
+
+![本地编辑器页：左栏填配置，右栏实时显示此刻实际注入的三段文本](docs/images/editor-full.png)
+
+（上图是本地编辑器页的真实截图 —— 右栏那三段就是**此刻会被注入的原文**，改左边即时变。）
 
 它还会主动点名**配了却不生效**的项，例如：设了自称但全文没用 `{selfName}` 占位符；
 有记忆条目但总开关是关的；收件箱里还有**待确认候选**没说；契约超过 12 条会互相稀释。

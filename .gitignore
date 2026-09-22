@@ -16,3 +16,5 @@ data/
 # 本机 AI 助手的项目记忆（含私有路径，绝不上公开仓）
 .workbuddy/
 *.tgz
+
+.tmp-shots/
