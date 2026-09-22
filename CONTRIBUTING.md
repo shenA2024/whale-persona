@@ -25,6 +25,28 @@ npm run sec    # 安全探针 12 组 + 自测；改了探针必须让 --selftest
 - PR 请过一遍模板里的清单。
 - 我们在意「证据」，不在意「措辞漂亮」：结论要有命令输出 / 文件行号 / 字节数撑着。
 
+## 网络（本机在国内，2026-09-22 实测）
+
+三条工具**各认各的代理**，混着用会得到互相矛盾的结论：
+
+- **git**：走 `http://127.0.0.1:10808`（v2rayN）。本机已在 `git config` 里钉了
+  `http.proxy` / `https.proxy`；代理没起时 push / fetch 必失败。
+- **pnpm**：**不读 git 的配置**。跑 `dsh plugin --profile web add -w <GitHub tarball 地址>` 之前，
+  必须给它环境变量：
+
+  ```powershell
+  $env:HTTP_PROXY = $env:HTTPS_PROXY = 'http://127.0.0.1:10808'
+  ```
+
+  不设就是 `ETIMEDOUT <ip>:443`（2026-09-22 实测；见坑库同名卡）。
+
+- **npm**：默认 registry 是镜像 `https://registry.npmmirror.com`。所以
+  - `whoami` / `view` / `publish` 这类命令**要显式带** `--registry https://registry.npmjs.org`，
+    否则会出现"凭据明明在 `.npmrc` 里却报 ENEEDAUTH"这种假故障（2026-09-22 实测踩过）；
+  - 新版本发布后镜像有**同步延迟**：装的人若走镜像拿不到最新版，先用官方 registry 复核一次再下结论
+    （本次 0.15.1 发布后实测镜像已同步）。
+- **`api.github.com` 直连可用**：代理没起时也能拿它判远端版本与 Release 附件，比 `git ls-remote` 稳。
+
 ## 发布清单（每次发版逐条打勾）
 
 > 触发来源：2026-09-19 发 v0.11.1 时连踩两个坑 —— 附件传成上一版、包里没有 `dsh.bundle` 声明。
@@ -90,3 +112,13 @@ npm run sec    # 安全探针 12 组 + 自测；改了探针必须让 --selftest
 
 - **安全问题**：走[私有漏洞报告](https://github.com/shenA2024/whale-persona/security/advisories/new)，不要开公开 Issue（见 [SECURITY.md](.github/SECURITY.md)）。
 - **用法提问 / 想法**：优先发 [Discussions](https://github.com/shenA2024/whale-persona/discussions)。
+
+## 已知但没做的事（记录，不是排期）
+
+- **README 里「与 `npm pack` 出来的完全同一份文件」按字节不成立**：两条通道打出的 tarball 字节数不同
+  （2026-09-22 实测：npm 侧 228180 / GitHub Release 侧 227062），解包内容一致（都是 76 个条目）。
+  改成"同一份内容"要动包内文件，等下一个版本一起改。
+- **`scripts/install-dsh.mjs` 的结尾提示可以更明确**：现在只说"挂载行变更需要重启宿主进程"，
+  没说"不重启则人设不生效"，新手容易以为装完就好了。同属包内文件，等下次发版。
+- **npm 2FA 的 web 授权在非交互终端走不完**：CLI 会把包暂存住、版本号被占住，
+  发布得在真实交互式终端里跑，或由人在浏览器完成授权 —— 见坑库同名卡。
