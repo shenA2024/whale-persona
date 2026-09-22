@@ -3,6 +3,39 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## 未发布
+
+### 修复：安装器误报「包没有 dsh.bundle 声明」（0.16.0 的提示文案，功能无影响）
+
+触发来源：2026-09-22 发 0.16.0 之后，按发布清单 §5 在**空 home** 里跑 `npx -y whale-persona` 真装一次做验收 ——
+安装成功（自检两条 OK），但输出里有一句刺眼的提示：「包没有 dsh.bundle 声明，按普通依赖装、靠挂载行激活」。
+
+- 实情：包内 `dsh.bundle.patch` 声明齐全，`cordis.patch.yml` 也在包里；紧随其后那行
+  「bundle whale-persona 已挂设置面板行」正是把它当 bundle 处理的证据。所以是**判据错**，不是包错。
+- 根因：`installPackage()` 拿 `dsh plugin add` 的**整段 stdout+stderr** 里搜
+  `declares no dsh.bundle` 就下结论 —— 而那句话可能来自 profile 里**别的包**（干净 home 里同时装了
+  bundle 与非 bundle 依赖，宿主会对后者发这句警告）。整段文本不能当"我们没声明"的证据。
+- 改法：判据落在**自己的 manifest** 上 —— 新增 `ownBundlePatch(dir)` 读本包 `dsh.bundle.patch`：
+  ① 声明了但文件不存在 → 报「包里多半漏打了它」（真问题）；
+  ② 声明齐全而宿主输出里恰好有那句警告 → 明说「与你无关」；
+  ③ 声明与文件都齐全 → 不再打印任何提示。
+
+验证方式（2026-09-22 实跑）：另起一个**全新空 home** 用本仓库安装器再装一次 → 退出码 0，
+提示变为「宿主输出里有「declares no dsh.bundle」的警告，但本包声明齐全，与你无关」，
+自检两条仍 OK。`node --check scripts/install-dsh.mjs` 通过。
+
+### 变更：`package.json` 的 `bin` 路径按 npm 规范去掉 `./` 前缀
+
+触发来源：同上。发布 0.16.0 时 npm 提示 `npm auto-corrected some errors in your package.json`，
+并把 `bin["whale-persona-dsh"]` 从 `./scripts/install-dsh.mjs` 规范化为 `scripts/install-dsh.mjs`。
+
+- 已核对三处：git HEAD 是旧写法、工作区是规范化后的写法、**线上 0.16.0 包内也是规范化后的写法**
+  （用 `npm pack` 解包直读 `package.json` 验证）—— 所以这次提交只是让**开发本体与线上包保持一致**，
+  不改任何行为（两种写法 npm 都接受，打包结果都保留 bin）。
+
+验证方式（2026-09-22 实跑）：`npm pack` 解包后 `package.json` 的 `bin` = `{"whale-persona-dsh":"scripts/install-dsh.mjs"}`，
+`scripts/install-dsh.mjs` 在包内（26.4 kB）；空 home 真装后 `npx -y whale-persona` 落地版本 0.16.0、bundles 正确。
+
 ## v0.16.0（2026-09-22）
 
 ### 新增：`SPEC.md` —— 把 `whale-persona-preset/1` 公开成第三方可实现的格式契约

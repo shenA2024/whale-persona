@@ -201,6 +201,17 @@ function copyTree() {
   })
 }
 
+/** 读我们自己那份 package.json 的 dsh.bundle.patch（没有/坏 JSON 返回空串）。
+ *  改判据的触发来源见 installPackage 里的注释：不能拿宿主输出的整段文本当"我们没声明"的证据。 */
+function ownBundlePatch(dir) {
+  try {
+    const m = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'))
+    return String(((m.dsh || {}).bundle || {}).patch || '')
+  } catch {
+    return ''
+  }
+}
+
 function installPackage(pkgName, sub) {
   const dir = sub ? path.join(TARGET, sub) : TARGET
   const spec = 'link:' + dir.split(path.sep).join('/')
@@ -214,8 +225,14 @@ function installPackage(pkgName, sub) {
     return
   }
   const out = String(r.stdout || '') + String(r.stderr || '')
-  if (out.indexOf('declares no dsh.bundle') >= 0) {
-    log('（提示：包没有 dsh.bundle 声明，按普通依赖装、靠挂载行激活——这是预期行为）')
+  // 判据必须落在**我们自己的 manifest** 上：早先版本拿 plugin add 的整段输出里搜
+  // 'declares no dsh.bundle' 就下结论，而那句话可能来自 profile 里**别的包**
+  // （2026-09-22 实测：干净 home 里本包声明齐全，仍被误报"没有 dsh.bundle 声明"）。
+  const patchRel = ownBundlePatch(dir)
+  if (patchRel && !existsSync(path.join(dir, patchRel))) {
+    warn('包内声明了 dsh.bundle.patch（' + patchRel + '）但文件不存在——包里多半漏打了它')
+  } else if (out.indexOf('declares no dsh.bundle') >= 0) {
+    log('（宿主输出里有「declares no dsh.bundle」的警告，但本包声明齐全，与你无关）')
   }
 }
 
