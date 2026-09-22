@@ -3,7 +3,7 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
-## 未发布
+## v0.16.1（2026-09-22）
 
 ### 修复：安装器误报「包没有 dsh.bundle 声明」（0.16.0 的提示文案，功能无影响）
 
@@ -35,6 +35,21 @@
 
 验证方式（2026-09-22 实跑）：`npm pack` 解包后 `package.json` 的 `bin` = `{"whale-persona-dsh":"scripts/install-dsh.mjs"}`，
 `scripts/install-dsh.mjs` 在包内（26.4 kB）；空 home 真装后 `npx -y whale-persona` 落地版本 0.16.0、bundles 正确。
+
+### 修复：安全探针 S11 把文档截图误判成「二进制大件」（判据收窄，不关闸门）
+
+触发来源：2026-09-22 晚补完 README 三张截图后，`npm run sec` 由 `PASS true` 变成
+`PASS false … fail:1`（`SEC_FAIL S11 ["docs/images/editor-full.png","docs/images/presets.png","docs/images/render-preview.png"]`），
+而同一批文件过 `prepublish-check` 是全绿的 —— 两条闸门对同一批文件给出相反结论。
+
+- 实情：S11 的原判据是「`git ls-files` 里 png/zip/exe/blend/glb… 零命中」，本意是拦**误提交的二进制大件**；
+  而 `docs/images/` 下那三张图是**有意的文档资产**（README 靠它们显示），不是一类东西。
+- 改法：判据收窄 —— 只放行 `docs/images/` 下的图片，且**单文件 ≤ 600 KB、整目录 ≤ 1.5 MB**；
+  其他位置（仓库根、源码目录…）的二进制照旧拦。判据从「有没有二进制」变成「二进制在不在该在的地方、有没有失控」。
+- 纪律：**闸门误伤合法内容时收窄判据，而不是关掉闸门**（与 0.15.1「词表拆硬词/软词」同一条）。
+
+验证方式（2026-09-22 实跑）：`npm run sec` → `PASS true, fail:0 suspect:0 skip:4`；
+`node scripts/prepublish-check.mjs` 仍 exit 0（81 个文件全过）。
 
 ## v0.16.0（2026-09-22）
 

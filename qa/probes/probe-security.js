@@ -305,8 +305,25 @@ guard('S10', () => {
 guard('S11', () => {
   const r = spawnSync('git', ['-C', ROOT, 'ls-files'], { encoding: 'utf8', shell: false })
   if (r.status !== 0) return skip('S11', 'not-a-git-repo')
-  const big = r.stdout.split(/\r?\n/).filter((f) => /\.(png|jpe?g|gif|webp|zip|gz|exe|dll|so|blend|glb|mp4|mov|pdf|woff2?|ttf)$/i.test(f))
-  t('S11', big.length === 0, big.length ? JSON.stringify(big.slice(0, 5)) : '零二进制')
+  // 判据收窄（2026-09-22）：docs/images/ 下的图片是**有意的文档资产**（README 靠它显示），
+  // 与「误提交的二进制大件」不是一类。放行但限体积 —— 单文件 ≤ 600 KB、整目录 ≤ 1.5 MB；
+  // 其他位置（仓库根、源码目录…）的二进制照旧拦。
+  const DOC = /^docs\/images\//
+  const MAX_ONE = 600 * 1024
+  const MAX_ALL = 1536 * 1024
+  const sizeOf = (f) => {
+    try { return statSync(path.join(ROOT, f)).size } catch { return 0 }
+  }
+  const bin = r.stdout.split(/\r?\n/).filter((f) => /\.(png|jpe?g|gif|webp|zip|gz|exe|dll|so|blend|glb|mp4|mov|pdf|woff2?|ttf)$/i.test(f))
+  const doc = bin.filter((f) => DOC.test(f))
+  const stray = bin.filter((f) => !DOC.test(f))
+  const oversize = doc.filter((f) => sizeOf(f) > MAX_ONE)
+  const total = doc.reduce((s, f) => s + sizeOf(f), 0)
+  const bad = stray.concat(oversize)
+  if (total > MAX_ALL) bad.push('docs/images 合计 ' + total + 'B > ' + MAX_ALL + 'B')
+  t('S11', bad.length === 0, bad.length
+    ? JSON.stringify(bad.slice(0, 5))
+    : '零二进制大件（docs/images 白名单 ' + doc.length + ' 张 / ' + total + ' B）')
 })
 
 guard('S12', () => {

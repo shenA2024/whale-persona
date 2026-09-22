@@ -56,7 +56,7 @@ npm run sec            # = node qa/probes/probe-security.js && node qa/probes/pr
 | S8 | **记忆闸门（功能探针）** | 真跑一次 `buildPersonaPrompt`：`proposed进了=false`、`confirmed进了=true`、`手工条目进了=true` |
 | S9 | 仓库无真实凭据 | `ghp_/github_pat_/sk-/AKIA/PRIVATE KEY` 全仓零命中 |
 | S10 | `.gitignore` 覆盖 | `node_modules/ data/ out/ build/ .env *.log` 全在 |
-| S11 | 版本库无二进制大件 | `git ls-files` 里 png/zip/exe/blend/glb… 零命中 |
+| S11 | 版本库无二进制大件 | `git ls-files` 里 png/zip/exe/blend/glb… 零命中；**`docs/images/` 白名单**（2026-09-22 收窄）：只放行该目录下的图片，单文件 ≤ 600 KB、整目录 ≤ 1.5 MB |
 
 ### 1.3 探针自身的三次返工（记在台账里，别下次再犯）
 
