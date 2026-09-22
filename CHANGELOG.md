@@ -3,6 +3,48 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.15.0（2026-09-22）
+
+### 变更：包名去掉 scope（`@shenA2024/whale-persona` → `whale-persona`）
+
+触发来源：2026-09-22 维护者拍板上 npm。npm 的包名校验**不接受大写字母**（读了本机 npm 的
+`validate-npm-package-name`，第 68 行 `name.toLowerCase() !== name` 即对新包不合法；`npm view` 实测
+直接报 `name can no longer contain capital letters`）。原包名的 scope 里有两个大写字母 —— 不上 npm 就没事，
+一上就必须改。
+
+- 根包 + `adapters/dsh` + `adapters/dsh-ui` 三处名字与版本一起动（lockstep）。
+- `cordis.patch.yml` 的挂载行、安装脚本的两个包常量、`scripts/doctor.mjs`、`scripts/ui-row.mjs`
+  与全部测试夹具同步改名。
+- **老安装不受影响**：装过的包名留在各自的 `node_modules` 里，本仓改名弄不坏它们；关联仓
+  `whale-persona-presets` 的引擎路径解析改成**新旧包名都认**。
+- `CHANGELOG` 里的历史条目**保持原样**（历史就是历史，不改写）。
+
+### 新增：npm 发布通道
+
+触发来源：同上。用户反馈里呼声最高的是"装不动"；实测安装脚本本身**一次跑完**
+（装包 + 建预设 + 挂面板 + 拷技能 + 自检），瓶颈在"必须先克隆仓库"这一步。
+
+- `publishConfig.registry` 钉死 `https://registry.npmjs.org`（本机默认 registry 是只读镜像，防发错地方）。
+- 发布清单新增 §5（npm），CI 增加一条结构判据。
+
+### 新增：发布前闸门 `scripts/prepublish-check.mjs`
+
+触发来源：2026-09-22 维护者要求「任何要公开的安装包，发布前必须检查有没有夹带私人内容」。
+
+- 打**真包**（不是工作树）后判四件事：词表必须拿得到（拿不到就红，**绝不"没词表就当干净"**）、
+  包内文件全在 `files` 白名单内、无个人配置类文件名、包内文本不命中私有词表。
+- **词表不进仓**（否则扫描器自己就是泄漏源）：从 `data/prepublish-words.txt`（gitignore）
+  或 `$DSH_HOME/whale-persona/prepublish-words.txt` 读。
+- 命中只报「文件:行 + 词表第几条」，**不回显命中内容**（免得它被打进 CI 日志）。
+- 写面登记进 `.github/SECURITY.md`（安全探针 S15 与代码同步）。
+
+### 验证
+
+- `npm test` → exit 0
+- `npm run sec` → `PASS true` + `SELFTEST true`（含 S15 写面 15 个、未登记 0）
+- `npm run prepublish-check` → 通过：76 个文件全在白名单内、无个人配置类文件名、词表 0 命中
+- 关联仓 `whale-persona-presets` 的自检脚本（`check.mjs`，设 `WHALE_HARNESS=<本仓>` 跑）→ 16 张卡全过，exit 0
+
 ## v0.14.2（2026-09-21）
 
 ### 修复：docs/ 没随包分发，README 里的链接对 tarball 用户是死的

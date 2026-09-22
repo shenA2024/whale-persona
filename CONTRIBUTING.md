@@ -45,7 +45,7 @@ npm run sec    # 安全探针 12 组 + 自测；改了探针必须让 --selftest
 - [ ] `package.json` 有 `dsh.bundle.patch`，且指向的文件**真实存在**
 - [ ] 该文件被 `files` 白名单收进包里（声明了却打不进 tarball 等于没声明）
 - [ ] 判据：`npm pack --dry-run 2>&1 | Select-String cordis` 能看到补丁文件
-- [ ] **改过安装脚本就必须从 Release 下载的包里跑一次**（`node <profile>/node_modules/@shenA2024/whale-persona/scripts/install-dsh.mjs`），
+- [ ] **改过安装脚本就必须从 Release 下载的包里跑一次**（`node <profile>/node_modules/whale-persona/scripts/install-dsh.mjs`），
       **看到日志**才算过：仓库里直跑没有 pnpm 的 junction，两条路径结论可能相反
       （v0.11.2 的「静默空操作」就是这么漏过去的）
 - [ ] **改过挂载方式就必须空 profile 实测一次**：
@@ -54,7 +54,7 @@ npm run sec    # 安全探针 12 组 + 自测；改了探针必须让 --selftest
 
 ### 3 打 tarball 与建 Release
 
-- [ ] `npm pack` 出 `shenA2024-whale-persona-<版本>.tgz`，记下**字节数 + sha256**
+- [ ] `npm pack` 出 `whale-persona-<版本>.tgz`，记下**字节数 + sha256**
 - [ ] 打完之后**把文件挪出仓库根**（别让 `.tgz` 留在工作树里）
 - [ ] GitHub → Releases → Draft a new release：**标签必须选本次版本号**（选错 = README 的一键命令 404）
 - [ ] 附件传**本次那份** tarball，文件名一个字符都别改
@@ -68,6 +68,23 @@ npm run sec    # 安全探针 12 组 + 自测；改了探针必须让 --selftest
 
 - [ ] 本机活挂载是 junction 指向本仓库，所以**改完即刻生效**；只有换挂载点或改挂载层级才需要重启 DSH
 - [ ] 人设改动只在**新建**会话生效（人设段在会话创建时绑定）
+
+### 5 发 npm（0.15.0 起）
+
+> 触发来源：2026-09-22 用户反馈"装不动"，维护者拍板上 npm。npm 发出去收不回（版本只能 deprecate，不能删），
+> 所以这一节的第一条是**机器判据**，不是人眼复查。
+
+- [ ] `npm run prepublish-check` → **exit 0**，且**不带 `--no-words`**
+      （带那个开关只跑结构判据，**不算过闸** —— 私人内容扫描会被跳过）
+- [ ] 词表在哪：`<repo>/data/prepublish-words.txt`（gitignore）或
+      `$DSH_HOME/whale-persona/prepublish-words.txt`；想到新的私词就加进去，加完**再跑一次闸门**
+- [ ] 版本必须**比线上大**：`npm view whale-persona version` 看线上，与本地 `package.json` 对比
+- [ ] `npm publish`（`publishConfig` 已钉官方 registry；账号开 2FA）
+- [ ] 发布后验三条（别只看页面）：
+      ① `npm view whale-persona version` 与本次版本一致；
+      ② `npm view whale-persona dist.tarball` 下载下来，sha256 与本地 `npm pack` 那份一致；
+      ③ 在**空 profile** 里用 `npx -y whale-persona` 装一次，确认落地的版本号与 bundles 都对
+- [ ] GitHub Release 附件照旧发（§3）—— 两条通道并行，tarball 留给拿不到 npm 的人
 
 ## 不适合走 Issue 的
 

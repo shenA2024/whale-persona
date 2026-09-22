@@ -114,7 +114,7 @@ schema 全量与注入文本逐字版见 [`adapters/dsh/README.md`](../dsh/READM
 
 - **`last-model.json` 是 DSH 侧的能力，ZCode 这里没有**：只有 DSH 适配器在 persona 段求值时写它
   （`core/lastModel.js` 的 `recordModel`），ZCode 的 hook **不写**这个文件；设置面板
-  （`@shenA2024/whale-persona-ui`）也是 DSH 侧的，ZCode 没有面板可看。
+  （`whale-persona-ui`）也是 DSH 侧的，ZCode 没有面板可看。
   所以别把 `$DSH_HOME/whale-persona/last-model.json` 当 ZCode 的依据 —— 除非你同时在用 DSH，
   那份记录反映的是 **DSH 会话**最近一次的 id。
 - **预览看不到 `byModel` 的命中结果**：`node hooks/render.mjs --preview` 不带模型（内部按 `model: null` 渲染），

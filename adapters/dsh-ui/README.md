@@ -82,10 +82,10 @@ token 名取自 DSH 前端产物实测（`dsh-client-ui-theme` 的 `body[data-ds
 # profile 的 cordis.patch.yml —— UI 插件必须在 profile 平面
 - insert:
     - id: whale-persona-ui
-      name: '@shenA2024/whale-persona-ui'
+      name: 'whale-persona-ui'
 ```
 
-人设本体（`@shenA2024/whale-persona`）必须在 **agent preset** 平面。
+人设本体（`whale-persona`）必须在 **agent preset** 平面。
 挂错平面的后果不是「插件失效」，而是整个插件树加载失败、DSH 起不来：
 `prompt section "deployment:persona-prefix" is already registered`。
 一条命令装（含两处挂载）用仓库根 `node scripts/install-dsh.mjs`。

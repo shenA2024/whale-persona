@@ -20,12 +20,12 @@
  *   家目录层  \`$DSH_HOME/cordis.patch.yml\`：
  *     - insert:
  *         - id: whale-persona-global
- *           name: '@shenA2024/whale-persona/global'
+ *           name: 'whale-persona/global'
  *   单 profile 层  \`$DSH_HOME/profiles/<p>/cordis.patch.yml\`：同上。
  */
 import { registerPersonaSections, GLOBAL_SECTIONS } from './sections.js'
 
-export const name = '@shenA2024/whale-persona/global'
+export const name = 'whale-persona/global'
 
 /** 依赖 dsh-system-prompt 提供的 systemPrompt 服务 */
 export const inject = ['systemPrompt']

@@ -32,3 +32,7 @@ jobs:
         run: npm test
       - name: 安全探针（12 组 + 自测）
         run: npm run sec
+      # 发布闸门的结构判据（白名单 / 个人配置类文件名）。
+      # 这里必须带 --no-words：私有词表只住在维护者本机（仓库外），CI 拿不到；发布时由维护者不带该开关跑。
+      - name: 发布闸门（仅结构判据）
+        run: npm run prepublish-check -- --no-words

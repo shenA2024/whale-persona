@@ -41,8 +41,12 @@ import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const SOURCE = path.resolve(HERE, '..')
-const PERSONA_PKG = '@shenA2024/whale-persona'
-const UI_PKG = '@shenA2024/whale-persona-ui'
+const PERSONA_PKG = 'whale-persona'
+const UI_PKG = 'whale-persona-ui'
+// 0.15.0 之前叫这两个名字（scope 带大写字母，npm 不收 —— 见 CHANGELOG v0.15.0）。
+// 注意：新名是旧名的**子串**，所以任何"包含即认为已装"的判断都必须先认旧名再认新名。
+const LEGACY_PERSONA_PKG = '@shenA2024/whale-persona'
+const LEGACY_UI_PKG = '@shenA2024/whale-persona-ui'
 const PRESET_ID = 'whale-persona'
 const PRESET_NAME = '自定义人设'
 const SELF = 'whale-persona:'
@@ -143,6 +147,7 @@ function main() {
   }
   ensureProfile()
   if (!opts.dry) copyTree()
+  dropLegacy()
   installPackage(PERSONA_PKG)
   installPackage(UI_PKG, path.join('adapters', 'dsh-ui'))
   writePreset()
@@ -286,8 +291,17 @@ function resolveBase() {
 
 function writePreset() {
   const dest = path.join(HOME, '.agent-presets', PRESET_ID)
-  const exists = existsSync(path.join(dest, 'agent.cordis.yml'))
-  const alreadyOurs = exists && readFileSync(path.join(dest, 'agent.cordis.yml'), 'utf8').indexOf(PERSONA_PKG) >= 0
+  const agentFile = path.join(dest, 'agent.cordis.yml')
+  const exists = existsSync(agentFile)
+  const cur = exists ? readFileSync(agentFile, 'utf8') : ''
+  const hasLegacy = cur.indexOf(LEGACY_PERSONA_PKG) >= 0
+  // 旧名是新名的子串：单看"含 whale-persona"会把旧预设误判成"已经是我们的"，于是原地不动 →
+  // 预设指向一个已经不装的模块。所以先做就地改名迁移，再判归属。
+  if (hasLegacy) {
+    if (!opts.dry) writeFileSync(agentFile, cur.split(LEGACY_PERSONA_PKG).join(PERSONA_PKG), 'utf8')
+    log((opts.dry ? 'DRY: ' : '') + 'preset 里的旧包名就地换成 ' + PERSONA_PKG + '：' + agentFile)
+  }
+  const alreadyOurs = exists && (hasLegacy || /name:\s*'whale-persona'/.test(cur))
   if (alreadyOurs) {
     if (!opts.dry) refreshPresetMeta(dest)
     log('preset 已存在，保留它的基座与内容（只补显示名/描述）：' + dest)
@@ -393,6 +407,39 @@ function bundleOwningUiRow() {
     if (existsSync(patchFile) && readFileSync(patchFile, 'utf8').indexOf(UI_PKG) >= 0) return String(rawName)
   }
   return ''
+}
+
+/**
+ * 0.15.0 改名迁移：把旧包名的残留从 profile 上摘干净。
+ * 为什么必须做：旧依赖还在 → 旧包还挂在 `dsh.profile.bundles` 上 → 与新的同名插件同时注册人设段，
+ * 宿主直接报「prompt section 已注册」起不来。宁可多删一次，也不要留两条同名挂载行。
+ * 只删我们自己那两个包名，用户自己写的别的依赖一个不动。
+ */
+function dropLegacy() {
+  const touched = []
+  const pkgFile = path.join(PROFILE_DIR, 'package.json')
+  const manifest = readJsonSafe(pkgFile)
+  if (manifest) {
+    let changed = false
+    for (const k of [LEGACY_PERSONA_PKG, LEGACY_UI_PKG]) {
+      if (manifest.dependencies && manifest.dependencies[k] !== undefined) { delete manifest.dependencies[k]; changed = true }
+    }
+    const bundles = manifest.dsh && manifest.dsh.profile && manifest.dsh.profile.bundles
+    if (Array.isArray(bundles)) {
+      const kept = bundles.filter((b) => b !== LEGACY_PERSONA_PKG)
+      if (kept.length !== bundles.length) { manifest.dsh.profile.bundles = kept; changed = true }
+    }
+    if (changed) {
+      if (!opts.dry) writeFileSync(pkgFile, JSON.stringify(manifest, null, 2) + '\n', 'utf8')
+      touched.push(pkgFile)
+    }
+  }
+  for (const k of [LEGACY_PERSONA_PKG, LEGACY_UI_PKG]) {
+    const p = path.join(PROFILE_DIR, 'node_modules', ...k.split('/'))
+    if (existsSync(p)) { if (!opts.dry) rmSync(p, { recursive: true, force: true }); touched.push(p) }
+  }
+  if (touched.length) log((opts.dry ? 'DRY: ' : '') + '清掉旧包名（' + LEGACY_PERSONA_PKG + '）残留 ' + touched.length + ' 处：' + touched.join(' | '))
+  else log('没有旧包名残留（0.15.0 改名迁移无需动作）')
 }
 
 function patchProfileRow() {

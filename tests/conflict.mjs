@@ -65,7 +65,7 @@ t('T3c 不递归 node_modules（入口扫描足够快）', entryFiles(pkg).every
 // T4 已挂载判据：profile patch 与 agent preset 里的 name: 行都要认
 mkdirSync(path.join(tmp, 'profiles', 'web'), { recursive: true })
 mkdirSync(path.join(tmp, '.agent-presets', 'whale'), { recursive: true })
-writeFileSync(path.join(tmp, 'profiles', 'web', 'cordis.patch.yml'), "- insert:\n    - id: whale-persona-ui\n      name: '@shenA2024/whale-persona-ui'\n", 'utf8')
-writeFileSync(path.join(tmp, '.agent-presets', 'whale', 'agent.cordis.yml'), "- id: whale-persona\n  name: '@shenA2024/whale-persona'\n", 'utf8')
+writeFileSync(path.join(tmp, 'profiles', 'web', 'cordis.patch.yml'), "- insert:\n    - id: whale-persona-ui\n      name: 'whale-persona-ui'\n", 'utf8')
+writeFileSync(path.join(tmp, '.agent-presets', 'whale', 'agent.cordis.yml'), "- id: whale-persona\n  name: 'whale-persona'\n", 'utf8')
 const mounted = mountedNames()
-t('T4 认出已挂载的包名', mounted.has('@shenA2024/whale-persona') && mounted.has('@shenA2024/whale-persona-ui'))
+t('T4 认出已挂载的包名', mounted.has('whale-persona') && mounted.has('whale-persona-ui'))

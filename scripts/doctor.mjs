@@ -29,7 +29,7 @@ export const OURS = {
   ],
   commands: ['memory'],
   loaderIds: ['whale-persona-ui'],
-  packages: ['@shenA2024/whale-persona', '@shenA2024/whale-persona-ui'],
+  packages: ['whale-persona', 'whale-persona-ui'],
   preset: 'whale-persona',
   configDirs: ['whale-persona', 'whale-suite'],
 }

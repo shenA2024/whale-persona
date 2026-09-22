@@ -21,7 +21,7 @@
 import { registerPersonaSections, PRESET_SECTIONS } from './sections.js'
 import { registerReflex } from './reflex/index.js'
 
-export const name = '@shenA2024/whale-persona'
+export const name = 'whale-persona'
 
 /** 依赖 dsh-system-prompt 提供的 systemPrompt 服务 */
 export const inject = ['systemPrompt']

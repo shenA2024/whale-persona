@@ -1,11 +1,11 @@
 /**
- * @shenA2024/whale-persona-ui —— 设置面板（宿主半身）
+ * whale-persona-ui —— 设置面板（宿主半身）
  *
  * 它只做一件事：把「人设引擎此刻实际会注入什么」端给设置页，让用户看得见。
  * 只读 —— 写配置仍然只有两条路：本地编辑器（scripts/ui.mjs）或让 AI 改。
  *
  * 挂载位必须是 **profile patch 栈**（UI 插件进不了 agent preset 平面）；
- * 人设本体（@shenA2024/whale-persona 的三个段）必须在 **agent preset 平面**。
+ * 人设本体（whale-persona 的三个段）必须在 **agent preset 平面**。
  * 挂错平面的后果不是「这个插件失效」，而是整个插件树加载失败、DSH 起不来
  * （prompt section "deployment:persona-prefix" is already registered）。
  *
@@ -39,7 +39,7 @@ import { DEFAULTS, mergeConfig, readRawConfig, renderSections, writeMergedConfig
 // 规则文件在用户自己那边，**本包不写规则**；写规则走"让 AI 改文件 + scripts/reflex.mjs 体检"那条路。
 import { reflexState, reflexTest } from '../dsh/reflex/index.js'
 
-export const name = '@shenA2024/whale-persona-ui'
+export const name = 'whale-persona-ui'
 
 /** 只依赖宿主 webServer：开 HTTP 路由给浏览器半身用 */
 export const inject = ['webServer']

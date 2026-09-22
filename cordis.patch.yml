@@ -10,10 +10,10 @@
 # 人设本体（三段系统提示词）**故意不在这里挂**：
 #   · 挂 profile 层 = 所有模式都带人设（含 headless/tui），且遮蔽不了部署级默认；
 #   · 要"鲸鱼模式专属"就得挂在 agent preset 平面，见 README「为什么 DSH 上会多出一个 Agent 预设？」。
-#   想全局生效的用另一个入口 '@shenA2024/whale-persona/global'（按 README 的全局模式一节挂家目录层）。
+#   想全局生效的用另一个入口 'whale-persona/global'（按 README 的全局模式一节挂家目录层）。
 #
 # 回退：删掉下面两条 insert，或在 dsh 的插件管理里停用本包。
 
 - insert:
     - id: whale-persona-ui
-      name: '@shenA2024/whale-persona-ui'
+      name: 'whale-persona-ui'

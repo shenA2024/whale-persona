@@ -17,7 +17,7 @@
 
 /** 设置面板行的身份证：id 与包名 */
 export const UI_ROW_ID = 'whale-persona-ui'
-export const UI_ROW_NAME = '@shenA2024/whale-persona-ui'
+export const UI_ROW_NAME = 'whale-persona-ui'
 
 /** 安装脚本会写进 profile patch 的那一块（幂等识别与移除都只认这一份） */
 export const UI_BLOCK = ['- insert:', '    - id: ' + UI_ROW_ID, "      name: '" + UI_ROW_NAME + "'"]

@@ -41,6 +41,7 @@ https://github.com/shenA2024/whale-persona/security/advisories/new
 | `scripts/install-dsh.mjs` | profile 的 `package.json` / `cordis.patch.yml`、agent preset 的 `preset.yml` / `agent.cordis.yml` | **只在用户主动运行安装脚本时** |
 | `scripts/sync-core.mjs` | 重建 `adapters/zcode/vendor/core/` 副本（rm + cp） | **只在维护者跑 `npm run sync-core` 时**（开发工具，不随包分发执行） |
 | `scripts/pack-release.mjs` | `data/backup/release/*.tgz`（Release 附件）＋ `data/backup/pack-<tag>/`（git worktree 检出） | **只在维护者打 Release 附件时**（开发工具，不随包分发执行；退出码非 0 = 包不合格别发） |
+| `scripts/prepublish-check.mjs` | `data/prepublish-tmp/`（临时 tgz ＋ 解出来的包树，跑完即删） | **只在维护者发布前跑 `npm run prepublish-check` 时**（只读仓内文件；词表从 `data/` 或 `$DSH_HOME` 读，两者都不会被提交、也不会进包） |
 
 运行期插件本体**不写收件箱**：候选由宿主 AI 用它自己的文件工具提议，生效由你确认。
 

@@ -1,5 +1,5 @@
 /**
- * @shenA2024/whale-persona-ui —— 设置面板（浏览器半身 · 可编辑版）
+ * whale-persona-ui —— 设置面板（浏览器半身 · 可编辑版）
  *
  * 手写懒 CJS bundle，零依赖零构建：宿主只认「已构建的 __ModuleLoader__ bundle」这个契约，
  * require 只能命中基座模块（react 在里面），所以用 createElement 手写组件——
@@ -25,7 +25,7 @@
  * 生效时机：改配置下一步生效，改挂载行要新会话。
  */
 window.__ModuleLoader__.load({
-  id: '@shenA2024/whale-persona-ui',
+  id: 'whale-persona-ui',
   factory: function (require) {
     var module = { exports: {} };
     var exports = module.exports;

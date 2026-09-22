@@ -73,34 +73,50 @@ node scripts/presets.mjs apply starter-plus         # 应用（应用前自动�
 **① 装（DSH）** —— 一条命令：装插件 + 建预设 + 设默认 + 拷技能 + 自检
 
 ```bash
+npx -y whale-persona     # 不需要克隆仓库；装完重启 DSH
+```
+
+要求：**Node ≥ 20**、**DSH ≥ 0.1.6-alpha.1**，装完**重启 DSH**。
+
+**不想用 npx？** 克隆仓库跑同一个脚本，效果一模一样：
+
+```bash
 git clone https://github.com/shenA2024/whale-persona.git
 cd whale-persona
 node scripts/install-dsh.mjs --dry-run   # 先看它要做什么
 node scripts/install-dsh.mjs             # 真装
 ```
 
-要求：**Node ≥ 20**、**DSH ≥ 0.1.6-alpha.1**，装完**重启 DSH**。装完你会看到两处新东西：
-
-**没有 git，或者 clone 不动？** 用本仓 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
+**两样都不行？** 用 Release 附带的 tarball（与 `npm pack` 出来的完全同一份文件）：
 
 ```powershell
-dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.14.2/shenA2024-whale-persona-0.14.2.tgz
+dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.15.0/whale-persona-0.15.0.tgz
 ```
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
 
-⚠️ 这一步把包装进 profile，并把**设置面板**自动挂成 profile 层（0.11.1 起本包声明了 `dsh.bundle.patch`，
-宿主会自动把它加进 `dsh.profile.bundles` —— 0.11.1 之前没有这个声明，装完只是躺在 `node_modules` 里不生效）。
-0.11.2 起安装脚本会**先算清这条行的归属**：bundle 已经挂了，profile 层就一条都不插（重装还会把 0.11.1
-写坏的那条摘掉）—— 见下面「装不上？」表里那条 `duplicate loader entry id`。
-**人设本体故意不自动挂**：它要挂在 agent preset 平面才是"鲸鱼模式专属"（挂在 profile 层对所有模式生效）。
-所以要用人设，接着跑包里自带的安装脚本，它会把 agent preset 与 UI 面板行都挂好：
+⚠️ **三条通道的区别：只有 tarball 那条要跑两次。** `npx` 与克隆走的是**同一个安装脚本**，它一次就做完
+装包 + 建 agent preset + 挂设置面板 + 拷技能 + 自检；tarball 那条只把包装进 profile，
+**还要再跑一次包里自带的脚本**才能建出 agent preset：
 
 ```powershell
-node "$env:USERPROFILE\.dsh\profiles\web\node_modules\@shenA2024\whale-persona\scripts\install-dsh.mjs"
+node "$env:USERPROFILE\.dsh\profiles\web\node_modules\whale-persona\scripts\install-dsh.mjs"
 ```
 
+三条通道都会把**设置面板**自动挂成 profile 层（0.11.1 起本包声明了 `dsh.bundle.patch`，宿主自动把它加进
+`dsh.profile.bundles`）；安装脚本还会先算清这条行的归属 —— bundle 已经挂了就一条都不插
+（见下面「装不上？」表里那条 `duplicate loader entry id`）。
+**人设本体故意不自动挂**：它要挂在 agent preset 平面才是"鲸鱼模式专属"（挂 profile 层会对所有模式生效）。
+
 然后重启 DSH。脚本会**跟随你当前的默认 preset** 建一份名为 `whale-persona` 的预设（不覆盖你原来那份），并提示你之后怎么切过去。
+
+**装完是空白的，这是刻意的** —— 出厂零观点、装上不改变任何行为（有单测钉死）。真正**必填的只有一段正文**
+（`persona.character`）：自称默认「我」、称呼默认「用户」，立场 / 语气 / 形象 / 工作契约全可选、默认关。
+两种起步法任选：
+
+- 去关联仓 [whale-persona-presets](https://github.com/shenA2024/whale-persona-presets) 拿一张现成卡
+  （`node scripts/presets.mjs import <卡.json>`；也吃酒馆 v2 角色卡）；
+- 或者对 AI 说一句：「加条契约：结尾不要出现征询式问句」。
 
 **懒得自己动手？** 把下面这句连同仓库地址丢给你的 AI：
 
@@ -150,7 +166,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 3. 宿主官方的创作机制就是「**复制**一份既有预设再改」。
 
 所以「自定义人设」不是多余的中间层，**它就是人设的挂载点**：一份从你当前默认预设复制来、
-只把那行人设换成 `@shenA2024/whale-persona` 的完整装配。安装器默认**跟随你当前的默认预设**做基座
+只把那行人设换成 `whale-persona` 的完整装配。安装器默认**跟随你当前的默认预设**做基座
 （`--base ptc` 可指定）——人设插件与模式正交，不会把你的标准模式悄悄换成 PTC。
 只有**绑定这份预设的会话**才有人设；会话出过内容后不能换预设（宿主规矩）。
 
@@ -162,14 +178,14 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 
 上面那套是 **preset 平面**——只有绑定那份预设的会话有人设；headless 一次性任务、以及你显式选了
 官方「标准模式 / PTC」的会话都没有。要让**每个会话**都带上同一份人设，用本仓的**全局入口**
-\`@shenA2024/whale-persona/global\`：它不占官方具名槽位，改用自有段名（\`whale:persona-global\`），
+\`whale-persona/global\`：它不占官方具名槽位，改用自有段名（\`whale:persona-global\`），
 所以可以挂在家目录层：
 
 \`\`\`yaml
 # $DSH_HOME/cordis.patch.yml —— 一次覆盖 web / tui / headless 全部 profile
 - insert:
     - id: whale-persona-global
-      name: '@shenA2024/whale-persona/global'
+      name: 'whale-persona/global'
 \`\`\`
 
 两个入口共用同一套 \`core/\` 与同一份 \`config.json\`，渲染结果逐字一致，两套段名零交集
@@ -454,7 +470,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 
 | 路径 | 怎么用 |
 |---|---|
-| 图形界面 | DSH「设置 → 人设」（装 `@shenA2024/whale-persona-ui`）或本地编辑器 `node scripts/ui.mjs` → http://127.0.0.1:8787：有**「形象（appearance）」「回复语气（tone）」两张卡片**，每张 = 总开关 + 通用文本 + 按模型覆盖行（语气卡另有 4 个预设按钮一键填入）；旁边的「实际注入的三段」**实时显示这两段渲染后的全文**（与运行期同一套 `core/`），保存沿用同一套纪律（只替换已知段、未知键原样保留）。告警会点名「填了没开」「开了没填」「只有按模型条目、当前模型没命中又没兜底」 |
+| 图形界面 | DSH「设置 → 人设」（装 `whale-persona-ui`）或本地编辑器 `node scripts/ui.mjs` → http://127.0.0.1:8787：有**「形象（appearance）」「回复语气（tone）」两张卡片**，每张 = 总开关 + 通用文本 + 按模型覆盖行（语气卡另有 4 个预设按钮一键填入）；旁边的「实际注入的三段」**实时显示这两段渲染后的全文**（与运行期同一套 `core/`），保存沿用同一套纪律（只替换已知段、未知键原样保留）。告警会点名「填了没开」「开了没填」「只有按模型条目、当前模型没命中又没兜底」 |
 | 直接改文件 | `$DSH_HOME/whale-persona/config.json`（ZCode 侧读同一份，定位链见 [adapters/zcode/README.md](adapters/zcode/README.md)）：整体读改写，别只发一个字段 |
 | 对 AI 说（技能） | 装 `skills/whale-persona` 后直接说「给你设个形象：…」「语气温柔点」「用某个模型时形象换成…」，技能会读配置、给前后对照、确认后写回。**只有你明确要求时才改这两段** —— 人设是提示词注入通道，AI 不许自行为自己加设定 |
 
@@ -588,7 +604,7 @@ DSH 里另有**只读**面板「设置 → 条件反射」：列规则（档位/
 
 | 入口 | 怎么开 | 说明 |
 |---|---|---|
-| 宿主设置面板 · 人设 | DSH「设置 → 人设」（装 `@shenA2024/whale-persona-ui`） | 左改右预览，保存走 `POST /whale-persona/api/config` |
+| 宿主设置面板 · 人设 | DSH「设置 → 人设」（装 `whale-persona-ui`） | 左改右预览，保存走 `POST /whale-persona/api/config` |
 | 宿主设置面板 · 条件反射 | DSH「设置 → 条件反射」（同一个包，0.12.0 起） | **只读**：列规则、命中台账、试命中（不写配置；改规则用 `scripts/reflex.mjs`） |
 | 本地编辑器页 | `node scripts/ui.mjs` → http://127.0.0.1:8787 | 两个宿主的用户都能用；只绑 127.0.0.1 |
 
@@ -644,7 +660,7 @@ profile 里有没有重复 loader id、配置真源在哪。
 | agent preset | `whale-persona`（安装脚本创建） |
 | 配置目录 | `$DSH_HOME/whale-persona/`（旧布局 `$DSH_HOME/whale-suite/` 存在时沿用） |
 
-**真撞了怎么办**：两者不要挂**同一平面**。要并存就让其中一方走 `@shenA2024/whale-persona/global`
+**真撞了怎么办**：两者不要挂**同一平面**。要并存就让其中一方走 `whale-persona/global`
 （自有段名、不占官方槽位），或把不用的那份从该平面摘掉。
 
 ## 仓库结构

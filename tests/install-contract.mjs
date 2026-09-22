@@ -2,7 +2,7 @@
 // 且「面板行只能有一个来源」——bundle 已挂时 profile 层不许再插同名 entry。
 // 触发来源：2026-09-19 实测 dsh plugin add 后只躺进 dependencies、不打补丁 —— 用户装完不生效。
 // 判据：dsh.bundle.patch 声明存在、指向的文件存在、该补丁挂的是设置面板（人设本体走 agent preset，故意不在这层）。
-import { readFileSync, existsSync, mkdtempSync, symlinkSync, unlinkSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync, symlinkSync, unlinkSync, rmSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
@@ -21,8 +21,8 @@ t('I1 指向的文件存在:', !!rel && existsSync(path.join(ROOT, rel)))
 t('I1 patch 被 files 白名单收进包里:', Array.isArray(pkg.files) && pkg.files.some((f) => String(f).includes('cordis.patch.yml')))
 
 const patch = rel && existsSync(path.join(ROOT, rel)) ? readFileSync(path.join(ROOT, rel), 'utf8') : ''
-t('I2 补丁挂设置面板:', /name:\s*'@shenA2024\/whale-persona-ui'/.test(patch))
-t('I2 补丁**不**挂人设本体到 profile 层（口径：鲸鱼模式专属）:', !/name:\s*'@shenA2024\/whale-persona'\s*$/.test(patch.replace(/\r/g, '')))
+t('I2 补丁挂设置面板:', /name:\s*'whale-persona-ui'/.test(patch))
+t('I2 补丁**不**挂人设本体到 profile 层（口径：鲸鱼模式专属）:', !/name:\s*'whale-persona'\s*$/.test(patch.replace(/\r/g, '')))
 t('I3 包入口与 global 入口都还在:', !!pkg.exports['.'] && !!pkg.exports['./global'])
 t('I3 零运行时依赖（决定 Release tarball 能否独立安装）:', !pkg.dependencies && !pkg.devDependencies)
 
@@ -36,9 +36,9 @@ t('I3 零运行时依赖（决定 Release tarball 能否独立安装）:', !pkg.
 const { planUiRow, applyUiRow } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'ui-row.mjs')).href)
 const TPL = '# Your patch layer for this dsh profile, applied after every bundle layer:\n[]\n'
 const UI_LINE = '- id: whale-persona-ui'
-const BROKEN = "# patch\n\n- insert:\n    - id: whale-persona-ui\n      name: '@shenA2024/whale-persona-ui'\n"
+const BROKEN = "# patch\n\n- insert:\n    - id: whale-persona-ui\n      name: 'whale-persona-ui'\n"
 const FOREIGN = "# patch\n\n- insert:\n    - id: someone-else\n      name: 'x'\n"
-const BUNDLE = '@shenA2024/whale-persona'
+const BUNDLE = 'whale-persona'
 
 t('I4 bundle 已挂时不往 profile 层插行:', planUiRow({ profilePatch: TPL, bundleOwner: BUNDLE }).action === 'none')
 const fixed = applyUiRow({ profilePatch: BROKEN, bundleOwner: BUNDLE })
@@ -53,7 +53,7 @@ t('I4 幂等：手工挂完再算一次是 none:', planUiRow({ profilePatch: add
 // 自愈路径返工（同轮实测）：修完若留下两个 `[]`，文件就成了两个 YAML 文档，
 // dump-config 直接抛 YAMLException: end of the stream or a document separator is expected ——
 // 比原来的重复 id 更难查。空列表行的处理必须收敛到恰好一份。
-const BROKEN_WITH_EMPTY = "# patch\n[]\n- insert:\n    - id: whale-persona-ui\n      name: '@shenA2024/whale-persona-ui'\n"
+const BROKEN_WITH_EMPTY = "# patch\n[]\n- insert:\n    - id: whale-persona-ui\n      name: 'whale-persona-ui'\n"
 const healed = applyUiRow({ profilePatch: BROKEN_WITH_EMPTY, bundleOwner: BUNDLE }).text
 t('I4 自愈后只剩一个空列表（不是两个 YAML 文档）:', (healed.match(/^\[\]$/gm) || []).length === 1)
 t('I4 自愈后没有残留的 UI 行:', !healed.includes(UI_LINE))
@@ -77,4 +77,34 @@ try {
 } finally {
   try { unlinkSync(path.join(tmp, 'repo-link')) } catch { /* 已经没了就算了 */ }
   rmSync(tmp, { recursive: true, force: true })
+}
+
+// ── I6 0.15.0 改名迁移：旧包名残留必须被认出来并清掉 ──────────────────────────
+// 触发来源：0.15.0 把包名从 @shenA2024/whale-persona 改成 whale-persona（npm 不收大写包名）。
+// 旧名是新名的**子串**，所以"包含即已装"的写法会把旧预设误判成新的、原地不动；而旧依赖还挂在
+// dsh.profile.bundles 上 → 与新的同名插件同时注册人设段 → 宿主直接起不来。这条用真夹具钉住。
+const LEGACY = '@shenA2024/whale-persona'
+const tmp2 = mkdtempSync(path.join(os.tmpdir(), 'wp-legacy-'))
+try {
+  const home = path.join(tmp2, 'home')
+  const prof = path.join(home, 'profiles', 'web')
+  mkdirSync(path.join(prof, 'node_modules', '@shenA2024', 'whale-persona'), { recursive: true })
+  writeFileSync(path.join(prof, 'package.json'), JSON.stringify({
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: { [LEGACY]: 'link:/x', '@shenA2024/whale-persona-ui': 'link:/y' },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', LEGACY] } },
+  }, null, 2), 'utf8')
+  const presetDir = path.join(home, '.agent-presets', 'whale-persona')
+  mkdirSync(presetDir, { recursive: true })
+  writeFileSync(path.join(presetDir, 'agent.cordis.yml'), "# fixture\n- id: whale-persona\n  name: '" + LEGACY + "'\n", 'utf8')
+
+  const run = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'install-dsh.mjs'), '--home', home, '--source', ROOT, '--dry-run'], { encoding: 'utf8' })
+  const out = String(run.stdout || '')
+  t('I6 认出旧包名残留并给出清理计划:', /清掉旧包名/.test(out) && out.includes(LEGACY))
+  t('I6 认出 preset 里的旧包名并就地换名:', /preset 里的旧包名就地换成/.test(out))
+  const after = JSON.parse(readFileSync(path.join(prof, 'package.json'), 'utf8'))
+  t('I6 dry-run 一个字节都不改盘:', after.dependencies[LEGACY] === 'link:/x')
+} finally {
+  rmSync(tmp2, { recursive: true, force: true })
 }

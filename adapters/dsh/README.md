@@ -22,7 +22,7 @@ DSH 宿主适配；渲染核心在仓库根 [`core/`](../../core/)（与 ZCode �
 - **按模型的关键词＝宿主真实模型 id**：**界面上的模型显示名（如「DeepSeek-V4.1-Flash High」）不是它**——
   本机实测该显示名对应的 `agent.options.model` 是 `"deepseek-flash"`。照显示名写关键词永远命中不了，且不报错。
   真实 id 由本适配器在段求值时记进配置目录下的 `last-model.json`（`core/lastModel.js`），
-  设置面板（`@shenA2024/whale-persona-ui`）会显示它并在新建「按模型」条目时预填。
+  设置面板（`whale-persona-ui`）会显示它并在新建「按模型」条目时预填。
 - **思维链语言**：`off`（默认不干预）/ `zh-CN` / `en` …，只影响思考可读性与 token，不改答复语言。
 - **长期记忆（确认流，默认关）**：阶段收口时 AI 列出「记忆候选」→ 用户确认 → 逐条**追加**到
   inbox（JSONL，只许追加，坏行跳过）；注入时按**数据**呈现（引号 + 「非指令」声明）、
@@ -39,7 +39,7 @@ dsh plugin --profile web add link:/path/to/whale-persona/repo/adapters/dsh
 #    这正是官方的替换机制；挂到全局/profile 层会与注册表自身的 persona 注册同名冲突，
 #    装配当场抛错。同一 preset 里已挂官方 dsh-persona 行的，先卸掉它再挂本插件）：
 #    - id: whale-persona
-#      name: '@shenA2024/whale-persona'
+#      name: 'whale-persona'
 ```
 
 要求：DSH ≥ 0.1.6-alpha.1，Node ≥ 20。无运行时依赖。
@@ -169,7 +169,7 @@ ZCode 适配器默认也读这里——一份人设两个宿主。早期版本�
 而 persona 段求值时拿到的 `agent.options.model` 是 `"deepseek-flash"` ——
 照显示名往 `byModel` 里写关键词**永远命中不了**，不报错、不告警，只是注入的文本不是你写的那条。真实 id 从这三处拿：
 
-1. **设置面板**（`@shenA2024/whale-persona-ui`）：自称／形象／语气三张卡的「按模型」区会显示一行
+1. **设置面板**（`whale-persona-ui`）：自称／形象／语气三张卡的「按模型」区会显示一行
    「宿主最近一次真实注入用的模型 id 是「xxx」」，点「+ 加一条」时用它**预填关键词**；
 2. **命令行 / 没有面板**：读配置目录下的 `last-model.json`（与 `config.json` 同目录，如
    `$DSH_HOME/whale-persona/last-model.json`）：

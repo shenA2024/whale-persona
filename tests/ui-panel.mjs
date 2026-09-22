@@ -29,7 +29,7 @@ writeFileSync(path.join(home, 'whale-persona', 'memory-inbox.jsonl'),
 const t = (name, ok) => { console.log(name + ':', ok); if (!ok) process.exitCode = 1 }
 
 const mod = await import('../adapters/dsh-ui/index.js')
-t('P1 插件名', mod.name === '@shenA2024/whale-persona-ui')
+t('P1 插件名', mod.name === 'whale-persona-ui')
 t('P2 inject 声明 webServer', Array.isArray(mod.inject) && mod.inject.indexOf('webServer') >= 0)
 
 let route = null
