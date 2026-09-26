@@ -137,6 +137,9 @@ function check() {
   const rawCards = (((raw || {}).persona || {}).appearance || {}).cards
   const list0 = Array.isArray(rawCards) ? rawCards : []
   const problems = []
+  // notes = 不是错、只是现状说明（例如「正文按需读」正是设计意图）——
+  // 它们不该让体检变红：红了的体检会被当成噪声，然后真问题也被忽略。
+  const notes = []
   const seen = new Set()
   list0.forEach((c, i) => {
     const at = 'cards[' + i + ']'
@@ -152,7 +155,7 @@ function check() {
     if (c.who !== undefined && !CARD_WHO.includes(c.who)) problems.push(at + ' who="' + String(c.who) + '" 不认识（只认 ' + CARD_WHO.join(' / ') + '）—— 会当成 other')
     const auto = c.auto !== undefined ? !!c.auto : (c.who === 'self' || c.who === 'user')
     if (auto && !brief && !detail) problems.push(at + ' 常驻但没有 brief / detail —— 注入里只剩一个标题')
-    if (auto && c.expand !== 'full' && detail) problems.push(at + ' 写了 detail 但 expand 不是 full —— 正文**不常驻**，AI 要用得到时会按 id 来读（这是设计，不是错）')
+    if (auto && c.expand !== 'full' && detail) notes.push(at + ' 写了 detail 但 expand 不是 full —— 正文不常驻，要用时按 id 来读（这是设计，不是错）')
     const med = Array.isArray(c.media) ? c.media : []
     med.forEach((m, j) => {
       const s = String(m == null ? '' : m).trim()
@@ -169,10 +172,12 @@ function check() {
   }
   if (!problems.length) {
     console.log('体检通过：' + cards.length + ' 张卡，没有发现问题。')
+    for (const s of notes) console.log('  · 说明：' + s)
     return
   }
   console.log('体检发现 ' + problems.length + ' 项：')
   for (const s of problems) console.log('  · ' + s)
+  for (const s of notes) console.log('  · 说明（不是错）：' + s)
   console.log('（提示：config.json 里 persona.appearance.cards 由用户手改；schema 见 SPEC.md §2.3.1）')
   process.exitCode = 1
 }
