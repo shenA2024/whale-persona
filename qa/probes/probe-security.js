@@ -295,6 +295,12 @@ guard('S17', () => {
   // 真实形象（年龄 + 性别 + 身高齐全）。S14 的词表只认人名 / 关系 / 私有路径，这种模式它看不见，
   // 所以这条是 S14 抓不到的那一半。
   // 只钉**组合**，不钉单个词：「女性」「身高」在通用文档里是正常词汇，单钉会误报成灾。
+  // 外观硬规格词：这类描述只该出现在私有位置；词同样用字符码拼，免得探针源码自己命中自己。
+  const fromCode = (codes) => String.fromCharCode.apply(null, codes)
+  const words = [
+    fromCode([0x9c7c, 0x9cc4, 0x8033]),          // 外观硬规格词一
+    fromCode([0x9cb8, 0x5c3e, 0x5206, 0x53c9]),  // 外观硬规格词二
+  ]
   const R = [
     /\d{1,2}\s*岁[^\n]{0,16}身高\s*\d/,
     /女性[^\n]{0,10}(?:工程师)?[^\n]{0,6}身高\s*\d/,
@@ -311,6 +317,7 @@ guard('S17', () => {
     try { txt = readFileSync(p, 'utf8') } catch { continue }
     txt.split('\n').forEach((L, i) => {
       for (const re of R) if (re.test(L)) hits.push(r + ':' + (i + 1))
+      for (const w of words) if (L.includes(w)) hits.push(r + ':' + (i + 1))
     })
   }
   t('S17', hits.length === 0, (tracked ? '扫描面=' + tracked.length + ' 个跟踪文件；' : '扫描面=磁盘；')
@@ -469,7 +476,8 @@ if (opt.selftest) {
   ].join(String.fromCharCode(10)), 'utf8')
   // S17 的行为测法要有牙：种一个含「外貌三要素」的示例文档，断言探针会 FAIL
   const shape = '你是一位 20 ' + String.fromCharCode(0x5c81) + '的女性，'
-    + String.fromCharCode(0x8eab, 0x9ad8) + ' 1.75 m。'
+    + String.fromCharCode(0x8eab, 0x9ad8) + ' 1.62 m。'
+    + String.fromCharCode(0x9c7c, 0x9cc4, 0x8033)
   writeFileSync(path.join(tmp, 'README.md'), shape + String.fromCharCode(10), 'utf8')
   writeFileSync(path.join(tmp, '.gitignore'), 'node_modules/' + String.fromCharCode(10), 'utf8')
   // S12 的行为测法要有牙：这里种一个**没做 Origin 校验**的本地页，断言探针会 FAIL

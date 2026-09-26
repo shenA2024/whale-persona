@@ -21,7 +21,7 @@
   （+ vendor 副本由 `sync-core` 带过）、`adapters/dsh-ui/client.js`、`scripts/ui.html`、
   `examples/demo-config.json`、4 个测试 fixture 与 3 处断言。
 
-验证方式：`git ls-files` 跟踪的文本文件里 `1.75` / `20 岁` / `女性` 零命中；`npm test` 19 个脚本全绿。
+验证方式：`git ls-files` 跟踪的文本文件里「身高数字 / 年龄档 / 性别词」零命中；`npm test` 19 个脚本全绿。
 
 ### 新增：记忆分层（core / hot / cold）与【记忆目录】按需读
 
