@@ -9,8 +9,8 @@
  * 用法（DSH_HOME 决定读哪份配置；默认 ~/.dsh）：
  *   node scripts/appearance.mjs                 # = list：列出全部形象卡与开关状态
  *   node scripts/appearance.mjs list            # 同上
- *   node scripts/appearance.mjs show xushi      # 读一张卡的全文（摘要 + 正文 + 照片路径）
- *   node scripts/appearance.mjs media xushi     # 只打照片路径（每行一条，方便直接喂给看图工具）
+ *   node scripts/appearance.mjs show aming      # 读一张卡的全文（摘要 + 正文 + 照片路径）
+ *   node scripts/appearance.mjs media aming     # 只打照片路径（每行一条，方便直接喂给看图工具）
  *   node scripts/appearance.mjs check           # 体检：重复 id / 空卡 / 路径不存在 / 填了不会注入
  *   ... 追加 --config <file> 读指定的 config.json（否则走 $DSH_WHALE_CONFIG 或默认位置）
  *
