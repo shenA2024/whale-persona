@@ -44,6 +44,7 @@
     "docs",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "SPEC.md",
     "CHANGELOG.md",
     "LICENSE"
