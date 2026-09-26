@@ -35,7 +35,7 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
     "character": "",                  // 立场正文（整段），stance/character/契约均支持 {selfName}/{userName}
     "appearance": { "enabled": false, "text": "", "byModel": {}, "cards": [], "index": true },  // 形象 + 形象卡（opt-in，默认关）：把「你是谁／长什么样」当既定事实注入
                                        //   结构同 tone；匹配＝精确键（忽略大小写）→ 最长子串 → 回落 text；空键/空值忽略；文本支持 {selfName}/{userName}
-                                       //   cards（0.18.0 形象卡）：自己 / 用户本人 / 第三方各一张卡；摘要（brief）常驻、长文（detail）与照片路径（media）按需读
+                                       //   cards（0.17.0 形象卡）：自己 / 用户本人 / 第三方各一张卡；摘要（brief）常驻、长文（detail）与照片路径（media）按需读
     "tone": { "enabled": false, "text": "", "byModel": {} },         // 语气（opt-in，默认关）：只改措辞与节奏，不改结论、证据标准与工作契约
                                        //   现成文案见 <仓库>/core/presets.js 的 TONE_PRESETS（严肃/温柔/简洁/幽默）—— 只是一键填进 tone.text 的文本，不是枚举
     "suffix": "",                     // 末尾追加句，支持 {{cwd}}
@@ -116,7 +116,7 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
    - **拿不准就先兜底**：把通用 `text` 填上（填了 `text` 至少有东西注入），`byModel` 只用来做差异。
    匹配是忽略大小写的子串（精确优先 → 最长子串 → 回落 `text`），写真实 id 里够独特的一段也行，抄完整 id 最稳。
    **改完必须把写进去的原文贴给用户看（含你用的键）**，见上一条纪律 2。
-7. **形象卡（`cards`，0.18.0）只写"谁长什么样"，不写别的**：外貌、称呼、照片路径放卡里；性格与要求进 `character` / `contracts`，事实偏好进记忆流。
+7. **形象卡（`cards`，0.17.0）只写"谁长什么样"，不写别的**：外貌、称呼、照片路径放卡里；性格与要求进 `character` / `contracts`，事实偏好进记忆流。
    照片**只存路径**（别把二进制 / base64 塞进配置）—— 提示词里只出现路径，要看图时按路径去读。
    读一张卡的全文：`node scripts/appearance.mjs show <id>`；只打照片路径：`media <id>`；体检：`check`（查空卡、重复 id、路径不存在、`enabled` 没开）。
 8. **卡是个人存档，不是人设内容包**：换人设预设时 `cards` / `index` 会保留（预设没显式声明就不动它）—— 别把卡内容抄进预设文件到处分享。

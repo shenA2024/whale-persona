@@ -92,11 +92,6 @@ export function normTier(v) {
   return s === TIER.hot || s === TIER.cold || s === TIER.core ? s : ''
 }
 
-/** 条目的有效层级（未指定 → core：老条目行为逐字节不变） */
-export function memTierOf(entry) {
-  return normTier(entry && entry.tier) || TIER.core
-}
-
 /** status 解析：只认 'confirmed'；'proposed' 与一切未知值都算未确认（宁可不注入，不可误注入） */
 function statusOf(raw) {
   const s = typeof raw === 'string' ? raw.trim().toLowerCase() : ''

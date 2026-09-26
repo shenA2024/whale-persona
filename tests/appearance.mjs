@@ -1,4 +1,4 @@
-// 形象卡单测（0.18.0）：零行为改变 / 常驻与目录分工 / expand·auto·on 开关 / 坏形状 / 未知键保留 / 换预设不丢卡
+// 形象卡单测（0.17.0）：零行为改变 / 常驻与目录分工 / expand·auto·on 开关 / 坏形状 / 未知键保留 / 换预设不丢卡
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'

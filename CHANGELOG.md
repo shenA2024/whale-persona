@@ -16,7 +16,7 @@
 
 - **判据不是常用度，是缺席成本**：安全边界、终局契约、指针类「去哪查」、关系口径一旦缺席代价不可逆，
   该留 `core`；用得少 ≠ 可以降级。分层只由人工改（AI 可以建议并说明理由）。
-- `core/memoryInbox.js`：事实行新增可省字段 `"tier"`（`core` / `hot` / `cold`）；新增 `normTier` / `tierOf` /
+- `core/memoryInbox.js`：事实行新增可省字段 `"tier"`（`core` / `hot` / `cold`）；新增 `normTier` /
   `splitByTier` / `indexBrief` / `findEntries` / `retierOpFor`；重放新增操作行 `{"op":"retier","ref":"原文","tier":…}`
   （仍然只追加、永不改写）。**未标 tier 的老条目走原路径**（与 `hot` 同：`pickRelevant` 竞争上限），
   所以老配置逐字节零行为改变；只有显式 `core` 才免限常驻。
@@ -64,6 +64,32 @@
 换预设不丢卡（含"预设显式给卡则以预设为准"）。全套 19 个测试脚本全绿；
 `scripts/prepublish-check.mjs` 通过（82 文件）；`npm run sec` 通过（S14 私人内容探针零命中 ——
 过程中它真抓到一处：新测试最初用了维护者的真实人名做示例，已换成通用名）。
+
+### 整改：外部评审（GLM5.3，2026-09-26）
+
+触发来源：0.17.0 开源后交给外部模型评审（184 行报告，方法是一套安全审查方法论：分级 + 编号 + `file:line` + 可证伪判据）。评审总评：工程质量、测试文化、安全纪律显著高于同类个人项目、无新增漏洞；两个 P0 都落在 0.17.0
+新特性上，共因是**给 AI 看的指令文案与引擎代码之间没有任何机制互相钉住**。逐条处置：
+
+- **H1（语义相反）**：入库纪律原文写「tier 可省，缺省 core」，引擎 `replayInbox` 却按「缺省 = 竞争池」执行
+  （源码注释甚至明写不许兜 core）——AI 照文案省略 tier，恰恰把「缺席代价不可逆」的条目送进竞争池。
+  已改成与引擎一致：**缺省 = hot；缺席成本高的必须显式写 `core`**。
+- **H2（契约漂移）**：SPEC.md 漏了 0.17.0 的三个新字段（`memory.index`、事实行 `tier`、操作行 `retier`），
+  违反 SPEC §13 自己的 MUST。已在 §2.4 / §5.2 / §5.3 补齐，并写明「未指定 ≠ core，走竞争池」。
+- **M2（死代码）**：删掉 `memTierOf`（无调用者，且它「未指定 → core」的注释正是 H1 的错误源头）。
+- **M1（四处口径）**：`defaults.js` 的【记忆目录】注释说反了（老条目并非都是 core）；`prompt.js` 头注仍写
+  「额度 = maxEntries − core 数」（2026-09-25 已改成 core 不占名额）；形象卡统一标 **0.17.0**（此前散着 0.18.0，
+  本版一并清掉 12 个文件）；CHANGELOG 曾把函数名写作 `tierOf`。
+- **M3（双倍渲染）**：`core/measure.js` 的 `buildSuffixSection` 在预算提醒关闭时（默认关）仍整套重渲染
+  persona + 收件箱 + 纪律，只为拼一个空字符串。已加数学等值的提前返回。
+- **L1 / L2**：reflex 的 request 钩子与 pre-step 曾各建一个同文件日志实例，改为一处共用；
+  `splitCards` 的两个从未使用的形参删掉。
+- **防复发两条**：探针新增 **S16**（把纪律文案渲染出来，断言它不含「缺省 core / 默认 core」、且必须出现
+  「显式写 core」——只测渲染产物、不扫全仓，因为文档里为了说明整改会引用那句错误说法）；
+  `prepublish-check` 新增软检查 —— 本版 CHANGELOG 提到的配置键若不在 SPEC 里就报黄牌。
+
+验证方式：`npm test` 全绿（含新增的 H1 文案断言）、`npm run sec` → `PASS true` + `SELFTEST true`、
+`prepublish-check` 通过。未处置项（待维护者拍板）：ZCode vendor 副本冻结或删除、固定文案 locale 表、
+npm keywords / README 英文章节 —— 全列在评审报告第五节的行动清单里。
 
 ## v0.16.1（2026-09-22）
 

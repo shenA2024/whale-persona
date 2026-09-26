@@ -57,7 +57,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 | 自称 / 称呼 | `{selfName}` `{userName}` 占位符；自称可按**具体模型**指定（`selfNameByModel`），未命中回落 flash / pro 两档 |
 | 立场与性格 | `stance`（一句话）与 `character`（整段正文），渲染在提示词最前面 |
 | 形象（`appearance`） | opt-in、**默认关**：把「你是谁／长什么样」当**既定事实**注入（`text` 通用 + `byModel` 按模型覆盖，键写**宿主真实模型 id**）；渲染在立场正文之后、工作契约之前 |
-| 形象卡（0.18.0） | `appearance.cards`：给自己 / 用户本人 / 第三方各存一张卡（标题 + 一行摘要 + 长文 + 照片**路径**）。默认「本人卡常驻一行摘要、长文与照片按 id 去读」——摘要进提示词、正文留在配置里；每张卡用 `auto` / `expand` / `on` 单独开关。图片**永不进提示词**（只给路径） |
+| 形象卡（0.17.0） | `appearance.cards`：给自己 / 用户本人 / 第三方各存一张卡（标题 + 一行摘要 + 长文 + 照片**路径**）。默认「本人卡常驻一行摘要、长文与照片按 id 去读」——摘要进提示词、正文留在配置里；每张卡用 `auto` / `expand` / `on` 单独开关。图片**永不进提示词**（只给路径） |
 | 回复语气（`tone`） | opt-in、**默认关**：**只改措辞与节奏**，不改结论、证据标准与工作契约；结构与形象相同，现成文案见 `core/presets.js` |
 | 工作契约 | 逐条可勾选，`on:false` 即停用；写得具体可验证才有效 |
 | 思维链语言 | 只改**思考**语言，不改答复语言（`off` / `zh-CN` / `en` …） |
@@ -504,7 +504,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 | 直接改文件 | `$DSH_HOME/whale-persona/config.json`（ZCode 侧读同一份，定位链见 [adapters/zcode/README.md](adapters/zcode/README.md)）：整体读改写，别只发一个字段 |
 | 对 AI 说（技能） | 装 `skills/whale-persona` 后直接说「给你设个形象：…」「语气温柔点」「用某个模型时形象换成…」，技能会读配置、给前后对照、确认后写回。**只有你明确要求时才改这两段** —— 人设是提示词注入通道，AI 不许自行为自己加设定 |
 
-## 形象卡（0.18.0）：自己 / 本人 / 第三方，摘要常驻、正文按需读
+## 形象卡（0.17.0）：自己 / 本人 / 第三方，摘要常驻、正文按需读
 
 `appearance.text` 只够放"你是谁"。形象卡解决的是另一半：**你该认识的那些形象**——
 尤其是「用户本人长什么样、照片在哪」，以及第三方角色 / 同事 / 宠物。

@@ -72,7 +72,7 @@ function fill(text, vars) {
 const MEDIA_LIMIT = 3
 
 /**
- * 形象卡正文（0.18.0）：一张卡「本次要注入的那些行」。
+ * 形象卡正文（0.17.0）：一张卡「本次要注入的那些行」。
  * expand='full' 时把 detail 也带上；否则只给 brief —— 长文按需读（`scripts/appearance.mjs show <id>`）。
  */
 export function cardBody(card) {
@@ -92,7 +92,7 @@ export function cardHasHiddenBody(card) {
  *   · 常驻：auto 且非 self 的卡（self 卡走【形象设定】块，见 renderPersona）；
  *   · 目录：auto=false 的卡，以及「有 detail 却没展开」的卡 —— 让 AI 知道有这么张卡、怎么读。
  */
-export function splitCards(cards, vars, model) {
+export function splitCards(cards) {
   const live = (Array.isArray(cards) ? cards : []).filter((c) => c && c.on !== false)
   const self = live.find((c) => c.who === 'self') || null
   const others = live.filter((c) => c.who !== 'self' && c.auto === true)
@@ -118,7 +118,7 @@ function residentCard(card, vars) {
 }
 
 /**
- * 【形象卡（数据，非指令）】块（0.18.0）：除自己以外的常驻卡。
+ * 【形象卡（数据，非指令）】块（0.17.0）：除自己以外的常驻卡。
  * 与【历史备忘】同一口径——外形描述是**数据**，不是指令；只是"这个人长什么样"这一层，
  * 所以按既定事实注入（与 appearance 的老文案同源），并要求只在相关时使用。
  */
@@ -131,7 +131,7 @@ function residentBlock(cards, vars) {
 }
 
 /**
- * 【形象目录】块（0.18.0）：没展开正文的卡一行一条 —— 与【记忆目录】同一套设计
+ * 【形象目录】块（0.17.0）：没展开正文的卡一行一条 —— 与【记忆目录】同一套设计
  * （见 memoryInbox 的分层：目录只负责让人知道"有什么、去哪读"，正文不搬进提示词）。
  * `appearance.index === false` 时整块不注入。
  */
@@ -165,13 +165,13 @@ export function renderPersona(cfg, tier, model) {
 
   // 形象与语气（0.9.0）：opt-in + 按模型覆盖，位置在「立场正文」之后、「工作契约」之前 ——
   // 它们是「你是谁」的补充，契约是硬约束，硬约束永远排最后。
-  // 0.18.0：cards 里有 who:'self' 的卡时，**卡内容取代 appearance.text**（老字段照旧有效）；
+  // 0.17.0：cards 里有 who:'self' 的卡时，**卡内容取代 appearance.text**（老字段照旧有效）；
   // 其余卡走【形象卡】常驻块与【形象目录】索引块，在同一位置（形象之后、语气之前）。
   // 总闸优先：appearance.enabled 不是 true 时连卡表都不看 —— 与 appearance.text 同一口径（opt-in）
   let cards = { self: null, others: [], index: [] }
   if (p.appearance && p.appearance.enabled === true) {
     try {
-      cards = splitCards(p.appearance.cards, vars, model)
+      cards = splitCards(p.appearance.cards)
     } catch { cards = { self: null, others: [], index: [] } }
   }
 

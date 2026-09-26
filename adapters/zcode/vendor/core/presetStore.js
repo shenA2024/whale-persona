@@ -255,7 +255,7 @@ export function applyPresetToConfig(rawCfg, preset) {
     }
   }
   const next = { ...cfg, persona }
-  // appearance 例外（0.18.0）：cards / index 是**个人存档**（你认识谁、长什么样、照片在哪），
+  // appearance 例外（0.17.0）：cards / index 是**个人存档**（你认识谁、长什么样、照片在哪），
   // 不是人设内容包的一部分 —— 预设没显式给这两个键时保留现场，
   // 否则换一次预设就把用户存的别人的照片与描述抹掉了（症状极隐蔽：卡凭空消失）。
   const liveAp = (cfg.persona && typeof cfg.persona === 'object' && cfg.persona.appearance) || null

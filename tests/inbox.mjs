@@ -313,3 +313,17 @@ t('T21 纪律写明 proposed 与确认权:', out.includes('"status":"proposed"')
   t('T25 目录只给摘要:', tail.includes('长条目') && !tail.includes('x'.repeat(120)))
   t('T25 写明别拿摘要当依据:', out.includes('不要凭这行摘要推测正文'))
 }
+
+// T27 纪律文案 ↔ 引擎语义互钉（2026-09-26，外部评审 H1 —— 文案曾写「可省，缺省 core」，
+// 引擎却按「缺省 = 竞争池」执行：AI 照文案省略 tier，正好把缺席代价高的条目送进竞争池）。
+// 这条断言钉的是"两边同向"，不是某句措辞：改动任一侧都会红。
+{
+  setOn(session, true) // 收口开关在 T13 之后被别的用例改过：测纪律文本就得先把它打开（否则段是空的）
+  write(base())
+  out = text()
+  const disc = out.split('【长期记忆 · 入库纪律】')[1] || ''
+  t('T27 纪律段已注入:', disc.length > 0)
+  t('T27 不许写「缺省 core」:', !disc.includes('缺省 core') && !disc.includes('默认 core'))
+  t('T27 必须写明缺省走竞争池:', disc.includes('缺省 = hot'))
+  t('T27 必须要求显式写 core:', disc.includes('显式写 "core"'))
+}

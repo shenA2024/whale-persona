@@ -178,9 +178,9 @@ export function buildDirective(rule, soft, narrow) {
 
 export function registerReflex(ctx) {
   ensureFile()
-  registerRequestHook(ctx, makeJsonlLog(path.join(configDir(), 'reflex.log.jsonl')))
-  const logFile = path.join(configDir(), 'reflex.log.jsonl')
-  const log = makeJsonlLog(logFile)
+  // 一个日志文件一个实例：request 钩子与 pre-step 共用同一个（2026-09-26，外部评审 L1 —— 之前建了两个）
+  const log = makeJsonlLog(path.join(configDir(), 'reflex.log.jsonl'))
+  registerRequestHook(ctx, log)
 
   ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
     let cfg

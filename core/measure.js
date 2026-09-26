@@ -71,6 +71,11 @@ export function buildSuffixSection(cfg, model, cwd, capture) {
   } catch {
     suffix = ''
   }
+  // 预算提醒默认关：关着就别为了一个空字符串把整份 persona + 收件箱 + 纪律再渲染一遍
+  // （2026-09-26，外部评审 M3：suffix 段每次装配都白跑一次全套计量；这个提前返回在数学上等值——
+  //  提醒行为空 ⟺ !enabled || !warnInPrompt || max<=0，见上面 measureInjection 的 note 判据）。
+  const b = budgetOf(cfg)
+  if (!b.enabled || !b.warnInPrompt || !(b.max > 0)) return suffix
   try {
     const m = measureInjection(cfg, { model, cwd, capture })
     return suffix + (m.budget.note || '')

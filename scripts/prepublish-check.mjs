@@ -132,5 +132,33 @@ if (noWords) {
 }
 rmSync(TMP, { recursive: true, force: true })
 
+// ── P5 契约漂移软检查（0.17.0 整改，外部评审 H2）────────────────────────────
+// CHANGELOG 本版提到的「段.键」形状配置键，MUST 在 SPEC.md 里出现。
+// 触发来源：0.17.0 的 memory.index / 事实行的 tier / retier 操作行三个新字段只进了 CHANGELOG，
+// SPEC 没跟 —— 而 SPEC 正是「第三方照它就能逐字复现」的主打卖点，漂移了没人会红。
+// 只报黄牌、不拦发布：新键先进 CHANGELOG、SPEC 稍后补，不该把发布卡死。
+{
+  const clText = readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8')
+  const specText = readFileSync(path.join(ROOT, 'SPEC.md'), 'utf8')
+  const head = clText.split(/^## /m)[1] || ''
+  const SEGMENTS = /^(memory|persona|budget|appearance|tone|reflex)\./
+  const keys = new Set()
+  for (const m of head.matchAll(/`([A-Za-z][A-Za-z0-9_.]{1,48})`/g)) {
+    const tok = m[1]
+    if (!SEGMENTS.test(tok) || tok.includes('/') || /\.(js|mjs|json|md)$/.test(tok)) continue
+    keys.add(tok)
+  }
+  // 口径：SPEC 的表以「段」为上下文（§2.4 表里写 `maxEntries` 而不是 `memory.maxEntries`），
+  // 所以全名或**剥掉段前缀后的裸键名**带反引号出现，都算已进 SPEC（初版只认全名，把三个已登记的键误报成黄牌）。
+  const inSpec = (k) => {
+    if (specText.includes('`' + k + '`')) return true
+    const bare = k.replace(/^(memory|persona|budget|appearance|tone|reflex)\./, '')
+    return specText.includes('`' + bare + '`')
+  }
+  const missing = [...keys].filter((k) => !inSpec(k))
+  if (missing.length) console.log('  WARN 配置键未进 SPEC（契约漂移黄牌）：' + JSON.stringify(missing))
+  else ok('P5 CHANGELOG 配置键 ⊆ SPEC :: ' + keys.size + ' 个键')
+}
+
 console.log(fail ? '发布闸门：不通过（' + fail + ' 项）—— 别发。' : '发布闸门：通过。')
 process.exitCode = fail ? 1 : 0

@@ -25,11 +25,13 @@
  *   S15 SEC_WRITE     写面清单与代码同步（0.14.1）：会写盘的生产文件必须逐个登记在 SECURITY.md 里
  *   S11 SEC_BINARY    版本库里没有二进制大件
  *   S12 SEC_ORIGIN    本地页真起服务打三个 Origin（行为测试）：非 loopback 必须 403
+ *   S16 SEC_ALIGN     纪律文案 ↔ 引擎语义互钉（0.17.0 整改）：注入的【入库纪律】不得写「缺省 core」，
+ *                     且必须要求「显式写 core」—— 文案与 replayInbox 的「未指定 = 竞争池」必须同向
  *
  * 无法自动化项（SEC_SKIP，不计失败）: 记忆确认行的语义伪造、提示词注入逃逸的人工判定、
  *   宿主平面划分（headless 不注入人设）、第三方扫描复核。以上以 qa/security-审查.md 的人工核验为准。
  *
- * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 12 组；门禁以台账全项人工核验为准。
+ * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 16 组；门禁以台账全项人工核验为准。
  */
 import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
@@ -374,6 +376,42 @@ guard('S12', () => {
   }).catch((e) => { cleanup(); throw e })
 })
 
+guard('S16', () => {
+  // SEC_ALIGN 纪律文案 ↔ 引擎语义互钉（2026-09-26，外部评审 H1 的共因）：
+  // 「给 AI 看的指令文本」与「引擎代码」之间原本没有任何机制互相钉住 —— 0.17.0 就漂了：
+  // 文案写「tier 可省，缺省 core」，而 replayInbox 按「缺省 = 竞争池」执行，
+  // 照文案省略 tier 正好把「缺席代价不可逆」的条目送进竞争池，且两边都不会红。
+  // 本组只测**渲染产物**，不扫全仓文档：CHANGELOG 为了说明这次整改会引用那句错误说法，
+  // 扫文档就会把"记录本身"判红（形态匹配的老毛病，见 sec-2 交接点 1）。
+  const p = path.join(ROOT, 'core', 'prompt.js')
+  if (!existsSync(p)) return skip('S16', 'no-engine')
+  // 渲染会去读收件箱：给它一个空 home，免得探针顺手读维护者的真实记忆文件
+  const home = mkdtempSync(path.join(os.tmpdir(), 'wpr-align-'))
+  const oldHome = process.env.DSH_HOME
+  process.env.DSH_HOME = home
+  pending = pending.then(async () => {
+    const mod = await import(pathToFileURL(p).href)
+    const cfg = {
+      enabled: true,
+      persona: { enabled: true, selfNameFlash: '小助手', userName: '小林', character: '你是{selfName}。' },
+      memory: { enabled: true, inbox: true },
+    }
+    const parts = mod.buildPersonaParts(cfg, 'deepseek-v4.1-flash', 'D:/work/demo', { capture: true })
+    const disc = String((parts && parts.discipline) || '')
+    const contradicts = disc.includes('缺省 core') || disc.includes('默认 core') || disc.includes('可省，缺省')
+    const demandsCore = disc.includes('显式写 "core"')
+    const saysDefaultHot = disc.includes('缺省 = hot')
+    t('S16', disc.length > 0 && !contradicts && demandsCore && saysDefaultHot,
+      '纪律段长度=' + disc.length + ' 与引擎语义矛盾=' + contradicts
+      + ' 要求显式写core=' + demandsCore + ' 写明缺省=hot=' + saysDefaultHot)
+  }).catch((e) => skip('S16', 'probe-error', String(e && e.message).slice(0, 80)))
+    .finally(() => {
+      if (oldHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = oldHome
+      rmSync(home, { recursive: true, force: true })
+    })
+})
+
 /** 异步探针（S12 要真起服务）——登记后由结论处 await，保证顺序与退出码都在异步跑完之后 */
 function flushAsync() { return pending }
 
@@ -392,6 +430,13 @@ if (opt.selftest) {
   mkdirSync(path.join(tmp, 'core'), { recursive: true })
   writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0', dependencies: { 'evil-dep': '1.0.0' } }), 'utf8')
   writeFileSync(path.join(tmp, 'core', 'a.js'), 'export const u = fetch("https://evil.example.com/x")\nexport const y = eval("1")\nconst el = document.createElement("div"); el.innerHTML = "<img src=x onerror=alert(1)>"\n', 'utf8')
+  // S16 的行为测法要有牙：种一个「文案与引擎语义相反」的最小 prompt.js，断言探针会 FAIL
+  writeFileSync(path.join(tmp, 'core', 'prompt.js'), [
+    'export function buildPersonaParts() {',
+    "  return { persona: '', inbox: '', discipline: '【长期记忆 · 入库纪律】\\n层级 tier（可省，缺省 core）：…' }",
+    '}',
+    '',
+  ].join(String.fromCharCode(10)), 'utf8')
   writeFileSync(path.join(tmp, '.gitignore'), 'node_modules/' + String.fromCharCode(10), 'utf8')
   // S12 的行为测法要有牙：这里种一个**没做 Origin 校验**的本地页，断言探针会 FAIL
   mkdirSync(path.join(tmp, 'scripts'), { recursive: true })
@@ -409,7 +454,7 @@ if (opt.selftest) {
   ].join(String.fromCharCode(10)), 'utf8')
   const r2 = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--root', tmp], { encoding: 'utf8', shell: false, timeout: 120000 })
   const caught = r2.stdout.match(/SEC_FAIL (S\d+)/g) || []
-  const okSelf = r2.status === 1 && caught.length >= 5 && caught.includes('SEC_FAIL S12')
+  const okSelf = r2.status === 1 && caught.length >= 5 && caught.includes('SEC_FAIL S12') && caught.includes('SEC_FAIL S16')
   console.log('SELFTEST ' + okSelf + ' DETAIL ' + JSON.stringify({ expectExit: 1, gotExit: r2.status, caught }))
   rmSync(tmp, { recursive: true, force: true })
   if (!okSelf) process.exitCode = 1
