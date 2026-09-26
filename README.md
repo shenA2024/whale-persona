@@ -762,6 +762,7 @@ core/            渲染核心（宿主无关的唯一源）：默认值 / 渲染
                  沉降路由(sinks) / 注入体积计量(measure) / 语气预设
 SPEC.md          格式规范 v1：配置文件结构 + 注入文本装配契约 + 预设卡格式 + 酒馆卡映射。
                  第三方照它就能读/写我们的文件并渲染出逐字一致的文本（只规定格式，不含任何内容）
+SPEC.en.md       SPEC.md 的英译：章节号 / 标识符 / 注入文案块由 tests/spec-i18n.mjs 机器校验不漂移
 examples/        可直接跑的示例：demo-config.json、demo-inbox.jsonl、empty-config.json
 adapters/dsh/    DSH 宿主半身：注册 persona-prefix/suffix（官方具名槽位）+ whale:thinking-language
 adapters/dsh/reflex/  条件反射层：规则命中即在代码层注入一步指令（默认零规则）+ 可选的步级工具裁剪
@@ -776,7 +777,7 @@ scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设�
                 inject-size.mjs  注入体积体检（分段字符数 + 预算判定；--json 机器可读）
                 doctor.mjs       共存体检（我们占了哪些名字 / 谁在同平面抢名字 / 重复 loader id）
                  reflex.mjs       条件反射：show / check / new（规则体检闸门 + 建规则，体检不过自动回滚）
-tests/           19 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
+tests/           20 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
                  形象卡 / 设置面板 / ZCode hook / 本地编辑器 API / 路径存在性门禁
                  ＋ 条件反射两组（reflex.mjs 55 条行为、reflex-rules.mjs 17 条建规则闸门）
 qa/              安全审查：probes/probe-security.js（探针）+ security-审查.md（台账与人工复核项）

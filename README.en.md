@@ -172,7 +172,9 @@ node scripts/doctor.mjs                 # coexistence check: which names we occu
 
 Format-level documentation for third-party implementations is [SPEC.md](SPEC.md) (Chinese): config
 shape, the exact assembly contract for injected text, the preset-card format, the SillyTavern card
-mapping. Mounting details: [adapters/dsh/README.md](adapters/dsh/README.md).
+mapping. An English translation is [SPEC.en.md](SPEC.en.md) — kept in step with the Chinese source
+and machine-checked by `tests/spec-i18n.mjs` (section numbers, identifier set, normative-keyword
+counts, verbatim literal blocks). Mounting details: [adapters/dsh/README.md](adapters/dsh/README.md).
 
 ## Memory: the AI may propose, only a human confirms
 
@@ -206,13 +208,14 @@ presentation of everything injected. Details in [.github/SECURITY.md](.github/SE
 ```text
 core/            host-independent rendering core (the single source of truth)
 SPEC.md          format spec v1: config, injection assembly contract, preset cards, Tavern mapping
+SPEC.en.md       the same spec in English, machine-checked against SPEC.md by tests/spec-i18n.mjs
 examples/        runnable examples: demo config, demo inbox, empty config
 adapters/dsh/    the harness half: persona sections, thinking-language section, reflex layer
 adapters/dsh-ui/ harness settings panel (host routes + browser half)
 adapters/zcode/  retired ZCode plugin (history only)
 scripts/         installer, render preview, local editor, memory console, appearance cards,
                  injection size, doctor, reflex rules, core→vendor sync
-tests/           19 test files, run with npm test
+tests/           20 test files, run with npm test
 qa/              safety probe + manual review ledger
 ```
 

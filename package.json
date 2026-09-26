@@ -24,7 +24,7 @@
     "whale-persona-dsh": "scripts/install-dsh.mjs"
   },
   "scripts": {
-    "test": "node tests/smoke.mjs && node tests/global.mjs && node tests/presets.mjs && node tests/tavern.mjs && node tests/inbox.mjs && node tests/sink.mjs && node tests/inject-size.mjs && node tests/conflict.mjs && node tests/model-names.mjs && node tests/style-fields.mjs && node tests/appearance.mjs && node tests/ui-panel.mjs && node tests/ui-css-scope.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs && node tests/install-contract.mjs && node tests/reflex.mjs && node tests/reflex-rules.mjs && node tests/paths.mjs",
+    "test": "node tests/smoke.mjs && node tests/global.mjs && node tests/presets.mjs && node tests/tavern.mjs && node tests/inbox.mjs && node tests/sink.mjs && node tests/inject-size.mjs && node tests/conflict.mjs && node tests/model-names.mjs && node tests/style-fields.mjs && node tests/appearance.mjs && node tests/ui-panel.mjs && node tests/ui-css-scope.mjs && node tests/zcode-hook.mjs && node tests/ui.mjs && node tests/install-contract.mjs && node tests/reflex.mjs && node tests/reflex-rules.mjs && node tests/paths.mjs && node tests/spec-i18n.mjs",
     "sec": "node qa/probes/probe-security.js && node qa/probes/probe-security.js --selftest",
     "install-dsh": "node scripts/install-dsh.mjs",
     "render": "node scripts/render-preview.mjs",
@@ -46,6 +46,7 @@
     "README.md",
     "README.en.md",
     "SPEC.md",
+    "SPEC.en.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
