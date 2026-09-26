@@ -8,6 +8,21 @@
 > 一次发布两个特性：**记忆分层**（core / hot / cold +【记忆目录】）与**形象卡**（自己 / 用户本人 / 第三方 + 索引式按需读）。
 > 两批改动同处一个工作区，同批提交、同批发布 —— 版本号 lockstep 一次从 0.16.1 提到 0.17.0（0.17.0 从未上过 npm）。
 
+### 隐私整改：示例文案不再使用实际形象（2026-09-26）
+
+触发来源：外部评审整改后自查发现，README 的 `appearance` 示例、两张文档截图与测试 fixture 用的
+都是**同一个真实形象**（年龄 + 性别 + 身高三要素齐全），而人设形象属于**私有口径** —— 公开仓里
+不该出现可指认的本人描述。这是 0.13.0 起的既有内容，安全探针 S14 的词表不含这种模式，所以一直没报。
+
+- 换法：统一改为中性通用示例「你是一位资深后端工程师」，去掉年龄 / 性别 / 身高三个维度；
+- 源头 `examples/demo-config.json` 一并改（两张截图都由它渲染）；
+- `docs/images/editor-full.png` 与 `docs/images/render-preview.png` 按新文案重出（尺寸与旧图一致）；
+- 覆盖 13 个跟踪文件：`README.md`、`adapters/dsh/README.md`、两份 `SKILL.md`、`core/defaults.js`
+  （+ vendor 副本由 `sync-core` 带过）、`adapters/dsh-ui/client.js`、`scripts/ui.html`、
+  `examples/demo-config.json`、4 个测试 fixture 与 3 处断言。
+
+验证方式：`git ls-files` 跟踪的文本文件里 `1.75` / `20 岁` / `女性` 零命中；`npm test` 19 个脚本全绿。
+
 ### 新增：记忆分层（core / hot / cold）与【记忆目录】按需读
 
 触发来源：用户提出「记忆可以留，但按常用度分级 + 加索引 + 用到再去读」。本机实战同时暴露两个具体痛点：
