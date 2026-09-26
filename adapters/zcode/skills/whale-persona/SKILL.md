@@ -83,7 +83,7 @@ description: 人设引擎 whale-persona 的配置管理工作流。当用户想�
 | 「你该怎么称呼我」 | `persona.userName` |
 | 「你和我的关系是…」（一句话） | `persona.stance` |
 | 「你的定位／性格／立场是…」（整段） | `persona.character` |
-| 「你是一个 20 岁的女性」「你长这样…」「你的身份是…」 | `persona.appearance.text`（所有模型通用）或 `persona.appearance.byModel`（只给某个模型） |
+| 「你是一个资深后端工程师」「你长这样…」「你的身份是…」 | `persona.appearance.text`（所有模型通用）或 `persona.appearance.byModel`（只给某个模型） |
 | 「记住他／她长什么样」「这张照片是他」 | `persona.appearance.cards` 里加一张卡（`who:"user"` 或 `"other"`）：`brief` 一行摘要常驻、`detail` 长文按需读、`media` 只放**路径**；动卡前先 `node scripts/appearance.mjs list` 看现有 id（别造重复 id） |
 | 「别每轮都提那张卡」「那张卡正文也一起带上」 | 卡上的 `auto`（是否常驻）/ `expand`（`brief` 只摘要 / `full` 连正文）/ `on`（整张停用）；总闸仍是 `appearance.enabled` |
 | 「说话温柔点／严肃点／简洁点／幽默点」 | `persona.tone.text` —— 可先用 `core/presets.js` 里 4 条预设（严肃/温柔/简洁/幽默）的原文，用户要改字就直接改 |

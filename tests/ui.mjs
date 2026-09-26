@@ -106,14 +106,14 @@ try {
     && state.tonePresets.every((p) => p && p.id && p.label && typeof p.text === 'string' && p.text.length > 20))
 
   const styleBody = { config: { enabled: true, persona: { userName: '小林',
-    appearance: { enabled: true, text: '你是一位 20 岁的女性，身高 1.75 m。', byModel: { 'glm-5.1': '更年轻的形象。' }, note: '未知子键不要裁' },
+    appearance: { enabled: true, text: '你是一位资深后端工程师。', byModel: { 'glm-5.1': '更年轻的形象。' }, note: '未知子键不要裁' },
     tone: { enabled: true, text: '语气干脆利落。', byModel: {}, ext: { keep: 1 } } } } }
   const savedStyle = await (await post('/save', styleBody)).json()
   const disk2 = JSON.parse(readFileSync(cfgFile, 'utf8'))
   const ap = (disk2.persona || {}).appearance || {}
   const tn = (disk2.persona || {}).tone || {}
   t('U7 形象/语气落盘形状正确 + 未知子键仍在 + 预览带这两段:', savedStyle.ok
-    && ap.enabled === true && ap.text === '你是一位 20 岁的女性，身高 1.75 m。' && ap.byModel['glm-5.1'] === '更年轻的形象。' && ap.note === '未知子键不要裁'
+    && ap.enabled === true && ap.text === '你是一位资深后端工程师。' && ap.byModel['glm-5.1'] === '更年轻的形象。' && ap.note === '未知子键不要裁'
     && tn.enabled === true && tn.text === '语气干脆利落。' && tn.ext && tn.ext.keep === 1
     && savedStyle.preview.prefix.includes('【形象设定】') && savedStyle.preview.prefix.includes('【回复语气】'))
 

@@ -174,14 +174,14 @@ const H = clientHooks
 const view = { raw: s2.json.raw, defaults: s2.json.defaults, hasRaw: true }
 const f = H.formFrom(view)
 f.appearanceEnabled = true
-f.appearanceText = '你是一位 20 岁的女性，身高 1.75 m。'
+f.appearanceText = '你是一位资深后端工程师。'
 f.appearanceRows = [{ keep: {}, key: 'glm-5.1', value: 'GLM 下：你是小五。' }]
 const stylePatch = H.buildPatch(f, view)
 t('N2 formFrom / buildPatch：形象形状对得上，且 raw 里的未知子键不被裁',
-  f.appearanceEnabled === true && f.appearanceText === '你是一位 20 岁的女性，身高 1.75 m。'
+  f.appearanceEnabled === true && f.appearanceText === '你是一位资深后端工程师。'
   && !!stylePatch.persona.appearance
   && stylePatch.persona.appearance.enabled === true
-  && stylePatch.persona.appearance.text === '你是一位 20 岁的女性，身高 1.75 m。'
+  && stylePatch.persona.appearance.text === '你是一位资深后端工程师。'
   && stylePatch.persona.appearance.byModel['glm-5.1'] === 'GLM 下：你是小五。'
   && stylePatch.persona.appearance.futureKey === '别的工具写的未知子键'
   && !!stylePatch.persona.tone && stylePatch.persona.tone.enabled === false
@@ -196,7 +196,7 @@ const w2 = await call('/whale-persona/api/config', {
 const disk = JSON.parse(readFileSync(CFG, 'utf8'))
 const ap = (disk.persona || {}).appearance || {}
 t('N3 保存落盘：appearance 形状正确 + 未知子键仍在 + 预览里真的注入【形象设定】',
-  w2.code === 200 && ap.enabled === true && ap.text === '你是一位 20 岁的女性，身高 1.75 m。'
+  w2.code === 200 && ap.enabled === true && ap.text === '你是一位资深后端工程师。'
   && Object.keys(ap.byModel).length === 1 && ap.byModel['glm-5.1'] === 'GLM 下：你是小五。'
   && ap.futureKey === '别的工具写的未知子键'
   && (disk.persona.tone || {}).enabled === false
@@ -236,14 +236,14 @@ const selfCardEmpty = flatText(H.ByModelCard(Object.assign({}, selfCardProps, {
   value: [], subtitle: SC.subtitle(0),
 })))
 const cardProps = {
-  enabled: true, text: '你是一位 20 岁的女性，身高 1.75 m。',
+  enabled: true, text: '你是一位资深后端工程师。',
   rows: [{ keep: {}, key: 'glm-5.1', value: 'GLM 下：你是小五。' }],
   disabled: false, onToggleEnabled: noop, onText: noop, onPatch: noop, onRemove: noop, onAdd: noop,
 }
 const appearanceCard = flatText(H.StyleCard(Object.assign({}, cardProps, {
   title: '形象（appearance）', switchLabel: '启用形象设定',
   switchHint: '默认关（opt-in）：关着的时候，下面填了内容也不会注入。',
-  placeholder: '例：你是一位 20 岁的女性，身高 1.75 m。',
+  placeholder: '例：你是一位资深后端工程师。',
   keyPlaceholder: '模型关键词，如 deepseek-v4.1-flash', valuePlaceholder: '这个模型下的形象',
   empty: '（没配就所有模型都用上面的通用文本）', notes: ['匹配顺序：精确命中 → 最长子串命中。'],
   note: '形象是 opt-in 的：开关关着时，这一段在系统提示词里完全不出现。',

@@ -26,26 +26,26 @@ const base = {
 const cfg = (patch) => mergeConfig(Object.assign({}, base, { persona: Object.assign({}, base.persona, patch) }))
 const render = (patch, model) => renderPersona(cfg(patch), String(model || '').includes('pro') ? 'pro' : 'flash', model)
 
-const APPEAR = { enabled: true, text: '你是一位 20 岁的女性，身高 1.75 m。', byModel: {} }
+const APPEAR = { enabled: true, text: '你是一位资深后端工程师。', byModel: {} }
 const TONE = { enabled: true, text: '语气温柔有耐心。', byModel: {} }
 
 // ① 默认关（opt-in）：填了也不注入
-t('A1 默认关：填了形象也不注入', render({ appearance: { enabled: false, text: '你是一位 20 岁的女性。' } }, 'deepseek-v4.1-flash').indexOf('形象设定') < 0)
+t('A1 默认关：填了形象也不注入', render({ appearance: { enabled: false, text: '你是一位资深后端工程师。' } }, 'deepseek-v4.1-flash').indexOf('形象设定') < 0)
 t('A2 默认值就是关且空', DEFAULTS.persona.appearance.enabled === false && DEFAULTS.persona.appearance.text === '' && Object.keys(DEFAULTS.persona.appearance.byModel).length === 0)
 t('A3 默认语气也是关且空', DEFAULTS.persona.tone.enabled === false && DEFAULTS.persona.tone.text === '')
 
 // ② 开关打开 + 通用文本
 const p1 = render({ appearance: APPEAR }, 'deepseek-v4.1-flash')
 t('A4 开 + 通用文本 → 出现【形象设定】', p1.indexOf('【形象设定】') >= 0)
-t('A5 形象原文逐字在内', p1.indexOf('- 你是一位 20 岁的女性，身高 1.75 m。') >= 0)
+t('A5 形象原文逐字在内', p1.indexOf('- 你是一位资深后端工程师。') >= 0)
 t('A6 指名持有人（用 userName）', p1.indexOf('以下是小林为你设定的形象') >= 0)
 
 // ③ 按模型覆盖（用户的原始诉求：只给某个模型设形象）
-const byModel = { enabled: true, text: '通用形象。', byModel: { 'deepseek-v4.1-flash': '你是一位 20 岁的女性，身高 1.75 m。' } }
+const byModel = { enabled: true, text: '通用形象。', byModel: { 'deepseek-v4.1-flash': '你是一位资深后端工程师。' } }
 const pHit = render({ appearance: byModel }, 'deepseek-v4.1-flash')
-t('A7 按模型命中 → 用它，通用文本不出现', pHit.indexOf('身高 1.75 m') >= 0 && pHit.indexOf('通用形象') < 0)
+t('A7 按模型命中 → 用它，通用文本不出现', pHit.indexOf('后端工程师') >= 0 && pHit.indexOf('通用形象') < 0)
 const pMiss = render({ appearance: byModel }, 'glm-5.2')
-t('A8 未命中 → 回落通用文本', pMiss.indexOf('通用形象。') >= 0 && pMiss.indexOf('1.75 m') < 0)
+t('A8 未命中 → 回落通用文本', pMiss.indexOf('通用形象。') >= 0 && pMiss.indexOf('后端工程师') < 0)
 const pExact = render({ appearance: { enabled: true, text: '', byModel: { 'DeepSeek-V4.1-Flash': '精确命中的形象。' } } }, 'deepseek-v4.1-flash')
 t('A9 大小写不同也算精确命中', pExact.indexOf('精确命中的形象。') >= 0)
 const pSub = render({ appearance: { enabled: true, text: '', byModel: { 'v4.1-flash': '子串命中的形象。' } } }, 'Pro/deepseek/deepseek-v4.1-flash')
@@ -138,6 +138,6 @@ t('L5 记录的 id 能被 byModel 子串命中', render({ appearance: { enabled:
 
 // ⑭ 端到端：buildPersonaPrompt 真的按模型选形象
 const e2e = buildPersonaPrompt(cfg({ appearance: byModel }), 'deepseek-v4.1-flash', '', {})
-t('X1 端到端按模型注入形象', e2e.indexOf('身高 1.75 m') >= 0)
+t('X1 端到端按模型注入形象', e2e.indexOf('后端工程师') >= 0)
 const e2e2 = buildPersonaPrompt(cfg({ appearance: byModel }), 'deepseek-v4-pro', '', {})
-t('X2 别的模型不串味', e2e2.indexOf('1.75 m') < 0 && e2e2.indexOf('通用形象。') >= 0)
+t('X2 别的模型不串味', e2e2.indexOf('后端工程师') < 0 && e2e2.indexOf('通用形象。') >= 0)

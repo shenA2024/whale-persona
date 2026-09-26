@@ -1469,10 +1469,10 @@ window.__ModuleLoader__.load({
             switchHint: '出厂默认关：关着的时候，下面填了内容也不会注入。',
             enabled: form.appearanceEnabled,
             text: form.appearanceText,
-            placeholder: '例：你是一位 20 岁的女性，身高 1.75 m。',
+            placeholder: '例：你是一位资深后端工程师。',
             rows: form.appearanceRows,
             keyPlaceholder: '模型关键词，如 deepseek-v4.1-flash',
-            valuePlaceholder: '这个模型下的形象，如 你是一位 20 岁的女性，身高 1.75 m。',
+            valuePlaceholder: '这个模型下的形象，如 你是一位资深后端工程师。',
             empty: '（没配就所有模型都用上面的通用文本）',
             notes: [
               '形象是「你是谁／长什么样」的既定事实：不必解释、不要否认，也不要反复强调或拿它加戏；被问到年龄/性别/长相时照它回答。',

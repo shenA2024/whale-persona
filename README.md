@@ -176,7 +176,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 
 （上图是 `node scripts/render-preview.mjs --config examples/demo-config.json` 的真实 stdout，不是手写的示例。）
 
-要改**形象**与**语气**（两段都是 opt-in、默认关）也一样：对 AI 说「给你设个形象：20 岁的女性，身高 1.75 m」
+要改**形象**与**语气**（两段都是 opt-in、默认关）也一样：对 AI 说「给你设个形象：资深后端工程师，后端工程师」
 或「语气温柔点」，或者直接写 `persona.appearance` / `persona.tone` —— 结构、匹配规则与注入文本见下面的
 「[形象与语气](#形象与语气都是-opt-in默认关)」一节。
 
@@ -352,7 +352,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 
 【形象设定】
 以下是小林为你设定的形象，按既定事实持有：被问到与你自身有关的问题（年龄、性别、长相、经历等）时照它回答，不必解释、不要否认，也不要反复强调或拿它加戏：
-- 你是一位 20 岁的女性，身高 1.75 m，说话干脆、不绕弯。
+- 你是一位资深后端工程师，说话干脆、不绕弯。
 
 【回复语气】
 以下是小林要求的措辞与节奏：只改变你怎么说话，不改变结论、证据标准与工作契约：
@@ -406,8 +406,8 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 ```jsonc
 "appearance": {
   "enabled": true,                 // 默认 false；false = 这一段永不注入（填了也不注入）
-  "text": "你是一位 20 岁的女性，身高 1.75 m。",              // 所有模型通用的兜底
-  "byModel": { "flash": "你是一位 20 岁的女性，身高 1.75 m，说话干脆、不绕弯。" }
+  "text": "你是一位资深后端工程师。",              // 所有模型通用的兜底
+  "byModel": { "flash": "你是一位资深后端工程师，说话干脆、不绕弯。" }
 },                                 // 键写「宿主真实模型 id」（如 "deepseek-flash"），别写界面显示名（如 DeepSeek-V4.1-Flash High）；
                                    // 真实 id 从哪拿：面板的「按模型」卡会显示最近一次真实 id，或读配置目录下的 last-model.json（见下节）；
                                    // 本示例的键 "flash" 是真实 id 的一段，靠「最长子串」命中（精确命中优先，忽略大小写）；抄完整 id 最稳
@@ -443,7 +443,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 
 【形象设定】
 以下是小林为你设定的形象，按既定事实持有：被问到与你自身有关的问题（年龄、性别、长相、经历等）时照它回答，不必解释、不要否认，也不要反复强调或拿它加戏：
-- 你是一位 20 岁的女性，身高 1.75 m。
+- 你是一位资深后端工程师。
 
 【回复语气】
 以下是小林要求的措辞与节奏：只改变你怎么说话，不改变结论、证据标准与工作契约：
@@ -510,7 +510,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 "persona": {
   "appearance": {
     "enabled": true,
-    "text": "你是一位 20 岁的女性工程师，身高 1.75 m。",   // 自己的形象（老字段，照旧有效）
+    "text": "你是一位资深后端工程师。",   // 自己的形象（老字段，照旧有效）
     "cards": [
       { "id": "aming", "who": "user", "title": "阿明",
         "brief": "三十岁、戴眼镜、常穿灰外套",

@@ -150,8 +150,8 @@ ZCode 适配器默认也读这里——一份人设两个宿主。早期版本�
 ```jsonc
 "appearance": {
   "enabled": true,                                        // 默认 false；false = 这一段永不注入（填了也不注入）
-  "text": "你是一位 20 岁的女性，身高 1.75 m。",           // 所有模型通用的兜底
-  "byModel": { "deepseek-flash": "你是一位 20 岁的女性，身高 1.75 m，说话干脆、不绕弯。" }
+  "text": "你是一位资深后端工程师。",           // 所有模型通用的兜底
+  "byModel": { "deepseek-flash": "你是一位资深后端工程师，说话干脆、不绕弯。" }
 },
 "tone": {
   "enabled": true,

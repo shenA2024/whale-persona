@@ -35,14 +35,14 @@ const base = (appearance) => ({
 })
 
 // A1 零行为改变：老配置（只有 text、没有 cards）—— 两个新块一个字都不出现
-write(base({ enabled: true, text: '你是一位 20 岁的女性，身高 1.75 m。' }))
+write(base({ enabled: true, text: '你是一位资深后端工程师。' }))
 let out = text()
-t('A1 老配置无新块:', out.includes('【形象设定】') && out.includes('身高 1.75 m')
+t('A1 老配置无新块:', out.includes('【形象设定】') && out.includes('后端工程师')
   && !out.includes('【形象卡') && !out.includes('【形象目录'))
 const legacyOut = out
 
 // A1b cards 给空数组同样不出现（出厂默认形态）
-write(base({ enabled: true, text: '你是一位 20 岁的女性，身高 1.75 m。', cards: [], index: true }))
+write(base({ enabled: true, text: '你是一位资深后端工程师。', cards: [], index: true }))
 t('A1b 空卡表无新块:', text() === legacyOut)
 
 // A2 user 卡常驻：只注入一行摘要 + 照片路径；detail 不进常驻
@@ -93,10 +93,10 @@ t('A5 常驻仍在:', out.includes('- 阿明：三十岁'))
 write(base({
   enabled: true,
   text: '这句应该被卡取代。',
-  cards: [{ id: 'me', who: 'self', title: '小岚', brief: '二十岁出头的女性工程师，身高 1.75 m。' }],
+  cards: [{ id: 'me', who: 'self', title: '小岚', brief: '资深后端工程师。' }],
 }))
 out = text()
-t('A6 self 卡取代 text:', out.includes('【形象设定】') && out.includes('二十岁出头的女性工程师') && !out.includes('这句应该被卡取代'))
+t('A6 self 卡取代 text:', out.includes('【形象设定】') && out.includes('资深后端工程师') && !out.includes('这句应该被卡取代'))
 
 // A6b self 卡 auto:false：既不常驻也不回落老 text（用户显式关了），只进目录
 write(base({
