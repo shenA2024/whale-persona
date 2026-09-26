@@ -116,7 +116,10 @@ const files = readdirSync(coreDir).filter((f) => f.endsWith('.js')).sort()
   ].join('\n') + '\n', 'utf8')
   const r = runHook(JSON.stringify({ prompt: 'hi', cwd: 'D:/work' }))
   const ctx = JSON.parse(r.stdout).hookSpecificOutput.additionalContext
-  t('Z8 相关性注入:', ctx.includes('「项目事实（work）」') && ctx.includes('「全局旧偏好」') === false)
+  // 0.17.0 起被挤出正文的条目改为进【记忆目录】索引（不再静默消失）：正文块无、目录块有
+  const z8head = ctx.split('【记忆目录')[0]
+  const z8tail = ctx.split('【记忆目录')[1] || ''
+  t('Z8 相关性注入:', ctx.includes('「项目事实（work）」') && !z8head.includes('全局旧偏好') && z8tail.includes('全局旧偏好'))
   t('Z8 纪律三类候选:', ctx.includes('[新增]') && ctx.includes('[更新]') && ctx.includes('[删去]'))
 }
 

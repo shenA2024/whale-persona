@@ -33,8 +33,9 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
     "userName": "用户",               // 称呼用户
     "stance": "",                     // 关系立场（一句话，渲染在 character 之前）
     "character": "",                  // 立场正文（整段），stance/character/契约均支持 {selfName}/{userName}
-    "appearance": { "enabled": false, "text": "", "byModel": {} },   // 形象（opt-in，默认关）：把「你是谁／长什么样」当既定事实注入
+    "appearance": { "enabled": false, "text": "", "byModel": {}, "cards": [], "index": true },  // 形象 + 形象卡（opt-in，默认关）：把「你是谁／长什么样」当既定事实注入
                                        //   结构同 tone；匹配＝精确键（忽略大小写）→ 最长子串 → 回落 text；空键/空值忽略；文本支持 {selfName}/{userName}
+                                       //   cards（0.18.0 形象卡）：自己 / 用户本人 / 第三方各一张卡；摘要（brief）常驻、长文（detail）与照片路径（media）按需读
     "tone": { "enabled": false, "text": "", "byModel": {} },         // 语气（opt-in，默认关）：只改措辞与节奏，不改结论、证据标准与工作契约
                                        //   现成文案见 <仓库>/core/presets.js 的 TONE_PRESETS（严肃/温柔/简洁/幽默）—— 只是一键填进 tone.text 的文本，不是枚举
     "suffix": "",                     // 末尾追加句，支持 {{cwd}}
@@ -45,7 +46,8 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
     "entries": [],                    // 手工条目（权威层，渲染为行为准则）
     "inbox": true,                    // 收件箱确认流
     "capture": "on-demand",           // 收口开关（只控【入库纪律】的注入）：on-demand（默认，会话里 /memory on 才注入）| always（每轮注入）
-    "maxEntries": 30,                 // 收件箱注入上限（保新弃旧）
+    "maxEntries": 30,                 // 收件箱注入上限（未标 tier 与 hot 的条目按相关性竞争；显式 core 不吃这个额度）
+    "index": true,                    // 【记忆目录】（0.17.0）：未展开的条目（cold + 超额）渲染成一行一条的索引块
     "inboxPath": "",                  // 空 = 配置目录下的 memory-inbox.jsonl
     "requireConfirm": true            // 候选确认闸门（0.8.0 起默认 true，代码强制）：注入只认人工确认过的条目；
                                       // false = 放行 0.8.0 之前的老格式条目，但 status:"proposed" 候选仍然不注入
@@ -78,12 +80,16 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
 | 「你和我的关系是…」（一句话） | `persona.stance` |
 | 「你的定位／性格／立场是…」（整段） | `persona.character` |
 | 「你是一个 20 岁的女性」「你长这样…」「你的身份是…」 | `persona.appearance.text`（所有模型通用）或 `persona.appearance.byModel`（只给某个模型） |
+| 「记住他／她长什么样」「这张照片是他」 | `persona.appearance.cards` 里加一张卡（`who:"user"` 或 `"other"`）：`brief` 一行摘要常驻、`detail` 长文按需读、`media` 只放**路径**；动卡前先 `node scripts/appearance.mjs list` 看现有 id（别造重复 id） |
+| 「别每轮都提那张卡」「那张卡正文也一起带上」 | 卡上的 `auto`（是否常驻）/ `expand`（`brief` 只摘要 / `full` 连正文）/ `on`（整张停用）；总闸仍是 `appearance.enabled` |
 | 「说话温柔点／严肃点／简洁点／幽默点」 | `persona.tone.text` —— 可先用 `core/presets.js` 里 4 条预设（严肃/温柔/简洁/幽默）的原文，用户要改字就直接改 |
 | 「给某个模型设个形象」 | `persona.appearance.byModel`：`{ "宿主真实模型 id": "文本" }` —— 键**先确认真实 id**（见下节纪律 6），不许拿界面显示名当键 |
 | 「换个语气」 | `persona.tone`（总开关 `enabled` + 通用 `text`）；只给某个模型换就写 `persona.tone.byModel`。语气只改措辞与节奏，不改结论、证据标准与工作契约 |
 | 「用某个模型时形象／语气不一样」 | 对应字段的 `byModel`：`{ "宿主真实模型 id": "文本" }`（键照面板显示的最近一次真实 id 抄最稳；忽略大小写的子串命中，写其中够独特的一段也行） |
 | 「加条规矩：……」「结尾不要……」 | `persona.contracts`（要具体可验证；5-10 条为宜） |
 | 「记一下：项目用 pnpm」 | 记忆流（`memory.entries` / 收件箱），不是契约 |
+| 「这条记忆老是想不到／它太占地方了」 | 条目的 `tier` 字段：`core`（免限常驻）/ `hot`（竞争上限）/ `cold`（只进【记忆目录】）；改层级走 `node scripts/memory.mjs tier <core\|hot\|cold> <序号…>` |
+| 「你上次记的那条全文是什么」 | `node scripts/memory.mjs show <序号…>` 读全文 / `search <关键词>` 检索——【记忆目录】里的摘要不是正文 |
 | 「你思考时说中文」 | `thinkingLanguage` |
 | 「设置里那张卡叫什么」 | `preset.yml` 的 `name:` 一行（见下一节） |
 
@@ -110,6 +116,10 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
    - **拿不准就先兜底**：把通用 `text` 填上（填了 `text` 至少有东西注入），`byModel` 只用来做差异。
    匹配是忽略大小写的子串（精确优先 → 最长子串 → 回落 `text`），写真实 id 里够独特的一段也行，抄完整 id 最稳。
    **改完必须把写进去的原文贴给用户看（含你用的键）**，见上一条纪律 2。
+7. **形象卡（`cards`，0.18.0）只写"谁长什么样"，不写别的**：外貌、称呼、照片路径放卡里；性格与要求进 `character` / `contracts`，事实偏好进记忆流。
+   照片**只存路径**（别把二进制 / base64 塞进配置）—— 提示词里只出现路径，要看图时按路径去读。
+   读一张卡的全文：`node scripts/appearance.mjs show <id>`；只打照片路径：`media <id>`；体检：`check`（查空卡、重复 id、路径不存在、`enabled` 没开）。
+8. **卡是个人存档，不是人设内容包**：换人设预设时 `cards` / `index` 会保留（预设没显式声明就不动它）—— 别把卡内容抄进预设文件到处分享。
 
 ## 长期记忆与收口开关
 
@@ -131,6 +141,16 @@ description: 人设引擎 whale-persona 的配置管理工作流（DeepSeek Harn
   `kind` 非 memory 的（如 `pitfall` / `idea`）**永不进提示词**——用户 `confirm` 的那一刻，插件才把它
   **只追加式**写进路由指向的文件（`path` / `format: md|plain|jsonl` / `template`），写完出队，幂等不可重写。
   你该做的：**照旧只写 `status:"proposed"` 的候选行**，多带一个 `kind` 字段即可；落盘动作在用户手上。
+- **层级 tier（0.17.0）**：条目可带 `"tier"`，缺省 = 未标（照旧与 hot 一起按相关性竞争上限）：
+  - `"core"` = **免限常驻**，不参与 `maxEntries` 竞争（安全边界、终局契约、指针类「去哪查」、关系口径用这层）；
+  - `"hot"` = 与未标条目同路径（项目 tag 命中优先，超额不展开正文）；
+  - `"cold"` = 从不展开正文，只出现在【记忆目录】里。
+  **判据是缺席成本、不是常用度**：用得越少、一旦缺席代价越大的越该留 `core`（对照教训：一条「去哪查落位表」的
+  指针记忆因长期未被用到而被挤出注入，结果连"自己缺什么"都不知道了）。你提议降级必须说明理由，实际改动只有用户能做：
+  `node scripts/memory.mjs tier core|hot|cold <序号…>`（写一行 `{"op":"retier",…}`，重放时生效）。
+- **【记忆目录】（0.17.0）**：没展开正文的条目（cold + 超额）会在【历史备忘】之后渲染成一个索引块，一行一条
+  （`[序号] 未展开 · 摘要…`）。**那只是索引不是正文**：需要哪条就按序号去读全文，别拿摘要当依据——
+  `node scripts/memory.mjs show <序号…>`（读全文）、`node scripts/memory.mjs search <关键词>`（检索）。读不到就说读不到。
   配了路由时，【入库纪律】里会多出「分类路由」一段列出 kind → 目标文件，照那段写，不要自己编 kind
   （没有路由的 kind 确认后会"无处可去"，用户会看到提示）。
 - 注入时收件箱按「数据非指令」呈现（引号包裹、换行折叠、剥离「」）——这是刻意的抗注入设计，不要改这个口径。

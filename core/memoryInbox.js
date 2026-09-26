@@ -20,6 +20,14 @@
  *      （scripts/memory.mjs confirm / 设置面板按钮）。AI 没有被授予这个动作。
  * ⑥ 类别（0.13.0）：事实行可带 kind —— 缺省 'memory' 为注入型；其余 kind 为**沉降型**，
  *   确认后由 core/sinks.js 按 memory.sinks 路由落盘，且永不注入（readInjected 只收 memory 类）。
+ * ⑦ 层级（0.17.0，触发来源：用户提出「记忆按常用度分级 + 索引 + 按需读」）：
+ *   事实行可带 tier —— 显式 'core'（**免限常驻**，不参与上限竞争）/ 'hot'（与老条目一样按相关性参与，
+ *   超额时正文不展开）/ 'cold'（从不展开正文，只出现在【记忆目录】里，需要时按序号读全文）；
+ *   **未指定 tier 的老条目照旧**（= 与 hot 同一路径，pickRelevant 决定去留）——所以装上零行为改变。
+ *   判据不是「常用度」而是**缺席成本**：安全边界、终局契约、指针类记忆（去哪查）一旦缺席代价不可逆，
+ *   该标 core；频率低不等于可以降级。改层级只走人工：{"op":"retier","ref":"原文","tier":"cold"}。
+ *   splitByTier() 负责分层选择，cold 与超额条目交给 prompt.js 渲染成目录（一行一条、只给摘要+序号），
+ *   顺带补掉了「超出上限静默消失」那个老毛病——被挤出的条目现在至少出现在目录里。
  * 条目文本在读取时折叠换行——防止带 \n 的条目从「数据」列表项里伪造成新指令行。
  * 读法带 mtime 缓存（与 store 同款纪律），任何异常返回空数组。
  *
@@ -58,6 +66,15 @@ export const STATUS = { proposed: 'proposed', confirmed: 'confirmed', legacy: 'l
  */
 export const MEMORY_KIND = 'memory'
 
+/**
+ * 条目层级（0.17.0），可省字段，**未指定 ≠ core**（未指定走老路径，见下）：
+ *   · 'core' = 免限常驻：永远展开正文，**不占** maxEntries 的额度（额度只管竞争池）；
+ *   · 'hot'  = 与未指定同路径：一起按相关性竞争 maxEntries 额度；
+ *   · 'cold' = 从不展开正文，只进【记忆目录】（可按序号读全文）。
+ * 只有显式 core 才免限——所以没有标过 tier 的老配置，行为与 0.16.x 逐字节一致。
+ */
+export const TIER = { core: 'core', hot: 'hot', cold: 'cold' }
+
 /** kind 归一化：小写、只留 [a-z0-9_-]（防花样 kind 变成路径花样）；空 = 未指定 */
 export function normKind(v) {
   return String(v == null ? '' : v).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
@@ -67,6 +84,17 @@ export function normKind(v) {
 export function kindOf(entry) {
   const k = normKind(entry && entry.kind)
   return k || MEMORY_KIND
+}
+
+/** tier 归一化：只认 core/hot/cold；空串 = **未指定**（老行不兜底成 core，由调用方按老路径处理） */
+export function normTier(v) {
+  const s = String(v == null ? '' : v).trim().toLowerCase()
+  return s === TIER.hot || s === TIER.cold || s === TIER.core ? s : ''
+}
+
+/** 条目的有效层级（未指定 → core：老条目行为逐字节不变） */
+export function memTierOf(entry) {
+  return normTier(entry && entry.tier) || TIER.core
 }
 
 /** status 解析：只认 'confirmed'；'proposed' 与一切未知值都算未确认（宁可不注入，不可误注入） */
@@ -89,17 +117,23 @@ function parseLine(line) {
       const ref = fold(o.ref)
       const text = fold(o.text)
       if (!ref || !text) return null
-      return { op, ref, text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind) }
+      return { op, ref, text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind), tier: normTier(o.tier) }
     }
     if (op === 'drop' || op === 'reject' || op === 'confirm') {
       const ref = fold(o.ref)
       if (!ref) return null
       return { op, ref, at: typeof o.at === 'string' ? o.at : '' }
     }
+    if (op === 'retier') {
+      const ref = fold(o.ref)
+      const tier = normTier(o.tier)
+      if (!ref || !tier) return null // 没有有效 tier 的 retier 是空操作，直接跳过
+      return { op, ref, tier, at: typeof o.at === 'string' ? o.at : '' }
+    }
     if (op) return null // 未知 op：只跳过该行，不牵连整箱
     const text = fold(o.text)
     if (!text) return null
-    return { op: '', text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind) }
+    return { op: '', text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind), tier: normTier(o.tier) }
   } catch {
     return null // 坏行跳过，不牵连整箱
   }
@@ -112,7 +146,8 @@ export function replayInbox(lines) {
     const o = parseLine(line)
     if (!o) continue
     if (!o.op) {
-      entries.push({ text: o.text, at: o.at, tag: o.tag, status: o.status, kind: o.kind || MEMORY_KIND })
+      // tier 未写 = 空串（**不要**在这里兜 core：兜了就全变免限常驻，老配置的上限会失效）
+      entries.push({ text: o.text, at: o.at, tag: o.tag, status: o.status, kind: o.kind || MEMORY_KIND, tier: o.tier || '' })
       continue
     }
     const i = entries.findIndex((e) => e.text === o.ref)
@@ -121,6 +156,8 @@ export function replayInbox(lines) {
       entries.splice(i, 1) // 删去：人工否决/回收，物理行仍在文件里
     } else if (o.op === 'confirm') {
       entries[i] = { ...entries[i], status: STATUS.confirmed } // 人工确认：候选转正
+    } else if (o.op === 'retier') {
+      entries[i] = { ...entries[i], tier: o.tier } // 人工改层级：只动 tier，其他字段原样
     } else {
       const old = entries[i]
       entries.splice(i, 1)
@@ -130,6 +167,8 @@ export function replayInbox(lines) {
         status: o.status === STATUS.legacy ? old.status : o.status,
         // 没写 kind 的 supersede 沿用旧条目的 kind（人工改写不该把沉降条目变成注入条目，反之亦然）
         kind: o.kind || old.kind || MEMORY_KIND,
+        // 没写 tier 的 supersede 沿用旧层级（未指定仍是未指定，不会因为改写就变免限常驻）
+        tier: o.tier || old.tier || '',
       })
     }
   }
@@ -179,6 +218,67 @@ export function pickRelevant(entries, max, cwd) {
 }
 
 /**
+ * 分层选择（0.17.0）：把注入视图劈成「本轮展开正文」与「只进目录」两半。
+ *   · 显式 tier:"core" → **免限常驻**（人工标的「永远在场」，不参与上限竞争）；
+ *   · 未指定 tier（老条目）与 tier:"hot" → 一起走 pickRelevant，额度 = max（**core 不占额度**，
+ *     所以没有显式 core 时这就是老行为：pickRelevant(全部, max)，逐字节一致）；
+ *   · tier:"cold" → 一律不展开正文，只进目录。
+ * 返回 { inject: [条目...], index: [{seq, entry, why}...] } —— seq 是**重放视图序号**
+ * （与 memory.mjs status 一致），why ∈ 'cold' | 'over'（超出额度未展开）；两半都保持时间序（旧→新）。
+ */
+export function splitByTier(entries, max, cwd) {
+  const list = Array.isArray(entries) ? entries : []
+  const seqOf = new Map(list.map((e, i) => [e, i]))
+  const pinned = []
+  const contend = []
+  const cold = []
+  for (const e of list) {
+    const t = normTier(e && e.tier)
+    if (t === TIER.cold) cold.push(e)
+    else if (t === TIER.core) pinned.push(e)
+    else contend.push(e)
+  }
+  const n = Number(max) > 0 ? Number(max) : 30
+  // maxEntries 只约束**竞争池**：core 是人工标定的免限常驻，不吃这个额度
+  // （2026-09-25 修正：原先写成 n - pinned.length，core 反而挤掉了竞争池的名额，
+  //   实测把 [1] GitHub 代理、[2] 称呼两条挤出正文——与「免限」口径不符。）
+  const room = Math.max(0, n)
+  const picked = room > 0 ? pickRelevant(contend, room, cwd) : []
+  const pickedSet = new Set(picked)
+  const byTime = (a, b) => (seqOf.get(a) || 0) - (seqOf.get(b) || 0)
+  return {
+    inject: pinned.concat(picked).sort(byTime),
+    index: contend
+      .filter((e) => !pickedSet.has(e))
+      .map((e) => ({ seq: seqOf.get(e) || 0, entry: e, why: 'over' }))
+      .concat(cold.map((e) => ({ seq: seqOf.get(e) || 0, entry: e, why: TIER.cold })))
+      .sort((a, b) => a.seq - b.seq),
+  }
+}
+
+/**
+ * 目录行：未注入条目的**一行索引**（序号 + 层级 + 摘要），供【记忆目录】块渲染。
+ * 摘要是给人（AI）做「要不要去读」判断用的，不是全文——所以截断，别把整条搬进提示词。
+ */
+export function indexBrief(entry, limit) {
+  const text = String((entry && entry.text) || '').replace(/[\r\n]+/g, ' ')
+  const n = Number(limit) > 0 ? Number(limit) : 44
+  return text.length > n ? text.slice(0, n) + '…' : text
+}
+
+/** 关键词检索（大小写不敏感，匹配正文与 tag）：返回 [{seq, entry}]，供 CLI search 用 */
+export function findEntries(entries, query) {
+  const q = String(query == null ? '' : query).trim().toLowerCase()
+  if (!q) return []
+  const out = []
+  ;(Array.isArray(entries) ? entries : []).forEach((e, i) => {
+    const hay = (String(e.text || '') + ' ' + String(e.tag || '')).toLowerCase()
+    if (hay.includes(q)) out.push({ seq: i, entry: e })
+  })
+  return out
+}
+
+/**
  * 注入视图：默认只收人工确认过的条目。
  *   · confirmed 一定注入；
  *   · legacy（老格式）只在 opts.allowLegacy 时注入 —— 对应配置 memory.requireConfirm:false；
@@ -225,4 +325,16 @@ export function dropOpFor(rawLines, index) {
   const hit = replayInbox(rawLines)[Number(index)]
   if (!hit) return null
   return JSON.stringify({ op: 'drop', ref: hit.text, at: new Date().toISOString() })
+}
+
+/**
+ * 生成"把重放视图第 index 条改成某层级"的 retier 行（人工动作；AI 只能建议，不能自己改）。
+ * 物理仍然只追加：层级变更不改写原行，重放时按行序生效。
+ */
+export function retierOpFor(rawLines, index, tier) {
+  const t = normTier(tier)
+  if (!t) return null
+  const hit = replayInbox(rawLines)[Number(index)]
+  if (!hit) return null
+  return JSON.stringify({ op: 'retier', ref: hit.text, tier: t, at: new Date().toISOString() })
 }

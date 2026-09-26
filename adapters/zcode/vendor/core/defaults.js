@@ -37,11 +37,12 @@ export const DEFAULTS = {
     /**
      * 形象（opt-in，默认关）：把「你是谁／长什么样」当成关于你自己的既定事实注入，如
      * 「你是一位 20 岁的女性，身高 1.75 m」。
-     * 结构 = { enabled, text（所有模型通用的默认）, byModel（按模型覆盖，命中优先） }。
+     * 结构 = { enabled, text（所有模型通用的默认）, byModel（按模型覆盖，命中优先） ,
+     *          cards（0.18.0：形象卡，见下）, index（是否渲染【形象目录】） }。
      * 匹配规则与 selfNameByModel 完全一致（精确 → 最长子串 → 回落 text）。
-     * 默认关 + 默认空 = 装上零行为改变（与 memory 同一口径）。
+     * 默认关 + 默认空 + 卡表空 = 装上零行为改变（与 memory 同一口径）。
      */
-    appearance: { enabled: false, text: '', byModel: {} },
+    appearance: { enabled: false, text: '', byModel: {}, cards: [], index: true },
     /**
      * 语气（opt-in，默认关）：只改**措辞与节奏**，不改结论、证据标准与工作契约。
      * 结构与 appearance 相同：{ enabled, text, byModel }。
@@ -68,8 +69,14 @@ export const DEFAULTS = {
      * 'always' —— 旧行为，每轮都注入。手工条目不受它控制。
      */
     capture: 'on-demand',
-    /** 注入上限（收件箱；当前项目 tag 命中优先，其次全局，超出保新弃旧） */
+    /** 注入上限（收件箱；core 不受它约束，hot 按当前项目 tag 相关性竞争，超出保新弃旧） */
     maxEntries: 30,
+    /**
+     * 【记忆目录】（0.17.0）：把未展开的条目（tier=cold + 超额 hot）渲染成一行一条的索引块，
+     * 让 AI 知道「有哪些记忆不在眼前、该去哪读」，而不是对它们一无所知。
+     * 默认 true —— 老配置里所有条目都是 core，目录必然为空块，装上零行为改变；设 false = 完全不注入目录。
+     */
+    index: true,
     /** 收件箱文件路径；空 = 配置目录下的 memory-inbox.jsonl（见 store.js 的 configDir()） */
     inboxPath: '',
     /**
@@ -92,8 +99,11 @@ export const DEFAULTS = {
   },
 }
 
+/** 形象卡的归属：自己 / 用户本人 / 其它（第三方角色、同事、宠物…） */
+export const CARD_WHO = ['self', 'user', 'other']
+
 /**
- * 「开关 + 通用文本 + 按模型覆盖表」这一族字段的归一化（appearance / tone 共用）。
+ * 「开关 + 通用文本 + 按模型覆盖表」这一族字段的归一化（tone 用；appearance 见 appearanceField）。
  * 未知子键原样透传（与整体纪律一致：保存一次不许把别人的键裁掉），坏形状一律回落默认。
  */
 function styleField(user, def) {
@@ -103,6 +113,56 @@ function styleField(user, def) {
     enabled: u.enabled !== undefined ? !!u.enabled : def.enabled,
     text: u.text !== undefined ? String(u.text) : def.text,
     byModel: (u.byModel && typeof u.byModel === 'object' && !Array.isArray(u.byModel)) ? u.byModel : def.byModel,
+  }
+}
+
+/**
+ * 单张形象卡归一化（0.18.0）。返回 null = 这张卡整张丢掉：
+ *   · 形状不是对象；· title / brief / detail 全空（空条目只会在注入里占一行噪音）。
+ * 默认值按「谁」推：auto 默认 self/user 常驻、other 不常驻；expand 默认 self 展开全文、其余只展开一行。
+ * `{...c}` 在前 —— 未知子键原样透传（同 §2.6 纪律）。
+ */
+function normCard(raw, i) {
+  const c = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : null
+  if (!c) return null
+  const title = String(c.title == null ? '' : c.title).trim()
+  const brief = String(c.brief == null ? '' : c.brief).trim()
+  const detail = String(c.detail == null ? '' : c.detail).trim()
+  if (!title && !brief && !detail) return null
+  const who = CARD_WHO.includes(c.who) ? c.who : 'other'
+  const id = String(c.id == null ? '' : c.id).trim() || ('card-' + (i + 1))
+  const media = Array.isArray(c.media)
+    ? c.media.map((m) => String(m == null ? '' : m).trim()).filter(Boolean)
+    : []
+  const defAuto = who === 'self' || who === 'user'
+  const auto = c.auto !== undefined ? !!c.auto : defAuto
+  const expand = (c.expand === 'full' || c.expand === 'brief') ? c.expand : (who === 'self' ? 'full' : 'brief')
+  return { ...c, id, who, title, brief, detail, media, auto, expand, on: c.on !== false }
+}
+
+/** 卡表归一化：丢空卡；**id 重复只留第一张**（可预测优先于报错，CLI 与渲染都按 id 定位） */
+export function normCards(list) {
+  const arr = Array.isArray(list) ? list : []
+  const seen = new Set()
+  const out = []
+  for (let i = 0; i < arr.length; i++) {
+    const c = normCard(arr[i], i)
+    if (!c) continue
+    if (seen.has(c.id)) continue
+    seen.add(c.id)
+    out.push(c)
+  }
+  return out
+}
+
+/** appearance 归一化：比 styleField 多 cards / index 两个子键 */
+function appearanceField(user, def) {
+  const base = styleField(user, def)
+  const u = user && typeof user === 'object' && !Array.isArray(user) ? user : {}
+  return {
+    ...base,
+    cards: normCards(u.cards),
+    index: u.index !== undefined ? !!u.index : def.index,
   }
 }
 
@@ -128,7 +188,7 @@ export function mergeConfig(user) {
       stance: p.stance !== undefined ? p.stance : d.persona.stance,
       suffix: p.suffix !== undefined ? p.suffix : d.persona.suffix,
       character: p.character !== undefined ? p.character : d.persona.character,
-      appearance: styleField(p.appearance, d.persona.appearance),
+      appearance: appearanceField(p.appearance, d.persona.appearance),
       tone: styleField(p.tone, d.persona.tone),
       contracts: Array.isArray(p.contracts) ? p.contracts : d.persona.contracts,
     },
@@ -142,6 +202,7 @@ export function mergeConfig(user) {
       inbox: m.inbox !== undefined ? !!m.inbox : d.memory.inbox,
       capture: typeof m.capture === 'string' ? m.capture : d.memory.capture,
       maxEntries: Number(m.maxEntries) > 0 ? Number(m.maxEntries) : d.memory.maxEntries,
+      index: m.index !== undefined ? !!m.index : d.memory.index,
       inboxPath: typeof m.inboxPath === 'string' ? m.inboxPath : '',
       entries: Array.isArray(m.entries) ? m.entries : d.memory.entries,
       sinks: (m.sinks && typeof m.sinks === 'object' && !Array.isArray(m.sinks)) ? m.sinks : d.memory.sinks,

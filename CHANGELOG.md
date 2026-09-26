@@ -3,6 +3,68 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.17.0（2026-09-26）
+
+> 一次发布两个特性：**记忆分层**（core / hot / cold +【记忆目录】）与**形象卡**（自己 / 用户本人 / 第三方 + 索引式按需读）。
+> 两批改动同处一个工作区，同批提交、同批发布 —— 版本号 lockstep 一次从 0.16.1 提到 0.17.0（0.17.0 从未上过 npm）。
+
+### 新增：记忆分层（core / hot / cold）与【记忆目录】按需读
+
+触发来源：用户提出「记忆可以留，但按常用度分级 + 加索引 + 用到再去读」。本机实战同时暴露两个具体痛点：
+① 超出 `memory.maxEntries` 的条目**静默消失**——被挤掉的偏偏是一条「跨库知识去哪查」的**指针类**记忆，
+它一缺席，AI 连"自己缺什么"都不知道了；② 全部条目每轮整体注入，低频条目也在重复付 token。
+
+- **判据不是常用度，是缺席成本**：安全边界、终局契约、指针类「去哪查」、关系口径一旦缺席代价不可逆，
+  该留 `core`；用得少 ≠ 可以降级。分层只由人工改（AI 可以建议并说明理由）。
+- `core/memoryInbox.js`：事实行新增可省字段 `"tier"`（`core` / `hot` / `cold`）；新增 `normTier` / `tierOf` /
+  `splitByTier` / `indexBrief` / `findEntries` / `retierOpFor`；重放新增操作行 `{"op":"retier","ref":"原文","tier":…}`
+  （仍然只追加、永不改写）。**未标 tier 的老条目走原路径**（与 `hot` 同：`pickRelevant` 竞争上限），
+  所以老配置逐字节零行为改变；只有显式 `core` 才免限常驻。
+- `core/prompt.js`：【历史备忘】之后新增【记忆目录】块（`memory.index`，默认 true）——未展开的条目
+  （`cold` + 超额）一行一条给「序号 + 摘要」，正文不搬进提示词，并明写「别拿摘要当依据，要读就按序号读全文」。
+- `scripts/memory.mjs`：新增 `show <序号…>`（读全文）、`search <关键词>`（检索）、`tier <core|hot|cold> <序号…>`
+  （人工改层级）；`status` 增加层级统计。
+- 被挤出上限的条目不再静默消失——它们进【记忆目录】。相关断言同步更新（`tests/inbox.mjs` T3/T9、`tests/zcode-hook.mjs` Z8：
+  拆成「正文块无 / 目录块有」两半来验）。
+
+验证方式：`tests/inbox.mjs` 新增 T23（core 免限、未标照旧竞争、cold 只进目录、目录带序号）、T24（`retier` 生效、
+`supersede` 不写 tier 时继承旧层级）、T25（`index:false` 可关、目录只给摘要、写明别拿摘要当依据）；
+18 个测试脚本全绿（0 失败）；`scripts/prepublish-check.mjs` 通过（81 文件、无个人配置文件名、无词表命中）；
+本机实跑 `who-injected`（38 条候选 / 上限 40 / 展开 38 / 目录 0——没有 cold 条目时行为不变，符合预期）。
+发布时复跑：19 个测试脚本全绿、`prepublish-check` 通过（82 文件）。
+
+### 新增：形象卡（`persona.appearance.cards`）——三方形象 + 索引式按需读
+
+触发来源：2026-09-25 用户提出「形象分三部分：你的形象注入、我的形象注入、甚至第三方形象注入；
+但注入词别太臃肿，按需读取或加索引；用户可以自己决定要不要自动注入」——他要每轮对话里都"想着我的样子"，
+又不愿意为此把整段外貌描写常驻在提示词里。
+
+- `core/defaults.js`：`persona.appearance` 新增两个子键 —— `cards`（形象卡表，默认 `[]`）与 `index`
+  （是否渲染【形象目录】，默认 `true`）；新增 `CARD_WHO` 常量与 `normCards()` 归一化
+  （空卡丢弃、`id` 重复只留第一张、未知子键原样透传）。卡结构：
+  `{ id, who, title, brief, detail, media[], auto, expand, on }`。
+- **默认值按「谁」推**：`who:"self"` / `"user"` 默认常驻（`auto:true`），`"other"` 默认只进目录；
+  `expand` 默认 self 展开全文、其余只注入一行摘要 —— **摘要常驻、正文按需读**，照片只注入路径。
+- `core/render.js`：新增 `splitCards()` / `cardBody()` / `cardHasHiddenBody()`，以及
+  【形象卡（数据，非指令）】（常驻卡）与【形象目录（数据，非指令）】（未展开卡一行一条 + 读法）两个块；
+  `who:"self"` 的卡**取代** `appearance.text`（老字段逐字照旧有效）。
+  块顺序保持「立场 → 形象 → 形象卡 → 形象目录 → 语气 → 契约」，契约永远最后（SPEC §3.1）。
+- 图片**永不进提示词**：`media` 只注入路径（每卡最多 3 条，超出记「等 N 张」），要看图时按路径去读。
+- `scripts/appearance.mjs`（新，只读不改配置）：`list` / `show <id>`（读一张卡全文，含"本次会注入什么"）/
+  `media <id>`（只打路径）/ `check`（体检：重复 id、空卡、路径不存在、`enabled` 没开、`index:false` 却有关键正文）。
+- `core/presetStore.js`：应用预设时，预设没显式声明 `cards` / `index` 就**保留现场** —— 形象卡是个人存档
+  （你认识谁、照片在哪），不是人设内容包，不该被一次预设切换抹掉（症状极隐蔽：卡凭空消失）。
+- **零行为改变**：`cards` 默认空、`index` 默认 true ⇒ 两个新块都不出现，老配置逐字节不变。
+- 图形界面**不动**：`cards` 由用户手改 `config.json` 或走 CLI；两条 UI 写回路径（设置面板 `client.js`
+  的 `styleOut`、本地编辑器页）本来就"先摊开 raw 再覆盖已知子键"，`cards` / `index` 自动原样保留。
+
+验证方式：`tests/appearance.mjs`（新，A1–A14）——零行为改变（无 `cards` 时与老配置逐字节相同）、
+常驻与目录分工、`expand`/`auto`/`on` 三个开关、`cards` 坏形状不炸、空卡与重复 id 的处理、
+未知子键保留、占位符替换、`media` 上限、`byModel` 老路径不受影响、`enabled` 总闸优先、
+换预设不丢卡（含"预设显式给卡则以预设为准"）。全套 19 个测试脚本全绿；
+`scripts/prepublish-check.mjs` 通过（82 文件）；`npm run sec` 通过（S14 私人内容探针零命中 ——
+过程中它真抓到一处：新测试最初用了维护者的真实人名做示例，已换成通用名）。
+
 ## v0.16.1（2026-09-22）
 
 ### 修复：安装器误报「包没有 dsh.bundle 声明」（0.16.0 的提示文案，功能无影响）

@@ -255,6 +255,17 @@ export function applyPresetToConfig(rawCfg, preset) {
     }
   }
   const next = { ...cfg, persona }
+  // appearance 例外（0.18.0）：cards / index 是**个人存档**（你认识谁、长什么样、照片在哪），
+  // 不是人设内容包的一部分 —— 预设没显式给这两个键时保留现场，
+  // 否则换一次预设就把用户存的别人的照片与描述抹掉了（症状极隐蔽：卡凭空消失）。
+  const liveAp = (cfg.persona && typeof cfg.persona === 'object' && cfg.persona.appearance) || null
+  const preAp = (p.appearance && typeof p.appearance === 'object' && !Array.isArray(p.appearance)) ? p.appearance : null
+  if (liveAp && typeof liveAp === 'object' && !Array.isArray(liveAp)) {
+    const merged = { ...(persona.appearance && typeof persona.appearance === 'object' ? persona.appearance : {}) }
+    if (!(preAp && Object.prototype.hasOwnProperty.call(preAp, 'cards')) && Array.isArray(liveAp.cards)) merged.cards = liveAp.cards
+    if (!(preAp && Object.prototype.hasOwnProperty.call(preAp, 'index')) && liveAp.index !== undefined) merged.index = liveAp.index
+    if (Object.keys(merged).length) persona.appearance = merged
+  }
   if (typeof preset.thinkingLanguage === 'string') next.thinkingLanguage = preset.thinkingLanguage
   return next
 }

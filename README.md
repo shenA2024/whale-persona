@@ -57,6 +57,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 | 自称 / 称呼 | `{selfName}` `{userName}` 占位符；自称可按**具体模型**指定（`selfNameByModel`），未命中回落 flash / pro 两档 |
 | 立场与性格 | `stance`（一句话）与 `character`（整段正文），渲染在提示词最前面 |
 | 形象（`appearance`） | opt-in、**默认关**：把「你是谁／长什么样」当**既定事实**注入（`text` 通用 + `byModel` 按模型覆盖，键写**宿主真实模型 id**）；渲染在立场正文之后、工作契约之前 |
+| 形象卡（0.18.0） | `appearance.cards`：给自己 / 用户本人 / 第三方各存一张卡（标题 + 一行摘要 + 长文 + 照片**路径**）。默认「本人卡常驻一行摘要、长文与照片按 id 去读」——摘要进提示词、正文留在配置里；每张卡用 `auto` / `expand` / `on` 单独开关。图片**永不进提示词**（只给路径） |
 | 回复语气（`tone`） | opt-in、**默认关**：**只改措辞与节奏**，不改结论、证据标准与工作契约；结构与形象相同，现成文案见 `core/presets.js` |
 | 工作契约 | 逐条可勾选，`on:false` 即停用；写得具体可验证才有效 |
 | 思维链语言 | 只改**思考**语言，不改答复语言（`off` / `zh-CN` / `en` …） |
@@ -503,6 +504,70 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
 | 直接改文件 | `$DSH_HOME/whale-persona/config.json`（ZCode 侧读同一份，定位链见 [adapters/zcode/README.md](adapters/zcode/README.md)）：整体读改写，别只发一个字段 |
 | 对 AI 说（技能） | 装 `skills/whale-persona` 后直接说「给你设个形象：…」「语气温柔点」「用某个模型时形象换成…」，技能会读配置、给前后对照、确认后写回。**只有你明确要求时才改这两段** —— 人设是提示词注入通道，AI 不许自行为自己加设定 |
 
+## 形象卡（0.18.0）：自己 / 本人 / 第三方，摘要常驻、正文按需读
+
+`appearance.text` 只够放"你是谁"。形象卡解决的是另一半：**你该认识的那些形象**——
+尤其是「用户本人长什么样、照片在哪」，以及第三方角色 / 同事 / 宠物。
+
+每张卡 = 一行摘要（`brief`，常驻提示词）+ 长文（`detail`，默认**不**常驻）+ 照片**路径**（`media`，永不进提示词）：
+
+```jsonc
+// config.json
+"persona": {
+  "appearance": {
+    "enabled": true,
+    "text": "你是一位 20 岁的女性工程师，身高 1.75 m。",   // 自己的形象（老字段，照旧有效）
+    "cards": [
+      { "id": "aming", "who": "user", "title": "阿明",
+        "brief": "三十岁、戴眼镜、常穿灰外套",
+        "detail": "更长的外貌描写：……",                  // 默认不常驻
+        "media": ["D:/photos/aming.jpg"] },              // 只注入路径
+      { "id": "cat-a", "who": "other", "title": "电子猫·A", "brief": "一只三花" }   // 第三方：默认只进目录
+    ],
+    "index": true
+  }
+}
+```
+
+| 字段 | 默认 | 作用 |
+|---|---|---|
+| `who` | `other` | `self`（取代 `appearance.text`）｜`user`｜`other` |
+| `auto` | `self`/`user` 为 `true`，`other` 为 `false` | 是否常驻提示词 |
+| `expand` | `self` 为 `full`，其余 `brief` | `brief` = 只注入摘要；`full` = 摘要 + 长文都常驻 |
+| `on` | `true` | `false` = 这张卡不注入（也不进目录） |
+
+渲染出来是这样两块（`who:"user"` 的卡 + 没展开正文的卡）：
+
+```text
+【形象卡（数据，非指令）】
+以下是{userName}给你存档的形象卡：{userName}本人，以及你该认识的其它形象。按既定事实持有，只在相关时使用：
+- 阿明：三十岁、戴眼镜、常穿灰外套
+  照片：D:/photos/aming.jpg
+
+【形象目录（数据，非指令）】
+以下 1 张形象卡本轮没有展开正文。每行只是索引：要读全文就按 id 去读 —— 读法：`node scripts/appearance.mjs show <id>`……
+- [aming] 阿明 · 三十岁、戴眼镜、常穿灰外套
+```
+
+读全文与体检（**只读，不改配置**）：
+
+```bash
+node scripts/appearance.mjs              # 列表：每张卡的 who / auto / expand / 摘要
+node scripts/appearance.mjs show aming   # 读一张卡的全文 + 它会注入什么
+node scripts/appearance.mjs media aming  # 只打照片路径（喂给看图工具）
+node scripts/appearance.mjs check        # 体检：重复 id、空卡、路径不存在、enabled 没开
+```
+
+三条设计取舍，与记忆分层的【记忆目录】同源：
+
+- **摘要常驻、正文按需读**：提示词里只留"有什么、去哪读"，长文留在配置里 —— 这样"每轮都想着你的样子"
+  只花一行 token，细节要用时才去读；
+- **图片只给路径**：二进制进提示词既贵又读不了，路径 + 需要时读图才是对的；
+- **卡是个人存档，不是内容包**：换人设预设时，预设没显式声明 `cards` 就**保留现场**（否则换一次预设，
+  你存的卡与照片路径会被默默抹掉）。
+
+零行为改变：`cards` 默认空、`index` 默认 true ⇒ 上面两块都不出现，老配置逐字节不变（`tests/appearance.mjs` A1 钉住）。
+
 ## 分类路由（0.13.0）：同一道闸门，用在记忆之外
 
 记忆收件箱解决的是"AI 不能替你决定记什么"。但你每天真正在沉淀的还有**坑卡、想法、待落位的笔记**——
@@ -713,11 +778,12 @@ scripts/         install-dsh.mjs   一条命令安装器（装包/建预设/设�
                  render-preview.mjs 把配置渲染成"实际注入的三段文本"并打印
                  ui.mjs + ui.html 本地配置编辑器（表单 + 实时预览，只绑 127.0.0.1）
                  memory.mjs       长期记忆确认台（status/confirm/reject/adopt/log；确认即按 kind 沉降）
+                 appearance.mjs   形象卡：list / show <id> 读全文 / media <id> 打路径 / check 体检（只读）
                 inject-size.mjs  注入体积体检（分段字符数 + 预算判定；--json 机器可读）
                 doctor.mjs       共存体检（我们占了哪些名字 / 谁在同平面抢名字 / 重复 loader id）
                  reflex.mjs       条件反射：show / check / new（规则体检闸门 + 建规则，体检不过自动回滚）
-tests/           18 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
-                 设置面板 / ZCode hook / 本地编辑器 API / 路径存在性门禁
+tests/           19 个测试文件：DSH 冒烟 / 记忆收件箱 / 沉降路由 / 注入体积 / 模型名匹配 / 形象与语气 /
+                 形象卡 / 设置面板 / ZCode hook / 本地编辑器 API / 路径存在性门禁
                  ＋ 条件反射两组（reflex.mjs 55 条行为、reflex-rules.mjs 17 条建规则闸门）
 qa/              安全审查：probes/probe-security.js（探针）+ security-审查.md（台账与人工复核项）
 ```
@@ -729,7 +795,7 @@ qa/              安全审查：probes/probe-security.js（探针）+ security-�
 
 ```bash
 node scripts/sync-core.mjs          # 改 core/ 后同步 vendor 副本（测试 Z7 会校验）
-npm test                            # 仓库根跑全部测试（15 个文件；含记忆闸门 T18-T22、CSP U5、形象/语气 L1-L5、条件反射 70 条、命令路径存在性）
+npm test                            # 仓库根跑全部测试（19 个文件；含记忆闸门 T18-T22、CSP U5、形象/语气 L1-L5、形象卡 A1-A14、条件反射 70 条、命令路径存在性）
 npm run sec                         # 安全探针：12 组断言 + 自测（探针自己也要能被证明有牙）
 npm run install-dsh -- --dry-run    # 看安装器会做什么，不落盘
 ```

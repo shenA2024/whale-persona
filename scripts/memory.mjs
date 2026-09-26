@@ -14,6 +14,9 @@
  *                                           # 带 kind 的条目（pitfall / idea …）在确认这一刻按 memory.sinks 路由落盘
  *   node scripts/memory.mjs reject 4        # 否决第 4 条（移出视图，物理行保留）
  *   node scripts/memory.mjs adopt           # 把老格式（没有 status 字段）条目一次性确认
+ *   node scripts/memory.mjs show 3 5        # 按序号读全文（不写序号 = 全部）——【记忆目录】里那行摘要的正文
+ *   node scripts/memory.mjs search 快照      # 关键词检索（正文 + tag），打印命中全文
+ *   node scripts/memory.mjs tier cold 12    # 改层级：core（免限常驻）/ hot（按相关性竞争）/ cold（只进目录）
  *   node scripts/memory.mjs log             # 打印原始行 + 行号（审计用）
  *   ... 追加 --dry-run 只打印将写入的行，不落盘
  *
@@ -22,7 +25,7 @@
  */
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { configPath, createStore } from '../core/store.js'
-import { MEMORY_KIND, STATUS, confirmOpFor, kindOf, readInbox, rejectOpFor, resolveInbox } from '../core/memoryInbox.js'
+import { MEMORY_KIND, STATUS, TIER, confirmOpFor, findEntries, kindOf, normTier, readInbox, rejectOpFor, resolveInbox, retierOpFor } from '../core/memoryInbox.js'
 import { readSinkLog, sinkConfirmed, sinkLogFile, sinkRoutes } from '../core/sinks.js'
 
 const argv = process.argv.slice(2)
@@ -37,6 +40,12 @@ const mem = cfg.memory || {}
 const FILE = resolveInbox(mem.inboxPath)
 
 const MARK = { [STATUS.confirmed]: '[已确认]', [STATUS.proposed]: '[待确认]', [STATUS.legacy]: '[老格式]' }
+
+/** 层级标记：未指定（老条目）不标，保持默认输出与旧版一致 */
+function tierMark(e) {
+  const t = normTier(e && e.tier)
+  return t === TIER.core ? ' [core]' : t === TIER.hot ? ' [hot]' : t === TIER.cold ? ' [cold]' : ''
+}
 
 function rawLines() {
   try {
@@ -71,8 +80,15 @@ function show() {
     const tag = e.tag ? '  {tag: ' + e.tag + '}' : ''
     const k = kindOf(e)
     const mark = k === MEMORY_KIND ? '' : ' <' + k + (routes[k] ? ' → 沉降' : ' → 无路由') + '>'
-    console.log('  [' + String(i).padStart(3, ' ') + '] ' + (MARK[e.status] || '[?]') + mark + ' ' + e.text + tag)
+    console.log('  [' + String(i).padStart(3, ' ') + '] ' + (MARK[e.status] || '[?]') + tierMark(e) + mark + ' ' + e.text + tag)
   })
+  const tiers = list.reduce((a, e) => {
+    const t = normTier(e.tier) || '未标'
+    a[t] = (a[t] || 0) + 1
+    return a
+  }, {})
+  console.log('层级：' + Object.keys(tiers).map((t) => t + ' ' + tiers[t]).join(' / ')
+    + '　（[core] 免限常驻；未标与 [hot] 一起按相关性竞争上限；[cold] 只进【记忆目录】）')
   const pending = list.filter((e) => e.status !== STATUS.confirmed)
   if (pending.length) {
     console.log('\n待确认 ' + pending.length + ' 条 —— 注入只认[已确认]。确认：node scripts/memory.mjs confirm <序号…|all>')
@@ -149,6 +165,80 @@ function reject() {
   if (!dry) show()
 }
 
+/** 解析序号（任意条目，不限于待确认）：数字 / 区间 2-5；越界与非法一律报错退出 */
+function pickAllIndices(list, spec) {
+  const out = []
+  for (const s of spec) {
+    if (/^\d+-\d+$/.test(s)) {
+      const [a, b] = s.split('-').map(Number)
+      for (let i = Math.min(a, b); i <= Math.max(a, b); i++) out.push(i)
+    } else if (/^\d+$/.test(s)) {
+      out.push(Number(s))
+    } else {
+      console.error('无法识别的序号：' + s)
+      process.exit(2)
+    }
+  }
+  return [...new Set(out)].filter((i) => list[i])
+}
+
+/**
+ * show / read：按序号读**全文**（默认全部）。这是【记忆目录】里那行摘要对应的正文——
+ * 分层记忆的分工：摘要在提示词里，正文在这里等你去读。
+ */
+function showEntries() {
+  const list = entries()
+  if (!list.length) { console.log('(收件箱为空)'); return }
+  const idx = args.length ? pickAllIndices(list, args) : list.map((_, i) => i)
+  if (!idx.length) { console.log('没有匹配的序号。'); return }
+  console.log('收件箱：' + FILE.replace(/\\/g, '/'))
+  for (const i of idx) {
+    const e = list[i]
+    const k = kindOf(e)
+    console.log('\n[' + i + ']' + tierMark(e) + ' ' + (MARK[e.status] || '[?]')
+      + (k === MEMORY_KIND ? '' : ' <' + k + '>')
+      + (e.tag ? ' {tag: ' + e.tag + '}' : '') + (e.at ? '  ' + e.at : ''))
+    console.log(e.text)
+  }
+}
+
+/** search：关键词检索（正文 + tag，大小写不敏感），打印命中条目全文与序号 */
+function search() {
+  const q = args.join(' ').trim()
+  if (!q) { console.error('用法：node scripts/memory.mjs search <关键词>'); process.exit(2) }
+  const hits = findEntries(entries(), q)
+  console.log('命中 ' + hits.length + ' 条（关键词：' + q + '）')
+  for (const h of hits) {
+    console.log('\n[' + h.seq + ']' + tierMark(h.entry) + ' ' + (MARK[h.entry.status] || '[?]')
+      + (h.entry.tag ? ' {tag: ' + h.entry.tag + '}' : ''))
+    console.log(h.entry.text)
+  }
+}
+
+/**
+ * tier：改条目层级（人工动作；AI 只能建议）。
+ *   core = 免限常驻（安全边界、终局契约、指针类记忆的默认去处）
+ *   hot  = 与未标条目一起按相关性竞争上限
+ *   cold = 从不展开正文，只进【记忆目录】
+ * 仍然只追加：写一行 {"op":"retier",...}，重放时生效。
+ */
+function setTier() {
+  const t = normTier(args[0])
+  if (!t) { console.error('用法：node scripts/memory.mjs tier <core|hot|cold> <序号…>'); process.exit(2) }
+  const list = entries()
+  const lines = rawLines()
+  const idx = pickAllIndices(list, args.slice(1))
+  if (!idx.length) { console.log('没有指定有效序号。'); return }
+  const ops = []
+  for (const i of idx) {
+    const op = retierOpFor(lines, i, t)
+    if (op) ops.push(op)
+  }
+  append(ops)
+  console.log((dry ? '将改 ' : '已改 ') + ops.length + ' 条 → ' + t + '。')
+  if (!dry) show()
+}
+
 function log() {
   const lines = rawLines()
   if (!existsSync(FILE)) { console.log('(收件箱不存在)'); return }
@@ -157,6 +247,9 @@ function log() {
 }
 
 if (cmd === 'status' || cmd === 'list') show()
+else if (cmd === 'show' || cmd === 'read' || cmd === 'get') showEntries()
+else if (cmd === 'search' || cmd === 'find') search()
+else if (cmd === 'tier') setTier()
 else if (cmd === 'confirm') confirm(false)
 else if (cmd === 'adopt') confirm(true)
 else if (cmd === 'reject' || cmd === 'drop') reject()
@@ -164,6 +257,6 @@ else if (cmd === 'log') log()
 else if (cmd === 'help' || cmd === '-h' || cmd === '--help') {
   console.log(readFileSync(new URL(import.meta.url), 'utf8').split('*/')[0].replace(/^\/\*\*?/, '').replace(/^ \* ?/gm, ''))
 } else {
-  console.error('未知命令：' + cmd + '（可用：status | confirm | reject | adopt | log）')
+  console.error('未知命令：' + cmd + '（可用：status | show | search | tier | confirm | reject | adopt | log）')
   process.exit(2)
 }
