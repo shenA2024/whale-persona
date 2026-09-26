@@ -29,6 +29,20 @@
 - 清掉示例文案换中性值时留下的重复文案（`README.md` / `core/defaults.js` 各一处，vendor 副本随 `sync-core` 同步）；
 - 验证方式：`npm test` 20 个脚本全绿、`npm run sec` `PASS true` + `SELFTEST true`、`prepublish-check` 发布闸门通过；
   行尾复核 `git diff --numstat` 与 `git diff --ignore-cr-at-eol --numstat` 一致。
+
+### 勘误：windows CI 假红 —— `spec-i18n.mjs` 的 I4 对行尾敏感（2026-09-26，同版内）
+
+触发来源：0.17.1 push 后 GitHub Actions 的 **windows 两档 node（20 / 22）全红**，ubuntu 两档全绿。
+CI 报错原文：`FAIL I4 固定文案块在英文版逐字存在 :: 中文版注入文案块数异常：0`。
+
+- 根因：`blocks()` 的围栏正则里 `[a-z]*` 之后要求**紧接 LF**，而 windows runner 上 `actions/checkout`
+  把文本文件落成 CRLF（ubuntu 是 LF）—— 围栏行成了「``` + CRLF」，一个块都抓不到，中文版块数 0 → I4 假红。
+  本机 `core.autocrlf=false`（全 LF），所以这条只在 CI 上现形。
+- 修法：读 `SPEC.md` / `SPEC.en.md` 时把行尾归一化为 LF —— 四条判据只该认内容、不该认行尾，一处修、I1–I4 都免疫。
+- 验证方式：两份 SPEC 转 CRLF 的副本里 `node tests/spec-i18n.mjs` 修前 EXIT=1（逐字复现 CI 那条 FAIL）、
+  修后 EXIT=0；整仓 111 个跟踪文本文件全转 CRLF 的完整副本里 `npm test` 20 个脚本全绿（EXIT=0）；
+  源码树（LF）同样全绿。改动只在 `tests/`（不在 npm `files` 白名单）⇒ 包内容与 0.17.1 逐字节相同，不发新版本。
+
 ## v0.17.0（2026-09-26）
 
 > 一次发布两个特性：**记忆分层**（core / hot / cold +【记忆目录】）与**形象卡**（自己 / 用户本人 / 第三方 + 索引式按需读）。

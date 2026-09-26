@@ -17,8 +17,14 @@ import assert from 'node:assert/strict'
 const ZH = 'SPEC.md'
 const EN = 'SPEC.en.md'
 
-const zh = fs.readFileSync(ZH, 'utf8')
-const en = fs.readFileSync(EN, 'utf8')
+// 行尾归一化：CI 的 windows runner 上 actions/checkout 会把文本文件落成 CRLF（ubuntu 是 LF），
+// 而下面的判据只该关心**内容**、不该关心行尾 —— 不归一化，blocks() 那条要求 ``` 后紧跟 \n 的正则
+// 在 CRLF 文档里会一个块都抓不到（中文版块数 0 → I4 假红）。触发来源：2026-09-26 windows CI 两档
+// node 全红（FAIL I4 …中文版注入文案块数异常：0），本机 core.autocrlf=false 是 LF，故只在 CI 复现。
+const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n')
+
+const zh = read(ZH)
+const en = read(EN)
 
 const sections = (s) => [...s.matchAll(/^#{2,5}\s+(\d+(?:\.\d+)*)/gm)].map((m) => m[1])
 const idents = (s) => new Set(
