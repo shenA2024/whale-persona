@@ -6,7 +6,7 @@
 ## v0.17.0（2026-09-26）
 
 > 一次发布两个特性：**记忆分层**（core / hot / cold +【记忆目录】）与**形象卡**（自己 / 用户本人 / 第三方 + 索引式按需读）。
-> 两批改动同处一个工作区，同批提交、同批发布 —— 版本号 lockstep 一次从 0.16.1 提到 0.17.0（0.17.0 从未上过 npm）。
+> 两批改动同处一个工作区，同批提交、同批发布 —— 版本号 lockstep 一次从 0.16.1 提到 0.17.0（0.17.0 此前从未上过 npm；已于 2026-09-26 发布到 npm 并建了 GitHub Release）。
 
 ### 隐私整改：示例文案不再使用实际形象（2026-09-26）
 
@@ -20,6 +20,8 @@
 - 覆盖 13 个跟踪文件：`README.md`、`adapters/dsh/README.md`、两份 `SKILL.md`、`core/defaults.js`
   （+ vendor 副本由 `sync-core` 带过）、`adapters/dsh-ui/client.js`、`scripts/ui.html`、
   `examples/demo-config.json`、4 个测试 fixture 与 3 处断言。
+- 防复发：安全探针新增 **S17**（示例里不得出现「年龄 / 性别 + 身高」这类可指认的外貌组合，也不得出现外观硬规格词；
+  只钉组合、不钉单词，免得「女性」「身高」这类正常用词误报），并带自测夹具证明判据有牙。
 
 验证方式：`git ls-files` 跟踪的文本文件里「身高数字 / 年龄档 / 性别词」零命中；`npm test` 19 个脚本全绿。
 
@@ -106,6 +108,12 @@
 `prepublish-check` 通过。未处置项（待维护者拍板）：ZCode vendor 副本冻结或删除、固定文案 locale 表、
 npm keywords / README 英文章节 —— 全列在评审报告第五节的行动清单里。
 
+### 发布：npm 0.17.0 + GitHub Release（2026-09-26）
+
+- npm：`whale-persona@0.17.0` 已成 `latest`，84 文件，`shasum 3c48d6e6d77918a1b310837086c765fa9bf4d691`，带 npm 的 sigstore 签名；
+  从 npm 下载回来重算 sha1 与本地打包**逐字节一致**，解包 84 文件、私人内容扫描零命中（唯一命中的 `whale-suite` 是本插件自身的历史布局目录名）。
+- GitHub Release：`v0.17.0 — 记忆分层（core / hot / cold）+ 形象卡`，tag `v0.17.0` 指向发布内容 `157a391`。
+- 本机 npm 账号是 `auth-and-writes` 模式，发布需一次性口令；token 级「bypass 2FA」已被官方禁止，账号级可改成 authorization only。
 ## v0.16.1（2026-09-22）
 
 ### 修复：安装器误报「包没有 dsh.bundle 声明」（0.16.0 的提示文案，功能无影响）

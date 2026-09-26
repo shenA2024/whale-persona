@@ -36,7 +36,7 @@ export const DEFAULTS = {
     character: '',
     /**
      * 形象（opt-in，默认关）：把「你是谁／长什么样」当成关于你自己的既定事实注入，如
-     * 「你是一位 资深后端工程师，后端工程师」。
+     * 「你是一位资深后端工程师」。
      * 结构 = { enabled, text（所有模型通用的默认）, byModel（按模型覆盖，命中优先） ,
      *          cards（0.17.0：形象卡，见下）, index（是否渲染【形象目录】） }。
      * 匹配规则与 selfNameByModel 完全一致（精确 → 最长子串 → 回落 text）。

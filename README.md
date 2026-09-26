@@ -176,7 +176,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --capture
 
 （上图是 `node scripts/render-preview.mjs --config examples/demo-config.json` 的真实 stdout，不是手写的示例。）
 
-要改**形象**与**语气**（两段都是 opt-in、默认关）也一样：对 AI 说「给你设个形象：资深后端工程师，后端工程师」
+要改**形象**与**语气**（两段都是 opt-in、默认关）也一样：对 AI 说「给你设个形象：资深后端工程师」
 或「语气温柔点」，或者直接写 `persona.appearance` / `persona.tone` —— 结构、匹配规则与注入文本见下面的
 「[形象与语气](#形象与语气都是-opt-in默认关)」一节。
 
