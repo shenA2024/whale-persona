@@ -14,7 +14,7 @@
 
 ```bash
 npm test       # 15 套功能测试（见 package.json 的 test 脚本：冒烟/全局/预设/酒馆卡/收件箱/模型名/形象语气/设置面板/样式作用域/ZCode hook/本地页/安装契约/条件反射/造规则闸门/路径存在性）
-npm run sec    # 安全探针 16 组 + 自测；改了探针必须让 --selftest 仍然通过
+npm run sec    # 安全探针 17 组 + 自测；改了探针必须让 --selftest 仍然通过
 ```
 
 两个都要绿。CI（`.github/workflows/ci.yml`）会在 ubuntu 与 windows × node 20/22 上跑同样两条。

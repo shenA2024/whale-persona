@@ -27,11 +27,13 @@
  *   S12 SEC_ORIGIN    本地页真起服务打三个 Origin（行为测试）：非 loopback 必须 403
  *   S16 SEC_ALIGN     纪律文案 ↔ 引擎语义互钉（0.17.0 整改）：注入的【入库纪律】不得写「缺省 core」，
  *                     且必须要求「显式写 core」—— 文案与 replayInbox 的「未指定 = 竞争池」必须同向
+ *   S17 SEC_SHAPE     示例里不出现「外貌三要素」（2026-09-26）：年龄 / 性别 + 身高不得同现 ——
+ *                     S14 的词表只认人名与关系，认不出这种「可指认的外貌描述」模式
  *
  * 无法自动化项（SEC_SKIP，不计失败）: 记忆确认行的语义伪造、提示词注入逃逸的人工判定、
  *   宿主平面划分（headless 不注入人设）、第三方扫描复核。以上以 qa/security-审查.md 的人工核验为准。
  *
- * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 16 组；门禁以台账全项人工核验为准。
+ * 结论边界: **探针 PASS 不等于门禁通过** —— 它只覆盖上面 16 组它只覆盖上面 17 组；门禁以台账全项人工核验为准。
  */
 import { readFileSync, readdirSync, statSync, existsSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { spawn, spawnSync } from 'node:child_process'
@@ -287,6 +289,34 @@ guard('S14', () => {
     + (hits.length ? JSON.stringify(hits.slice(0, 5)) : '零命中（人名 / 关系 / 私有工作目录）'))
 })
 
+guard('S17', () => {
+  // SEC_SHAPE（2026-09-26）：示例 / 文档里的外貌描述不得凑成「可指认的真人」。
+  // 触发来源：外部评审整改后自查 —— README 的 appearance 示例、两张文档截图与测试 fixture 用的是同一个
+  // 真实形象（年龄 + 性别 + 身高齐全）。S14 的词表只认人名 / 关系 / 私有路径，这种模式它看不见，
+  // 所以这条是 S14 抓不到的那一半。
+  // 只钉**组合**，不钉单个词：「女性」「身高」在通用文档里是正常词汇，单钉会误报成灾。
+  const R = [
+    /\d{1,2}\s*岁[^\n]{0,16}身高\s*\d/,
+    /女性[^\n]{0,10}(?:工程师)?[^\n]{0,6}身高\s*\d/,
+  ]
+  const hits = []
+  const gitR = spawnSync('git', ['-C', ROOT, 'ls-files', '-z'], { encoding: 'utf8', shell: false })
+  const tracked = gitR.status === 0 && gitR.stdout
+    ? gitR.stdout.split('\0').filter(Boolean).map((p) => path.resolve(ROOT, p))
+    : null
+  for (const p of (tracked || walk(ROOT, null))) {
+    const r = rel(p)
+    if (!/\.(js|mjs|cjs|json|md|html|yml|yaml|txt)$/.test(r)) continue
+    let txt = ''
+    try { txt = readFileSync(p, 'utf8') } catch { continue }
+    txt.split('\n').forEach((L, i) => {
+      for (const re of R) if (re.test(L)) hits.push(r + ':' + (i + 1))
+    })
+  }
+  t('S17', hits.length === 0, (tracked ? '扫描面=' + tracked.length + ' 个跟踪文件；' : '扫描面=磁盘；')
+    + (hits.length ? JSON.stringify(hits.slice(0, 5)) : '零命中（示例里没有「年龄 / 性别 + 身高」的组合）'))
+})
+
 guard('S9', () => {
   const pat = /ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9]{24,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----/
   const hits = []
@@ -437,6 +467,10 @@ if (opt.selftest) {
     '}',
     '',
   ].join(String.fromCharCode(10)), 'utf8')
+  // S17 的行为测法要有牙：种一个含「外貌三要素」的示例文档，断言探针会 FAIL
+  const shape = '你是一位 20 ' + String.fromCharCode(0x5c81) + '的女性，'
+    + String.fromCharCode(0x8eab, 0x9ad8) + ' 1.75 m。'
+  writeFileSync(path.join(tmp, 'README.md'), shape + String.fromCharCode(10), 'utf8')
   writeFileSync(path.join(tmp, '.gitignore'), 'node_modules/' + String.fromCharCode(10), 'utf8')
   // S12 的行为测法要有牙：这里种一个**没做 Origin 校验**的本地页，断言探针会 FAIL
   mkdirSync(path.join(tmp, 'scripts'), { recursive: true })
@@ -454,7 +488,7 @@ if (opt.selftest) {
   ].join(String.fromCharCode(10)), 'utf8')
   const r2 = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--root', tmp], { encoding: 'utf8', shell: false, timeout: 120000 })
   const caught = r2.stdout.match(/SEC_FAIL (S\d+)/g) || []
-  const okSelf = r2.status === 1 && caught.length >= 5 && caught.includes('SEC_FAIL S12') && caught.includes('SEC_FAIL S16')
+  const okSelf = r2.status === 1 && caught.length >= 6 && caught.includes('SEC_FAIL S12') && caught.includes('SEC_FAIL S16') && caught.includes('SEC_FAIL S17')
   console.log('SELFTEST ' + okSelf + ' DETAIL ' + JSON.stringify({ expectExit: 1, gotExit: r2.status, caught }))
   rmSync(tmp, { recursive: true, force: true })
   if (!okSelf) process.exitCode = 1
