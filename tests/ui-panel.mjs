@@ -503,6 +503,14 @@ t('AP6 profile 平面缺人设行：说清是"这个 profile 里没有"，按钮
   apProfileMissing.indexOf('这个 profile 里还没有挂着 whale-persona 的预设') >= 0
   && apProfileMissing.indexOf('看手工步骤') >= 0 && apProfileMissing.indexOf('不认 .agent-presets 目录') >= 0)
 
+/* AP7（2026-09-29 真机截图暴露）：手工步骤里的 YAML 缩进必须活到浏览器里 ——
+ * 逐行用 div 渲染会被 HTML 折叠成顶格，用户照抄下去就是一份 bad YAML（截图里那个 insert 块全是顶格的）。
+ * 步骤文本是点了按钮之后由 POST 响应填进 st.hint 的，静态渲染测不到，所以判据钉在渲染方式与样式上。 */
+const clientSrc = readFileSync(new URL('../adapters/dsh-ui/client.js', import.meta.url), 'utf8')
+t('AP7 手工步骤用 <pre> 渲染 + 保留空白的样式在（缩进不被 HTML 折叠）',
+  clientSrc.indexOf("h('pre', { className: 'wpr-note wpr-mono wpr-pre' }") >= 0
+  && clientSrc.indexOf('.wpr-pre{white-space:pre') >= 0)
+
 // 先让配置回到合法状态（前面的坏 JSON 用例可能把它写坏了）
 writeFileSync(CFG, JSON.stringify({
   enabled: true, thinkingLanguage: 'zh-CN',

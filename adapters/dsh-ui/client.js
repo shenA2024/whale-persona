@@ -147,6 +147,8 @@ window.__ModuleLoader__.load({
       '.wpr-note{color:var(--wpr-t3);font-size:11px;margin:4px 0 0}',
       '.wpr-warn{color:var(--wpr-warn);font-size:12px}',
       '.wpr-mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;word-break:break-all;user-select:text;-webkit-user-select:text}',
+      // 手工步骤要保留前导空格：YAML 的缩进是语义的一部分，div 渲染会被 HTML 折叠掉（2026-09-29 真机截图暴露）
+      '.wpr-pre{white-space:pre;overflow-x:auto;}',
       '.wpr-dimnote{color:var(--wpr-t3);font-size:11px;white-space:nowrap}',
       '.wpr-mt8{margin-top:8px}',
       '.wpr-mt6{margin-top:6px}',
@@ -903,9 +905,11 @@ window.__ModuleLoader__.load({
         known ? h('div', { className: 'wpr-note wpr-mono' }, strOf(p.dir)) : null,
         known ? h('div', { className: 'wpr-note' },
           '预设改动**新会话**才挂上：新建任务时在 Agent 预设里选它；设成新任务默认则自动用它。') : null,
-        arrOf(st.hint).map(function (m, i) {
-          return h('div', { key: 'hint' + i, className: 'wpr-note wpr-mono' }, m);
-        }),
+        // 手工步骤整块一个 <pre>：步骤里 YAML 的缩进是语义的一部分，逐行用 div 渲染会被 HTML 折叠成顶格，
+        // 用户照抄就得到一份 bad YAML（2026-09-29 真机截图暴露 —— 面板上那份 insert 块全是顶格的）。
+        (arrOf(st.hint).length
+          ? h('pre', { className: 'wpr-note wpr-mono wpr-pre' }, arrOf(st.hint).join('\n'))
+          : null),
         st.err ? h('div', { className: 'wpr-alert wpr-bad wpr-mt6' }, st.err) : null);
     }
 
