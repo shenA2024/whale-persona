@@ -34,6 +34,7 @@ process.env.DSH_AGENT_PRESETS_ROOT = srcRoot
 const {
   PRESET_ID, PRESET_NAME, LEGACY_PERSONA_PKG,
   presetDir, agentFile, presetState, installPreset, setDefaultPreset, shippedPresetsRoot,
+  detectPresetPlane,
 } = await import('../core/presetInstall.js')
 
 const t = (name, ok) => { console.log(name + ':', ok); if (!ok) process.exitCode = 1 }
@@ -112,6 +113,68 @@ writeFileSync(path.join(home, 'settings.yaml'), 'model: x\nagent-presets:\n  ext
 setDefaultPreset({ home })
 const sy = read(path.join(home, 'settings.yaml'))
 t('A11 只插一行 default，别处原样', sy.indexOf('model: x') >= 0 && sy.indexOf('extra: y') >= 0 && sy.indexOf('other: z') >= 0 && sy.indexOf('default: whale-persona') > 0)
+
+// ── 两套 preset 机制（0.17.5）：桌面版走 profile 组合，根本不认 .agent-presets ─────────
+// 触发来源 2026-09-29 真机：面板量的是 .agent-presets 平面，而桌面版实际用的是 profile 平面
+// （`cordis.patch.yml` 的 agent-preset-registry + 一个 insert 块），于是"就绪/缺一步"都对不上真相。
+// 夹具照真机形状造：desktop 的 patch.yml 里 L82 registry 段、L91 insert、L100 人设行。
+const home3 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-plane-'))
+const pdir = path.join(home3, 'profiles', 'desktop')
+mkdirSync(pdir, { recursive: true })
+const PATCH = path.join(pdir, 'cordis.patch.yml')
+writeFileSync(PATCH,
+  '- id: some-tool\n'
+  + '  name: "@deepseek-ai/dsh-some-tool"\n'
+  + '- id: agent-preset-registry\n'
+  + '  name: "@deepseek-ai/dsh-agent-preset-registry"\n'
+  + '  config:\n'
+  + '    default: standard\n'
+  + '    selectedDefault: whale\n'
+  + '- insert:\n'
+  + '    - id: preset-whale\n'
+  + '      name: "@deepseek-ai/dsh-agent-preset"\n'
+  + '      config:\n'
+  + '        id: whale\n'
+  + '        name: 自定义人设\n'
+  + '        description: 基于 standard 模式 + whale-persona 人设引擎\n'
+  + '        order: 9\n'
+  + '        plugins:\n'
+  + '          - id: whale-persona\n'
+  + "            name: 'whale-persona'\n"
+  + '\n'
+  + '          - id: tool-pwsh\n'
+  + "            name: '@deepseek-ai/dsh-tool-pwsh'\n", 'utf8')
+
+// 宿主 argv 里带着 profile 目录 —— 真机上桌面版命令行就是这样（实测：… dsh … <DSH_HOME>\profiles\desktop …）
+const realArgv = process.argv.slice()
+process.argv = realArgv.concat([pdir])
+
+const plane = detectPresetPlane(home3)
+t('DP1 认出 profile 平面（patch.yml 里有 agent-preset-registry）', plane.plane === 'profile' && plane.profileName === 'desktop')
+t('DP1b 认不出时按传统平面兜底（不给假结论）', detectPresetPlane(home).plane === 'agent-presets')
+const ps = presetState(home3)
+t('DP2 profile 平面读数：人设在、且算作新任务默认',
+  ps.plane === 'profile' && ps.installed === true && ps.hasPersonaRow === true && ps.isDefault === true)
+t('DP2b 显示名与预设 id 都从组合里读（不是 .agent-presets 那套）',
+  ps.displayName === '自定义人设' && ps.presetIdInPlane === 'whale' && ps.defaultPresetId === 'whale' && ps.dir === PATCH)
+t('DP2c 位置指向 profile 组合文件本身（面板显示的就是这一条）', ps.patchFile === PATCH)
+const ip = installPreset({ home: home3 })
+t('DP3 profile 平面已就绪 → kept，且不动宿主组合',
+  ip.ok === true && ip.action === 'kept' && read(PATCH).indexOf('preset-whale') > 0)
+const sd = setDefaultPreset({ home: home3 })
+t('DP4 默认已是它 → 幂等不写', sd.ok === true && sd.changed === false)
+// 缺人设行：明说做不到自动落盘，给手工步骤，且一个字节都不改宿主的组合
+// （要连它的 name 行一起删 —— 只删 `- id:` 那行的话，剩下的 name: 'whale-persona' 仍会被认出来）
+writeFileSync(PATCH, read(PATCH).replace("          - id: whale-persona\n            name: 'whale-persona'\n", ''), 'utf8')
+const before = read(PATCH)
+const ip2 = installPreset({ home: home3 })
+t('DP5 缺人设行 → action=manual（不假装能一键建）', ip2.ok === false && ip2.action === 'manual')
+t('DP5b 给的是照抄能用的步骤（含 insert 写法与 selectedDefault）',
+  ip2.messages.some((m) => m.indexOf('- insert:') >= 0) && ip2.messages.some((m) => m.indexOf('selectedDefault') >= 0))
+t('DP5c 一个字节都没写宿主组合', read(PATCH) === before)
+const sd2 = setDefaultPreset({ home: home3 })
+t('DP6 人设没挂上时不改默认（顺序对了才写）', sd2.ok === false && sd2.reason.indexOf('先挂上') >= 0)
+process.argv = realArgv
 
 console.log('---- preset-install 读数 ----')
 console.log('home =', home)

@@ -470,6 +470,39 @@ t('AP4 normalize 透传 preset / presetKnown（白名单漏字段就是面板瞎
 t('AP4b 此刻确实还没建 preset → 整页那行红字是真话（不是误报）',
   wholeText.indexOf('还没有 Agent 预设') >= 0)
 
+/* ── 2026-09-29 追加：双平面（桌面版走 profile 组合，根本不认 .agent-presets）────────────────
+ * 触发来源：面板此前只认 .agent-presets，于是在桌面版上**量错了平面** —— 显示的数字、以及
+ * 「建人设预设」「设为新任务默认」两个按钮，对桌面版都不适用。
+ * 判据：是 profile 平面就得说出来（别让用户去找一个不存在的目录）；缺人设行时给的是手工步骤，
+ * 不再是"一键建"。
+ */
+const apProfileOk = flatText(H.AgentPresetCard({
+  preset: {
+    id: 'whale-persona', plane: 'profile', profileName: 'desktop',
+    patchFile: 'D:/home/profiles/desktop/cordis.patch.yml',
+    dir: 'D:/home/profiles/desktop/cordis.patch.yml',
+    presetIdInPlane: 'whale', installed: true, hasPersonaRow: true,
+    displayName: '自定义人设', isDefault: true, baseId: 'standard',
+  },
+  presetKnown: true,
+}))
+t('AP5 profile 平面就绪：点名机制与预设 id，不出现"还没有"',
+  apProfileOk.indexOf('桌面版 profile 机制') >= 0 && apProfileOk.indexOf('profile 预设 whale') >= 0
+  && apProfileOk.indexOf('已就绪：自定义人设') >= 0 && apProfileOk.indexOf('还没有 Agent 预设') < 0)
+
+const apProfileMissing = flatText(H.AgentPresetCard({
+  preset: {
+    id: 'whale-persona', plane: 'profile', profileName: 'desktop',
+    patchFile: 'D:/home/profiles/desktop/cordis.patch.yml',
+    dir: 'D:/home/profiles/desktop/cordis.patch.yml',
+    installed: false, hasPersonaRow: false, baseId: 'standard',
+  },
+  presetKnown: true,
+}))
+t('AP6 profile 平面缺人设行：说清是"这个 profile 里没有"，按钮改成看手工步骤',
+  apProfileMissing.indexOf('这个 profile 里还没有挂着 whale-persona 的预设') >= 0
+  && apProfileMissing.indexOf('看手工步骤') >= 0 && apProfileMissing.indexOf('不认 .agent-presets 目录') >= 0)
+
 // 先让配置回到合法状态（前面的坏 JSON 用例可能把它写坏了）
 writeFileSync(CFG, JSON.stringify({
   enabled: true, thinkingLanguage: 'zh-CN',

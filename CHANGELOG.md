@@ -3,6 +3,46 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.17.5（2026-09-29）
+
+### 修复：面板在桌面版上量错了平面（量的是 `.agent-presets`，宿主用的是 profile 组合）
+
+触发来源（2026-09-29，真机）：0.17.4 修好红字之后，用户看到的是 `isDefault: false` /「新任务默认未设」，
+而同一台机器上人设确实在生效、新建会话也确实用的是那个预设 —— 面板和宿主各说各的。
+根因不是字段丢失，是**平面认错了**：`core/presetInstall.js` 自 0.17.3 起只认
+`<DSH_HOME>/.agent-presets/<id>/`，而桌面版（0.1.7-rc.1+）根本不用这个目录 —— 它的预设是
+**profile 组合里的一行**（`profiles/<name>/cordis.patch.yml` 的 `agent-preset-registry` 段 ＋
+`- insert:` 块里 `id: preset-*` 的项；asar 全量 7639 个 js 里没有 `.agent-presets` 字样，2026-09-25 实测）。
+
+- **平面探测**（`core/presetInstall.js` 新增，vendor 副本同步）：
+  - `currentProfileName(home)`：从宿主进程 argv 里找 `<DSH_HOME>/profiles/<name>`
+    （2026-09-29 实测桌面版命令行：`… dsh-desktop-host/lib/index.js … <DSH_HOME>\profiles\desktop …`），
+    退回环境变量 `DSH_PROFILE` / `DSH_PROFILE_NAME`。
+  - `detectPresetPlane(home)`：该 profile 的 `cordis.patch.yml` 里有没有 `- id: agent-preset-registry` 段 ——
+    有＝`profile` 平面，没有＝`agent-presets` 平面。对照实测：desktop 有、web 没有。
+  - `parsePatchPresets(text)`：文本级解析（零依赖是硬纪律），认 registry 的 `default`/`selectedDefault`，
+    以及 insert 块里每项的 `config.id` / `config.name` / `config.description` / `plugins` 有没有人设行。
+- **读数分派**：`presetState()` 按平面走两套，返回**同形状**字段（`installed` / `hasPersonaRow` /
+  `isDefault` / `displayName` …，外加新增的 `plane` / `planeWhy` / `profileName` / `patchFile` /
+  `presetIdInPlane`），面板不必分两套渲染。真机读数：`plane:"profile"` / `presetIdInPlane:"whale"` /
+  `isDefault:true`。
+- **写入分派**：
+  - `setDefaultPreset()` 在 profile 平面只改 `agent-preset-registry` 段的 `selectedDefault` 一行，
+    改前先写 `cordis.patch.yml.bak-<时间戳>`；语义不变（只在"没有默认"或"默认已是本插件"时写）。
+  - `installPreset()` 在 profile 平面**不自动落盘**，返回 `action:'manual'` ＋ 照抄能用的手工步骤。
+    理由写在代码注释里：那份组合里挂的不只是人设行、还有整个工具面；自动搬要保证每个桌面版版本
+    都能解析，而没有可重启的验证面时，插块的代价是**宿主起不来**。能力边界明说，不假装一键搞定。
+- **面板**：卡片头点名机制（`桌面版 profile 机制`）；就绪态带上 `profile 预设 whale`；
+  缺人设行时说"这个 profile 里还没有挂着 whale-persona 的预设"，按钮改成「看手工步骤」并把步骤摊开；
+  目录行显示的是 `cordis.patch.yml` 本身（不再引用户去找一个不存在的 `.agent-presets` 目录）。
+- **宿主半身白名单**：`adapters/dsh-ui/index.js` 的 `/summary` 同样是显式白名单，一并补上这五个字段 ——
+  0.17.4 那次红字就是这条白名单漏了 `preset` 造成的，同一种坑不让它再出现一次。
+
+验证：`node tests/preset-install.mjs` 新增 DP1–DP6（两套平面的识别、读数、幂等、`manual` 分支
+一个字节都不写宿主的组合）；`node tests/ui-panel.mjs` 新增 AP5/AP6（两套平面的文案与按钮）；
+`npm test` 全绿。真机对照：桌面版 `/whale-persona/api/summary` 的 `plane` 从（缺字段）变成 `profile`、
+`isDefault` 从 `false` 变成 `true`。
+
 ## v0.17.4（2026-09-29）
 
 ### 修复：面板把「没拿到宿主半身的状态」说成了「你还没有预设」

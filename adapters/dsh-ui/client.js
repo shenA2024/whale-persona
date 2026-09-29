@@ -818,9 +818,13 @@ window.__ModuleLoader__.load({
       var setAsDefault = dState[1];
       var sane = !!(p.installed && p.hasPersonaRow);
       var okNow = sane || (!!st.done && !st.err);
+      // 桌面版走的是 **profile 平面**（预设＝profile 组合里的一行），不是 .agent-presets 目录。
+      // 两种平面的"已就绪/缺一步"含义相同，但位置、默认机制、以及"建"这个动作做不做得到都不一样 ——
+      // 面板必须说出来，否则用户会按 .agent-presets 的思路去找一个根本不存在的目录（2026-09-29 真机）。
+      var isProfilePlane = strOf(p.plane) === 'profile';
 
       function run() {
-        setSt({ busy: true, err: '', done: '' });
+        setSt({ busy: true, err: '', done: '', hint: [] });
         fetch(AGENT_PRESET_API, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -830,6 +834,11 @@ window.__ModuleLoader__.load({
             function () { return { ok: false, j: {} }; });
         }).then(function (res) {
           var j = res.j || {};
+          // 桌面版：core 明说做不到自动落盘，回 action='manual' + 手工步骤 —— 这是提示、不是失败
+          if (j.action === 'manual') {
+            setSt({ busy: false, err: '', done: '', hint: arrOf(j.messages) });
+            return;
+          }
           if (!res.ok || j.ok !== true) {
             setSt({ busy: false, err: strOf(j.error) || '建 preset 失败（宿主日志里有原因）', done: '' });
             return;
@@ -848,7 +857,7 @@ window.__ModuleLoader__.load({
         h(CardHead, {
           title: 'Agent 预设',
           badge: known ? badge(okNow, '已就绪', '缺这一步') : h('span', { className: 'wpr-badge wpr-off' }, '状态未取到'),
-          sub: '人设的挂载点 · 只有选中它的会话才有人设',
+          sub: '人设的挂载点 · 只有选中它的会话才有人设' + (isProfilePlane ? ' · 桌面版 profile 机制' : ''),
         }),
         !known
           ? h('div', { className: 'wpr-alert' },
@@ -859,13 +868,19 @@ window.__ModuleLoader__.load({
             ? h('div', { className: 'wpr-alert wpr-ok' },
               st.done ? (st.done + ' —— 新会话生效')
                 : ('✓ 已就绪：' + (strOf(p.displayName) || strOf(p.id) || '自定义人设')
+                  + (isProfilePlane && strOf(p.presetIdInPlane) ? '（profile 预设 ' + strOf(p.presetIdInPlane) + '）' : '')
                   + (p.isDefault ? ' · 新任务默认' : (p.otherDefault ? ' · 新任务默认是「' + strOf(p.defaultPresetId) + '」' : ' · 新任务默认未设'))))
             : h('div', { className: 'wpr-alert wpr-bad' },
               p.installed
-                ? '⚠ 有这个预设目录，但里面没有 whale-persona 那一行（可能指向旧包名，或被人改过）'
-                : '✗ 还没有 Agent 预设 —— 人设本体不会生效（装的是**空壳**：包在、面板在、人设不在）')),
+                ? '⚠ 有这个预设，但里面没有 whale-persona 那一行（可能指向旧包名，或被人改过）'
+                : (isProfilePlane
+                  ? '✗ 这个 profile 里还没有挂着 whale-persona 的预设 —— 人设本体不会生效（装的是**空壳**：包在、面板在、人设不在）'
+                  : '✗ 还没有 Agent 预设 —— 人设本体不会生效（装的是**空壳**：包在、面板在、人设不在）'))),
         !known ? null : (okNow ? null : h('div', { className: 'wpr-note' },
-          '插件市场 / dsh plugin add 只把包挂进 profile 平面，不建这个预设；人设本体只认预设平面里那一行。')),
+          isProfilePlane
+            ? ('这台宿主是桌面版：它不认 .agent-presets 目录，预设写在 profile 组合里（'
+              + (strOf(p.patchFile) || strOf(p.dir)) + '）—— 那一行得手工加，下面是照抄就能用的步骤。')
+            : '插件市场 / dsh plugin add 只把包挂进 profile 平面，不建这个预设；人设本体只认预设平面里那一行。')),
         !known
           ? h('div', { className: 'wpr-statusline wpr-mt6' },
             h('button', {
@@ -875,16 +890,22 @@ window.__ModuleLoader__.load({
           : (okNow ? null : h('div', { className: 'wpr-statusline wpr-mt6' },
             h('button', {
               className: 'wpr-btn wpr-primary', type: 'button', disabled: st.busy, onClick: run,
-            }, st.busy ? '正在建…' : (p.installed ? '修正这个预设' : '建人设预设')),
+            }, st.busy ? '正在建…' : (isProfilePlane ? '看手工步骤' : (p.installed ? '修正这个预设' : '建人设预设'))),
             h(CheckBox, {
               checked: asDefault, disabled: st.busy, label: '同时设为新任务默认', onChange: setAsDefault,
             }))),
         !known ? null : (okNow ? null : h('div', { className: 'wpr-note' },
-          '基座 = ' + (strOf(p.baseId) || 'standard') + '（跟着你当前的默认预设走，不替你换模式）；'
-          + (p.baseAvailable === false ? '⚠ 这台机器上找不到基座目录 —— 只能按宿主 preset 目录手工拷一份。' : '找不到基座时会在这里报出来，不会偷偷写半个。'))),
+          isProfilePlane
+            ? ('这个 profile 的基座由宿主的 agent-preset-registry 决定（default = ' + (strOf(p.baseId) || 'standard')
+              + '）；要搬进 plugins 的插件行得跟着那个基座走。')
+            : ('基座 = ' + (strOf(p.baseId) || 'standard') + '（跟着你当前的默认预设走，不替你换模式）；'
+              + (p.baseAvailable === false ? '⚠ 这台机器上找不到基座目录 —— 只能按宿主 preset 目录手工拷一份。' : '找不到基座时会在这里报出来，不会偷偷写半个。')))),
         known ? h('div', { className: 'wpr-note wpr-mono' }, strOf(p.dir)) : null,
         known ? h('div', { className: 'wpr-note' },
           '预设改动**新会话**才挂上：新建任务时在 Agent 预设里选它；设成新任务默认则自动用它。') : null,
+        arrOf(st.hint).map(function (m, i) {
+          return h('div', { key: 'hint' + i, className: 'wpr-note wpr-mono' }, m);
+        }),
         st.err ? h('div', { className: 'wpr-alert wpr-bad wpr-mt6' }, st.err) : null);
     }
 

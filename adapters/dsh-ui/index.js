@@ -226,11 +226,19 @@ function buildSummary(query) {
       const s = presetState()
       return {
         id: s.id,
+        // 宿主用哪套 preset 机制（0.17.5）。这一格同样是**显式白名单**：漏一个字段就是
+        // "宿主明明算出来了、面板永远看不到"——0.17.4 那个红字事故就是这条白名单漏了 preset 造成的。
+        plane: s.plane,
+        planeWhy: s.planeWhy,
+        profileName: s.profileName,
+        patchFile: s.patchFile,
+        presetIdInPlane: s.presetIdInPlane,
         dir: s.dir,
         installed: s.installed,
         hasPersonaRow: s.hasPersonaRow,
         legacy: s.legacy,
         displayName: s.displayName,
+        description: s.description,
         isDefault: s.isDefault,
         otherDefault: s.otherDefault,
         defaultPresetId: s.defaultPresetId,
@@ -408,9 +416,13 @@ export function apply(ctx) {
           }
           // 「设为新会话默认」是**可选**动作：用户已有别的默认 preset 时 core 会拒绝（不抢他的选择），
           // 拒绝原因原样回给面板显示 —— 面板不许把它翻译成"成功了"。
+          // profile 平面（桌面版）的"建"做不到自动落盘：core 返回 action='manual' + 手工步骤。
+          // 那不是错误、是能力边界（往宿主组合里插块要让每个桌面版版本都能解析，代价是宿主起不来）——
+          // 用 200 回、把步骤原样交面板显示，别让用户以为插件坏了。
+          const isManual = r.action === 'manual'
           if (r.ok && body && body.setDefault === true) out.setDefault = setDefaultPreset({})
-          if (!r.ok) out.error = r.messages[r.messages.length - 1] || 'preset 没建成'
-          return send(r.ok ? 200 : 409, out)
+          if (!r.ok && !isManual) out.error = r.messages[r.messages.length - 1] || 'preset 没建成'
+          return send((r.ok || isManual) ? 200 : 409, out)
         }
         // ── 条件反射（reflex）：只读状态 + 试命中 ────────────────────────────────
         if (url.pathname === API_PATH + '/reflex/state' && req.method === 'GET') {
