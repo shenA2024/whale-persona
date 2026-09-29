@@ -12,8 +12,20 @@
 #   · 要"鲸鱼模式专属"就得挂在 agent preset 平面，见 README「为什么 DSH 上会多出一个 Agent 预设？」。
 #   想全局生效的用另一个入口 'whale-persona/global'（按 README 的全局模式一节挂家目录层）。
 #
+# entry 名必须是**本包内的相对路径**，不能写裸包名 'whale-persona-ui'（0.17.2 修）：
+#   · 裸包名要求 profile/node_modules 顶层真有一个 whale-persona-ui 包 —— 那只有安装脚本建
+#     junction 才有；走插件市场 / `dsh plugin add whale-persona` 的单包安装，宿主 ESM 解析的基点
+#     是 profile 目录，裸名必然 MODULE_NOT_FOUND（CLI 0.1.6-alpha.2 实测：整个插件树
+#     failed to load、DSH 起不来；桌面版降为 warning「1 entry did not activate」）。
+#   · 相对名的解析基点是**提供本 patch 层的那个包目录**，包装在哪（profile 顶层 / .pnpm 实体 /
+#     共享层 junction）都成立；且 dsh-client-modules 的 locatePkgJson 对路径型说明符走
+#     nearestPackage，能认到 adapters/dsh-ui/package.json 的 name 与 exports["./client"] ——
+#     浏览器半身照样登记（判据：boot HTML 里出现 whale-persona-ui/client.js）。
+#   · 反例：写子路径 'whale-persona/ui' 不行 —— 宿主半身能起，但 client 扫描只认裸包根说明符
+#     （exactPackageSpecifier），子路径被判成"不是 client 包"，设置页里就没了那张卡片。
+#
 # 回退：删掉下面两条 insert，或在 dsh 的插件管理里停用本包。
 
 - insert:
     - id: whale-persona-ui
-      name: 'whale-persona-ui'
+      name: './adapters/dsh-ui/index.js'

@@ -151,6 +151,7 @@ node "$env:USERPROFILE\.dsh\profiles\web\node_modules\whale-persona\scripts\inst
 | `git-hosted plugins build on install via their prepare script, which pnpm blocks until allowed — add the exact key pnpm printed above under allowBuilds in <profile>/pnpm-workspace.yaml, then re-run` | pnpm 会拦 git 依赖的构建脚本 | 按提示把那行加进 `pnpm-workspace.yaml` 的 `allowBuilds` 再重跑（走 tarball / npm 通道遇不到） |
 | `ERR_PNPM_ADDING_TO_ROOT` | profile 目录自带 `pnpm-workspace.yaml`，往根加依赖必须带 `-w` | 命令里补 `-w`（上面几条都已带） |
 | `Error: dsh: plugin tree failed to load: failed to apply loader entry include (cordis:include): duplicate loader entry id: whale-persona-ui` | 0.11.1 的安装脚本看不出宿主已经把面板行自动挂进 profile 层（`dsh.profile.bundles`），又往 profile 的 `cordis.patch.yml` 手工插了一条同 id 行；loader 的 entry id 全局唯一，重复即硬错 | 拉到 0.11.2 后**重跑一次安装脚本**即可自愈（它会摘掉那条重复行）；急用时手工把 `profiles/<profile>/cordis.patch.yml` 还原成只剩注释 + `[]` |
+| `Failed to import loader entry whale-persona-ui (whale-persona-ui): Cannot find package 'whale-persona-ui' imported from <profile>\` （命令行宿主=插件树起不来；桌面版=`warning: 1 entry did not activate`，能起但设置页里没有「人设」面板） | **0.17.1 及更早**的面板行写的是裸包名，只有安装脚本建的 junction 让它可解析 —— 走插件市场 / 只装 `whale-persona` 一个包时解析不到 | 升到 **0.17.2**（面板行改成包内相对路径）；不想升级就补跑一次包内安装脚本，把 junction 与 preset 建出来：`node "$env:USERPROFILE\.dsh\profiles\web\node_modules\whale-persona\scripts\install-dsh.mjs"` |
 
 还不行 → **开一个 issue，选「安装求助」模板**，把报错原文贴上来即可（不用自己诊断）。
 同类求助攒够（≥5 个不同用户，或一周内 ≥3 次同类）就会补上「一键安装」（npm）通道。

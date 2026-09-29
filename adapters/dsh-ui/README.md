@@ -82,8 +82,13 @@ token 名取自 DSH 前端产物实测（`dsh-client-ui-theme` 的 `body[data-ds
 # profile 的 cordis.patch.yml —— UI 插件必须在 profile 平面
 - insert:
     - id: whale-persona-ui
-      name: 'whale-persona-ui'
+      name: './adapters/dsh-ui/index.js'
 ```
+
+名字必须是**相对路径**（基点 = 提供该 patch 层的包目录），**不能**写裸包名 `whale-persona-ui`：
+单包安装（插件市场 / `dsh plugin add whale-persona`）时 profile 顶层没有那个包名，裸名解析失败
+会让整个插件树起不来（命令行宿主 0.1.6-alpha.2 实测）。相对路径同时让浏览器半身照常登记
+（client 扫描只认裸包根说明符，所以 `whale-persona/ui` 这类子路径同样不行）。
 
 人设本体（`whale-persona`）必须在 **agent preset** 平面。
 挂错平面的后果不是「插件失效」，而是整个插件树加载失败、DSH 起不来：

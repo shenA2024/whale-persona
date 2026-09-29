@@ -3,6 +3,39 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.17.2（2026-09-29）
+
+### 修复：单包安装（插件市场通道）面板行解析失败 —— 命令行宿主整个插件树起不来
+
+触发来源：2026-09-26 用户反馈（桌面版插件市场装 `whale-persona@0.17.1` 后
+`{"code":"operation-error","diagnostic":"dsh: warning: 1 entry did not activate\nwhale-persona-ui (whale-persona-ui): failed to import"}`）。
+在隔离 `DSH_HOME` 上复现同一路径（`dsh plugin --profile web add -w link:<包>`，profile 依赖只有
+whale-persona）：命令行宿主直接
+
+```text
+Error: dsh: plugin tree failed to load: failed to apply loader entry include (cordis:include):
+failed to import loader entry whale-persona-ui (whale-persona-ui):
+Cannot find package 'whale-persona-ui' imported from <profile>\
+```
+
+- **根因**：`cordis.patch.yml` 的面板行写的是**裸包名** `whale-persona-ui`，而这个名字只在
+  **安装脚本建过 junction** 的 profile 里可解析。单包安装（插件市场 / `dsh plugin add whale-persona`）
+  时宿主 ESM 的解析基点是 profile 目录，裸名必然 `MODULE_NOT_FOUND`；桌面版把这条降级成
+  warning（宿主起得来、设置页里没有「人设」面板），命令行宿主是硬错。
+- **修法**：面板行的 name 改成**包内相对路径** `./adapters/dsh-ui/index.js` —— 相对名的解析基点是
+  **提供该 patch 层的包目录**，包装在 profile 顶层 / `.pnpm` 实体 / 共享层都成立。
+- 记下两条走过的弯路，防止有人"改回去"：
+  - 子路径 `whale-persona/ui`（配 `exports`）能让**宿主半身**起来，但
+    `@deepseek-ai/dsh-client-modules` 的 client 扫描只认裸包根说明符（`exactPackageSpecifier`），
+    子路径会被判成"不是 client 包" —— **浏览器半身会丢**，设置页里没有那张卡片；
+  - 相对路径写成 `./node_modules/whale-persona/adapters/dsh-ui/index.js` 也不行：基点是包目录而不是
+    profile 目录，实际解析成 `<包>/node_modules/whale-persona/...`，必然 `MODULE_NOT_FOUND`。
+- 验证方式（隔离 home，单包安装，命令行 dsh 0.1.6-alpha.2）：启动 stderr 零告警；boot HTML 里出现
+  `whale-persona-ui/client.js`；`GET /whale-persona/api/summary` → `200`（2215 字节）。
+  改前在同一环境复现的是上面那段 `plugin tree failed to load`。
+- 连带：`tests/install-contract.mjs` 的 I2 改为断言"面板行用包内相对路径"，并新增一条
+  "**不许**退回裸包名"的判据。
+
 ## v0.17.1（2026-09-26）
 
 > 纯文档与测试：无新增字段、无行为改变（出厂空配置仍渲染三段空文本）。

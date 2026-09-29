@@ -21,7 +21,11 @@ t('I1 指向的文件存在:', !!rel && existsSync(path.join(ROOT, rel)))
 t('I1 patch 被 files 白名单收进包里:', Array.isArray(pkg.files) && pkg.files.some((f) => String(f).includes('cordis.patch.yml')))
 
 const patch = rel && existsSync(path.join(ROOT, rel)) ? readFileSync(path.join(ROOT, rel), 'utf8') : ''
-t('I2 补丁挂设置面板:', /name:\s*'whale-persona-ui'/.test(patch))
+t('I2 补丁挂设置面板:', /- id:\s*whale-persona-ui/.test(patch) && /name:\s*'\.\/adapters\/dsh-ui\/index\.js'/.test(patch))
+// 0.17.2 触发来源：单包安装（插件市场 / `dsh plugin add whale-persona`）时 profile/node_modules
+// 顶层没有 whale-persona-ui —— 裸包名解析必然失败，命令行宿主实测整个插件树 failed to load。
+// 判据：面板行只许用包内相对路径（解析基点 = 提供该 patch 层的包目录），不许退回裸包名。
+t('I2 面板行用包内相对路径、不用裸包名:', !/name:\s*'whale-persona-ui'\s*$/m.test(patch.replace(/\r/g, '')))
 t('I2 补丁**不**挂人设本体到 profile 层（口径：鲸鱼模式专属）:', !/name:\s*'whale-persona'\s*$/.test(patch.replace(/\r/g, '')))
 t('I3 包入口与 global 入口都还在:', !!pkg.exports['.'] && !!pkg.exports['./global'])
 t('I3 零运行时依赖（决定 Release tarball 能否独立安装）:', !pkg.dependencies && !pkg.devDependencies)
