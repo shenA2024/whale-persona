@@ -110,9 +110,17 @@ node scripts/install-dsh.mjs             # do it
 dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/releases/download/v0.15.1/whale-persona-0.15.1.tgz
 ```
 
-⚠️ **Only the tarball path needs two steps.** `npx` and the clone path run the same installer, which
-does everything at once; the tarball path only puts the package into the profile, so run the bundled
-installer once more:
+⚠️ **Marketplace / tarball installs come in two halves.** `npx` and the clone path run the same
+installer, which does everything at once (package + agent preset + settings panel + skill + self-check).
+The plugin marketplace (and the tarball path, and `dsh plugin add`) only mounts the package into the
+**profile plane** — so the package and the settings panel are there, but **the agent preset is not**
+(the persona itself only lives in the preset plane, and the official marketplace channel does not
+create it for us).
+
+**Since 0.17.3 you no longer need to run the script:** after restarting, open
+**Settings → Persona → the "Agent preset" card** and click **"Create persona preset"**
+(the card says "this step is missing"; tick "also make it the default for new sessions" if you want),
+then **start a new session**. The command line still works:
 
 ```powershell
 node "$env:USERPROFILE\.dsh\profiles\web\node_modules\whale-persona\scripts\install-dsh.mjs"

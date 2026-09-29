@@ -1,8 +1,17 @@
 /**
  * whale-persona-ui —— 设置面板（宿主半身）
  *
- * 它只做一件事：把「人设引擎此刻实际会注入什么」端给设置页，让用户看得见。
- * 只读 —— 写配置仍然只有两条路：本地编辑器（scripts/ui.mjs）或让 AI 改。
+ * 它做两件事：
+ *   ① 把「人设引擎此刻实际会注入什么」端给设置页，让用户看得见（只读）；
+ *   ② 自检 **agent preset 平面**：缺了就给一个用户自己点的「建人设预设」入口（0.17.3）。
+ *
+ * 写面刻意只有这两条，且都要用户在上面点一下：
+ *   · 配置本身 —— 保存路由（写 config.json，与本地编辑器 scripts/ui.mjs 同一套读写纪律）；
+ *   · agent preset —— POST /agent-preset，落地全在 core/presetInstall.js（安装脚本走同一份）。
+ * 为什么补第二条（触发来源 2026-09-29）：插件市场 / `dsh plugin add` 只把包挂进 profile 平面，
+ * **不会**建 agent preset，于是用户"装完插件、面板在、人设不生效"——他得自己再跑一次安装脚本，
+ * 而市场不会替他跑。面板是唯一能当场告诉他"少了哪一步"的地方。
+ * 改 agent preset 要**新会话**才挂上，面板必须把这句话说出来，不能让人以为它当场生效。
  *
  * 挂载位必须是 **profile patch 栈**（UI 插件进不了 agent preset 平面）；
  * 人设本体（whale-persona 的三个段）必须在 **agent preset 平面**。
@@ -38,6 +47,9 @@ import { DEFAULTS, mergeConfig, readRawConfig, renderSections, writeMergedConfig
 // 条件反射层（reflex，2026-09-20 并入人设插件）：本路由只做两件事 —— 报状态、试命中。
 // 规则文件在用户自己那边，**本包不写规则**；写规则走"让 AI 改文件 + scripts/reflex.mjs 体检"那条路。
 import { reflexState, reflexTest } from '../dsh/reflex/index.js'
+// agent preset 平面（0.17.3）：状态与"建"和安装脚本共用 core/presetInstall.js 一份实现 ——
+// 两边各写一份必然漂移，而这里漂移的代价是"面板说建好了、宿主不认"。
+import { PRESET_ID, installPreset, presetState, setDefaultPreset } from '../../core/presetInstall.js'
 
 export const name = 'whale-persona-ui'
 
@@ -208,6 +220,24 @@ function buildSummary(query) {
       logPath: sinkLogFile(memory),
       sunk: readSinkLog(memory).length,
     },
+    // agent preset 平面（0.17.3）：人设本体只认 preset 里那行，而市场通道装包**不会**建 preset ——
+    // 这张状态必须端出来（面板据此显示「已就绪」还是「还差一步」），不能让用户自己猜。
+    preset: (() => {
+      const s = presetState()
+      return {
+        id: s.id,
+        dir: s.dir,
+        installed: s.installed,
+        hasPersonaRow: s.hasPersonaRow,
+        legacy: s.legacy,
+        displayName: s.displayName,
+        isDefault: s.isDefault,
+        otherDefault: s.otherDefault,
+        defaultPresetId: s.defaultPresetId,
+        baseId: s.baseId,
+        baseAvailable: s.baseAvailable,
+      }
+    })(),
   }
 }
 
@@ -354,6 +384,33 @@ export function apply(ctx) {
           }
 
           return send(404, { ok: false, error: 'unknown presets action: ' + action })
+        }
+        // ── agent preset 平面（0.17.3）：查状态靠 /summary，这里只负责"用户点一下建起来" ──────
+        // 触发来源 2026-09-29：插件市场 / dsh plugin add 只把包挂进 profile 平面，**不会**建 agent preset，
+        // 用户装完的观感就是"装了没用"。这条路由让面板当场把缺的那一步补上。
+        // 权限：上面的 guard 已判 loopback + origin（只允许本机页面调）；写盘细节全在 core/presetInstall.js。
+        if (url.pathname === API_PATH + '/agent-preset' && req.method === 'POST') {
+          const ct = String((req.headers && req.headers['content-type']) || '').toLowerCase()
+          if (ct.indexOf('application/json') === -1) return send(415, { ok: false, error: 'content-type must be application/json' })
+          let body = null
+          try { body = JSON.parse(await readBody(req)) } catch (e) {
+            return send(400, { ok: false, error: 'body is not valid JSON: ' + String((e && e.message) || e) })
+          }
+          const r = installPreset({})
+          const out = {
+            ok: r.ok,
+            action: r.action,
+            dir: r.dir,
+            baseId: r.baseId,
+            baseWhy: r.baseWhy,
+            messages: r.messages,
+            setDefault: null,
+          }
+          // 「设为新会话默认」是**可选**动作：用户已有别的默认 preset 时 core 会拒绝（不抢他的选择），
+          // 拒绝原因原样回给面板显示 —— 面板不许把它翻译成"成功了"。
+          if (r.ok && body && body.setDefault === true) out.setDefault = setDefaultPreset({})
+          if (!r.ok) out.error = r.messages[r.messages.length - 1] || 'preset 没建成'
+          return send(r.ok ? 200 : 409, out)
         }
         // ── 条件反射（reflex）：只读状态 + 试命中 ────────────────────────────────
         if (url.pathname === API_PATH + '/reflex/state' && req.method === 'GET') {

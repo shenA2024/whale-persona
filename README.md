@@ -115,9 +115,14 @@ dsh plugin --profile web add -w https://github.com/shenA2024/whale-persona/relea
 
 干净 DSH_HOME 实测：**3.2 秒把包装上**，不需要 git、不需要 npm 账号、不需要改 pnpm 配置。
 
-⚠️ **三条通道的区别：只有 tarball 那条要跑两次。** `npx` 与克隆走的是**同一个安装脚本**，它一次就做完
-装包 + 建 agent preset + 挂设置面板 + 拷技能 + 自检；tarball 那条只把包装进 profile，
-**还要再跑一次包里自带的脚本**才能建出 agent preset：
+⚠️ **三条通道的区别：市场 / tarball 那条是"分两半"装的。** `npx` 与克隆走的是**同一个安装脚本**，它一次就做完
+装包 + 建 agent preset + 挂设置面板 + 拷技能 + 自检；插件市场（以及 tarball、`dsh plugin add`）只把包挂进
+**profile 平面** —— 结果是**包在、设置面板在，但 agent preset 还没建**（人设本体只认预设平面，
+而官方市场通道不会替我们建它）。
+
+**0.17.3 起不用再跑脚本**：重启后进 **设置 → 人设 → 「Agent 预设」卡片**点一下「建人设预设」
+（卡片会直接写明「缺这一步」；要的话勾上「同时设为新任务默认」），然后**新开会话**。
+想用命令行也行：
 
 ```powershell
 node "$env:USERPROFILE\.dsh\profiles\web\node_modules\whale-persona\scripts\install-dsh.mjs"
@@ -152,12 +157,15 @@ node "$env:USERPROFILE\.dsh\profiles\web\node_modules\whale-persona\scripts\inst
 | `ERR_PNPM_ADDING_TO_ROOT` | profile 目录自带 `pnpm-workspace.yaml`，往根加依赖必须带 `-w` | 命令里补 `-w`（上面几条都已带） |
 | `Error: dsh: plugin tree failed to load: failed to apply loader entry include (cordis:include): duplicate loader entry id: whale-persona-ui` | 0.11.1 的安装脚本看不出宿主已经把面板行自动挂进 profile 层（`dsh.profile.bundles`），又往 profile 的 `cordis.patch.yml` 手工插了一条同 id 行；loader 的 entry id 全局唯一，重复即硬错 | 拉到 0.11.2 后**重跑一次安装脚本**即可自愈（它会摘掉那条重复行）；急用时手工把 `profiles/<profile>/cordis.patch.yml` 还原成只剩注释 + `[]` |
 | `Failed to import loader entry whale-persona-ui (whale-persona-ui): Cannot find package 'whale-persona-ui' imported from <profile>\` （命令行宿主=插件树起不来；桌面版=`warning: 1 entry did not activate`，能起但设置页里没有「人设」面板） | **0.17.1 及更早**的面板行写的是裸包名，只有安装脚本建的 junction 让它可解析 —— 走插件市场 / 只装 `whale-persona` 一个包时解析不到 | 升到 **0.17.2**（面板行改成包内相对路径）；不想升级就补跑一次包内安装脚本，把 junction 与 preset 建出来：`node "$env:USERPROFILE\.dsh\profiles\web\node_modules\whale-persona\scripts\install-dsh.mjs"` |
+| （没有报错）插件装上了、设置面板也在，但**新会话里人设不生效** | 人设本体只认 agent preset 平面里那行（`<DSH_HOME>/.agent-presets/whale-persona/agent.cordis.yml`）；插件市场 / `dsh plugin add` 只把包挂进 profile 平面，**不会**建 preset | 0.17.3 起：**设置 → 人设 → 「Agent 预设」卡片**会写「缺这一步」→ 点「建人设预设」→ **新开会话**；或用命令行跑一次包内安装脚本 |
 
 还不行 → **开一个 issue，选「安装求助」模板**，把报错原文贴上来即可（不用自己诊断）。
 同类求助攒够（≥5 个不同用户，或一周内 ≥3 次同类）就会补上「一键安装」（npm）通道。
 
 
-- **设置 → Agent 预设**：多出一张「**自定义人设**」卡片（已是「新任务默认」）；
+- **设置 → Agent 预设**：多出一张「**自定义人设**」卡片（按安装通道不同，可能已是「新任务默认」）；
+- **设置 → 人设 → 「Agent 预设」卡片**：看到「✓ 已就绪」才算人设真的挂上了。走**插件市场**装的话，
+  这里通常写「✗ 还没有 Agent 预设」→ 点一下「建人设预设」（要的话勾「同时设为新任务默认」）→ **新开会话**；
 - **设置 → 人设**：左边填（自称/称呼/立场/正文/工作契约/长期记忆），右边**实时显示此刻实际注入的三段文本**，保存即生效。
 
 **② 装（ZCode · 已停止开发）**：Settings → Plugin Management → Discover → **+** 添加 marketplace，来源填本仓库 URL → 安装 `whale-persona`。

@@ -1,6 +1,6 @@
 // 设置面板·宿主半身测试（2026-09-18 新增；同日补"可保存"后的写路径）
 // 断言强制：任一 false 即非零退出（与 smoke.mjs 同一约定）
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import os from 'node:os'
 import path from 'node:path'
@@ -511,3 +511,70 @@ t('PR7 删除预设:', prDl.code === 200 && prDl.json.deleted === true && !prDl.
 t('PR7 删除不存在的返回 deleted=false:', (await call('/whale-persona/api/presets/delete', {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: 'nope' }),
 })).json.deleted === false)
+
+/* ── Agent preset 平面（0.17.3）──────────────────────────────────────────────
+ * 触发来源 2026-09-29：插件市场 / `dsh plugin add` 只把包挂进 profile 平面，**不建** agent preset，
+ * 用户装完的观感是「插件装了、面板在、人设不生效」。面板必须能 ①说出缺这一步 ②让用户点一下建起来。
+ * 判据：summary 下发 preset 状态；POST /agent-preset 幂等建；失败路径不许谎报成功。
+ * 夹具：DSH_AGENT_PRESETS_ROOT 指向自造的基座根 —— 免得判据取决于"这台机器装了什么"。
+ */
+const presetSrcRoot = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-panel-src-'))
+const shippedPresets = path.join(presetSrcRoot, '@deepseek-ai', 'dsh-agent-presets', 'presets')
+mkdirSync(path.join(shippedPresets, 'standard'), { recursive: true })
+writeFileSync(path.join(shippedPresets, 'standard', 'agent.cordis.yml'),
+  "- id: persona\n  name: '@deepseek-ai/dsh-persona'\n\n- id: tools\n  name: 'x'\n", 'utf8')
+writeFileSync(path.join(shippedPresets, 'standard', 'preset.yml'), 'name: 标准模式\n', 'utf8')
+process.env.DSH_AGENT_PRESETS_ROOT = presetSrcRoot
+
+const PRESET_DIR = path.join(home, '.agent-presets', 'whale-persona')
+const PRESET_AGENT = path.join(PRESET_DIR, 'agent.cordis.yml')
+
+const pre = await call('/whale-persona/api/summary')
+t('P28 summary 下发 preset 状态（还没建就不谎报就绪）',
+  !!pre.json.preset && pre.json.preset.installed === false && pre.json.preset.hasPersonaRow === false)
+t('P28b 状态带目录与基座 id（面板要显示给用户）',
+  pre.json.preset.dir === PRESET_DIR && pre.json.preset.id === 'whale-persona' && pre.json.preset.baseId === 'standard')
+t('P29 非 JSON content-type → 415', (await call('/whale-persona/api/agent-preset', {
+  method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{}',
+})).code === 415)
+t('P29b body 不是 JSON → 400', (await call('/whale-persona/api/agent-preset', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: '{ nope',
+})).code === 400)
+t('P29c 还没建时盘上确实没有这个预设', !existsSync(PRESET_AGENT))
+
+const mk = await call('/whale-persona/api/agent-preset', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ setDefault: true }),
+})
+t('P30 一键建 preset → 200 + created', mk.code === 200 && mk.json.ok === true && mk.json.action === 'created')
+t('P30b 盘上真的有人设行（不是只回了个 ok）',
+  existsSync(PRESET_AGENT) && readFileSync(PRESET_AGENT, 'utf8').indexOf("name: 'whale-persona'") > 0)
+t('P30c 可选动作「设为新任务默认」也落地了',
+  !!mk.json.setDefault && mk.json.setDefault.ok === true
+  && readFileSync(path.join(home, 'settings.yaml'), 'utf8').indexOf('default: whale-persona') > 0)
+
+const mkAgain = await call('/whale-persona/api/agent-preset', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
+})
+t('P31 再点一次 → kept（幂等，不推平用户改动）', mkAgain.code === 200 && mkAgain.json.action === 'kept')
+
+const post = await call('/whale-persona/api/summary')
+t('P32 状态转 healthy，且认得出它现在是默认',
+  post.json.preset.installed === true && post.json.preset.hasPersonaRow === true && post.json.preset.isDefault === true)
+
+t('P33 非 loopback host 不许建 → 403', (await call('/whale-persona/api/agent-preset', {
+  method: 'POST', host: 'evil.example.com:3081', headers: { 'content-type': 'application/json' }, body: '{}',
+})).code === 403)
+
+// 用户已有别的默认时不抢：把 default 改成别人的，再点一次带 setDefault 的按钮
+writeFileSync(path.join(home, 'settings.yaml'), 'agent-presets:\n  default: computer-use\n', 'utf8')
+const keep = await call('/whale-persona/api/agent-preset', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ setDefault: true }),
+})
+t('P34 用户另有默认时不抢，且把拒绝原因回给面板（不翻译成成功）',
+  keep.code === 200 && keep.json.ok === true && !!keep.json.setDefault && keep.json.setDefault.ok === false
+  && keep.json.setDefault.reason.indexOf('没动它') >= 0)
+t('P34b 盘上仍是用户自己的默认',
+  readFileSync(path.join(home, 'settings.yaml'), 'utf8').indexOf('default: computer-use') > 0)
+const post2 = await call('/whale-persona/api/summary')
+t('P34c 状态里把它标成"别人的默认"（面板要能说清谁生效）',
+  post2.json.preset.isDefault === false && post2.json.preset.otherDefault === true && post2.json.preset.defaultPresetId === 'computer-use')

@@ -782,6 +782,89 @@ window.__ModuleLoader__.load({
      * 「还没写配置 = 装上零行为改变」只在文件不存在时多一行；档位判定规则等说明收进折叠。
      * 样式只有一层、永远跟随宿主（2026-09-19 收口：不留任何自带外观开关）。
      */
+    /* ── Agent 预设（0.17.3）──────────────────────────────────────────────── */
+
+    var AGENT_PRESET_API = '/whale-persona/api/agent-preset';
+
+    /**
+     * Agent 预设 = 人设的挂载点：人设本体那一段只在**绑定了这个预设**的会话里生效。
+     *
+     * 为什么面板要管它（触发来源 2026-09-29）：插件市场 / `dsh plugin add` 只把包挂进 profile 平面，
+     * **不会**建 agent preset —— 用户装完的观感是「插件装了、面板也在，可是没用」。这张卡把缺的那一步
+     * 当场摆出来，并给一个用户自己点的入口（写盘在宿主半身 → core/presetInstall.js，与安装脚本同一份实现）。
+     *
+     * 两种状态都只说事实：就绪就说就绪（并点名它是不是新任务默认），缺了就直说人设不生效；
+     * 建完必须补一句"新会话才挂上"—— 否则用户会以为当场生效、然后以为插件坏了。
+     */
+    function AgentPresetCard(props) {
+      var p = props.preset || {};
+      var stState = useState({ busy: false, err: '', done: '' });
+      var st = stState[0] || { busy: false, err: '', done: '' };
+      var setSt = stState[1];
+      var dState = useState(true);
+      var asDefault = dState[0] !== false;
+      var setAsDefault = dState[1];
+      var sane = !!(p.installed && p.hasPersonaRow);
+      var okNow = sane || (!!st.done && !st.err);
+
+      function run() {
+        setSt({ busy: true, err: '', done: '' });
+        fetch(AGENT_PRESET_API, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ setDefault: asDefault }),
+        }).then(function (r) {
+          return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; },
+            function () { return { ok: false, j: {} }; });
+        }).then(function (res) {
+          var j = res.j || {};
+          if (!res.ok || j.ok !== true) {
+            setSt({ busy: false, err: strOf(j.error) || '建 preset 失败（宿主日志里有原因）', done: '' });
+            return;
+          }
+          var lines = arrOf(j.messages).slice(-1);
+          var dflt = j.setDefault;
+          // 用户已经有别的默认预设时 core 会拒绝（不抢他的选择）—— 拒绝原因原样显示，不当成功说
+          if (dflt && dflt.ok === false) lines.push('没改新任务默认：' + strOf(dflt.reason));
+          setSt({ busy: false, err: '', done: lines.join(' · ') });
+        }, function (e) {
+          setSt({ busy: false, err: messageOf(e), done: '' });
+        });
+      }
+
+      return h('div', { className: 'wpr-card' },
+        h(CardHead, {
+          title: 'Agent 预设',
+          badge: badge(okNow, '已就绪', '缺这一步'),
+          sub: '人设的挂载点 · 只有选中它的会话才有人设',
+        }),
+        okNow
+          ? h('div', { className: 'wpr-alert wpr-ok' },
+            st.done ? (st.done + ' —— 新会话生效')
+              : ('✓ 已就绪：' + (strOf(p.displayName) || strOf(p.id) || '自定义人设')
+                + (p.isDefault ? ' · 新任务默认' : (p.otherDefault ? ' · 新任务默认是「' + strOf(p.defaultPresetId) + '」' : ' · 新任务默认未设'))))
+          : h('div', { className: 'wpr-alert wpr-bad' },
+            p.installed
+              ? '⚠ 有这个预设目录，但里面没有 whale-persona 那一行（可能指向旧包名，或被人改过）'
+              : '✗ 还没有 Agent 预设 —— 人设本体不会生效（装的是**空壳**：包在、面板在、人设不在）'),
+        okNow ? null : h('div', { className: 'wpr-note' },
+          '插件市场 / dsh plugin add 只把包挂进 profile 平面，不建这个预设；人设本体只认预设平面里那一行。'),
+        okNow ? null : h('div', { className: 'wpr-statusline wpr-mt6' },
+          h('button', {
+            className: 'wpr-btn wpr-primary', type: 'button', disabled: st.busy, onClick: run,
+          }, st.busy ? '正在建…' : (p.installed ? '修正这个预设' : '建人设预设')),
+          h(CheckBox, {
+            checked: asDefault, disabled: st.busy, label: '同时设为新任务默认', onChange: setAsDefault,
+          })),
+        okNow ? null : h('div', { className: 'wpr-note' },
+          '基座 = ' + (strOf(p.baseId) || 'standard') + '（跟着你当前的默认预设走，不替你换模式）；'
+          + (p.baseAvailable === false ? '⚠ 这台机器上找不到基座目录 —— 只能按宿主 preset 目录手工拷一份。' : '找不到基座时会在这里报出来，不会偷偷写半个。')),
+        h('div', { className: 'wpr-note wpr-mono' }, strOf(p.dir)),
+        h('div', { className: 'wpr-note' },
+          '预设改动**新会话**才挂上：新建任务时在 Agent 预设里选它；设成新任务默认则自动用它。'),
+        st.err ? h('div', { className: 'wpr-alert wpr-bad wpr-mt6' }, st.err) : null);
+    }
+
     function StatusStrip(props) {
       var d = props.data;
       var st = d.configState || {};
@@ -1409,6 +1492,10 @@ window.__ModuleLoader__.load({
         onToggleEnabled: function (v) { cb.patchForm({ enabled: v }); },
         onThinking: function (v) { cb.patchForm({ thinkingLanguage: v }); },
       }));
+
+      // ② Agent 预设（0.17.3）—— 紧跟状态条：它决定"人设在这台机器上到底生效没有"，
+      // 比下面任何一条配置都靠前（配置写得再对，预设没建也白搭）。
+      body.push(h(AgentPresetCard, { key: 'agentpreset', preset: d.preset }));
 
       // ② 我是谁 —— 自称两档 / 按模型指定自称 / 称呼 / 立场与后缀
       body.push(h(GroupTitle, { key: 'g1', text: '我是谁', hint: '自称 · 称呼 · 立场' }));

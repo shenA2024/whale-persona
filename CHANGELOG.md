@@ -3,6 +3,41 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## v0.17.3（2026-09-29）
+
+### 新增：市场通道装完人设即生效 —— 面板自检 Agent 预设 + 一键创建
+
+触发来源：0.17.2 修好「面板行解析失败」之后，用户当天追问「插件市场是官方的吧，那这个一定要解决」。
+把包挂进 profile 平面只是**一半**：人设本体（`- id: whale-persona`）必须落在 **agent preset 平面**
+（`<DSH_HOME>/.agent-presets/<id>/agent.cordis.yml`）才生效，而插件市场 / `dsh plugin add` **不会**建它 ——
+官方也没有"包声明式注册 preset"的机制（`@deepseek-ai/dsh-agent-presets` 只扫 preset 根，
+且写权限只给 `trust:'user'` 的根）。于是市场用户的真实观感是「插件装了、设置面板在、人设不生效」；
+0.17.2 及以前只有 `scripts/install-dsh.mjs` 会建 preset，等于要用户自己再跑一次脚本，而市场不会替他跑。
+
+- **唯一实现**：preset 的发现/生成从安装脚本提到 `core/presetInstall.js`
+  （`presetState` / `installPreset` / `setDefaultPreset` / `resolveBase` / `swapPersonaRowIn` …），
+  安装脚本与设置面板共用一份 —— 两份实现必然漂移，而这里漂移的代价是"面板说建好了、宿主不认"。
+  `scripts/install-dsh.mjs` 删掉本地那套（-164 行），只留"把结果翻成人话"：
+  日志文案是安装脚本的对外接口，`tests/install-contract.mjs` 的 I6 钉着它。
+- **面板**：设置页新增「Agent 预设」卡片（紧跟状态条 —— 配置写得再对、预设没建也白搭），
+  就绪/缺失两态直说；缺失时给一键「建人设预设」，可勾「同时设为新任务默认」。
+  宿主半身新增 `POST /whale-persona/api/agent-preset`（与其它写路由同一道 loopback + origin 护栏），
+  `GET /api/summary` 增发 `preset` 状态块。
+- **不抢用户的选择**：基座跟随用户**当前的默认 preset**（不写死 standard，否则会把 PTC 用户的能力面悄悄换掉）；
+  用户已有别的默认 preset 时**不覆盖**，把拒绝原因原样回给面板显示，不翻译成成功。
+- **幂等**：已有 preset 只补显示名/描述，不重新复制基座；用户改过的显示名、自己加的行都保留；
+  旧包名 `@shenA2024/whale-persona` 就地改名迁移（新名是旧名的子串，判归属必须先认旧名）。
+- 桌面版候选根补 `<exeDir>/resources/app.asar/dsh/node_modules`
+  （2026-09-29 实测：桌面版宿主进程内的 Electron fs 认 asar 路径，所以能读到 shipped preset）。
+- 面板会直说「改预需要新会话才挂上」—— 不让人以为点完当场生效、然后当成插件坏了。
+- **验证方式**：
+  - `node tests/preset-install.mjs`（新增，31 条判据）：建 / 幂等 / 旧名迁移 / 越界基座 id 拒绝 /
+    dry-run 不改盘 / 默认 preset 不抢 / 只插一行不碰 settings.yaml 的其它键；
+  - `node tests/ui-panel.mjs` 新增 14 条：summary 下发状态、POST 建完状态转 healthy、
+    415 / 400 / 403 三条失败路径、"设为默认"被拒时不谎报成功；
+  - 隔离 home 端到端：单包安装 → summary 报 `installed:false` → POST → `created` → 状态 `healthy`；
+  - `.github/SECURITY.md` 写面清单补登记 `core/presetInstall.js`（安全探针 S15 的判据），`npm run sec` PASS。
+
 ## v0.17.2（2026-09-29）
 
 ### 修复：单包安装（插件市场通道）面板行解析失败 —— 命令行宿主整个插件树起不来

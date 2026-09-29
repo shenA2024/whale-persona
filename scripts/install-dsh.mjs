@@ -38,17 +38,21 @@ import { createRequire } from 'node:module'
 import { applyUiRow } from './ui-row.mjs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  LEGACY_PERSONA_PKG, PERSONA_PKG, PRESET_ID, PRESET_NAME,
+  installPreset, presetState,
+  setDefaultPreset as writeDefaultPreset,
+} from '../core/presetInstall.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const SOURCE = path.resolve(HERE, '..')
-const PERSONA_PKG = 'whale-persona'
-const UI_PKG = 'whale-persona-ui'
 // 0.15.0 之前叫这两个名字（scope 带大写字母，npm 不收 —— 见 CHANGELOG v0.15.0）。
 // 注意：新名是旧名的**子串**，所以任何"包含即认为已装"的判断都必须先认旧名再认新名。
-const LEGACY_PERSONA_PKG = '@shenA2024/whale-persona'
+// PERSONA_PKG / LEGACY_PERSONA_PKG / PRESET_ID / PRESET_NAME 自 0.17.3 起从 core/presetInstall.js 来：
+// preset 的发现与生成归它（设置面板走同一份），常量跟着它走，别在这里再写一份。
+const UI_PKG = 'whale-persona-ui'
+// 面板包的旧名只是脚本自己的迁移目标，留在本地。
 const LEGACY_UI_PKG = '@shenA2024/whale-persona-ui'
-const PRESET_ID = 'whale-persona'
-const PRESET_NAME = '自定义人设'
 const SELF = 'whale-persona:'
 /** profile / preset id 白名单：字母数字开头，其余 . _ -，最长 64 —— 结果只可能是一个目录名 */
 const ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
@@ -251,139 +255,14 @@ function manualLink(pkgName, sub) {
   } catch (e) { warn('junction 建不了：' + e.message) }
 }
 
-function findShippedPreset(name) {
-  const root = findShippedPresetsRoot()
-  return root ? path.join(root, name) : ''
-}
-
-function findShippedPresetsRoot() {
-  const rel = path.join('@deepseek-ai', 'dsh', 'node_modules', '@deepseek-ai', 'dsh-agent-presets', 'presets')
-  for (const root of candidateRoots()) {
-    const p = path.join(root, rel)
-    if (existsSync(p)) return p
-  }
-  return ''
-}
-
-/** 用户当前的默认 preset id（读 $DSH_HOME/settings.yaml 的 agent-presets.default） */
-function defaultPresetId() {
-  const file = path.join(HOME, 'settings.yaml')
-  if (!existsSync(file)) return ''
-  const lines = readFileSync(file, 'utf8').split(/\r?\n/)
-  const idx = lines.findIndex((l) => /^agent-presets:\s*$/.test(l))
-  if (idx < 0) return ''
-  for (let j = idx + 1; j < lines.length; j++) {
-    if (!/^\s+\S/.test(lines[j])) break
-    const m = /^\s+default:\s*(\S+)\s*$/.exec(lines[j])
-    if (m) return m[1]
-  }
-  return ''
-}
-
-/** 基座目录：用户 preset 优先，其次宿主自带；找不到返回空串 */
-function basePresetDir(id) {
-  if (!ID_RE.test(String(id || ''))) return '' // 防「default preset 名被改成 ../.. 」这类路径穿越
-  const user = path.join(HOME, '.agent-presets', id)
-  if (existsSync(path.join(user, 'agent.cordis.yml'))) return user
-  const shippedRoot = findShippedPresetsRoot()
-  if (shippedRoot) {
-    const shipped = path.join(shippedRoot, id)
-    if (existsSync(path.join(shipped, 'agent.cordis.yml'))) return shipped
-  }
-  return ''
-}
-
 /**
- * 基座选择：**跟随用户当前的默认 preset**，不替他选。
- * 为什么不是写死 standard：persona 插件跟"模式"无关，它只是替换掉基座里的人设行；
- * 写死标准模式会把 PTC 用户的能力面悄悄换掉（PTC 走 run_code SDK，标准走逐工具调用）。
+ * preset 的发现与生成自 0.17.3 起全在 core/presetInstall.js —— 设置面板的「建人设预设」
+ * 走的就是同一份实现，两边各写一份必然漂移，而漂移的代价是"面板说建好了、宿主不认"。
+ * 这里只剩「跑一遍 + 把结果翻成人话」：日志文案是安装脚本的对外接口（tests/install-contract.mjs 钉着）。
  */
-function resolveBase() {
-  if (opts.base !== 'auto') return { id: opts.base, why: '命令行指定 --base' }
-  const cur = defaultPresetId()
-  if (cur && cur !== PRESET_ID) return { id: cur, why: '跟随用户当前的默认 preset' }
-  if (cur === PRESET_ID) return { id: 'standard', why: '默认 preset 已是本插件（重装），回退宿主出厂默认' }
-  return { id: 'standard', why: '用户没设默认 preset，用宿主出厂默认' }
-}
-
 function writePreset() {
-  const dest = path.join(HOME, '.agent-presets', PRESET_ID)
-  const agentFile = path.join(dest, 'agent.cordis.yml')
-  const exists = existsSync(agentFile)
-  const cur = exists ? readFileSync(agentFile, 'utf8') : ''
-  const hasLegacy = cur.indexOf(LEGACY_PERSONA_PKG) >= 0
-  // 旧名是新名的子串：单看"含 whale-persona"会把旧预设误判成"已经是我们的"，于是原地不动 →
-  // 预设指向一个已经不装的模块。所以先做就地改名迁移，再判归属。
-  if (hasLegacy) {
-    if (!opts.dry) writeFileSync(agentFile, cur.split(LEGACY_PERSONA_PKG).join(PERSONA_PKG), 'utf8')
-    log((opts.dry ? 'DRY: ' : '') + 'preset 里的旧包名就地换成 ' + PERSONA_PKG + '：' + agentFile)
-  }
-  const alreadyOurs = exists && (hasLegacy || /name:\s*'whale-persona'/.test(cur))
-  if (alreadyOurs) {
-    if (!opts.dry) refreshPresetMeta(dest)
-    log('preset 已存在，保留它的基座与内容（只补显示名/描述）：' + dest)
-    return
-  }
-  const base = resolveBase()
-  const src = basePresetDir(base.id)
-  if (!src) {
-    warn('找不到基座 preset「' + base.id + '」，preset 没建。手工做法：')
-    warn('  1) 把 <宿主 preset 目录>/' + base.id + ' 复制到 ' + dest)
-    warn("  2) 把里面  - id: persona / name: '@deepseek-ai/dsh-persona'  那段换成")
-    warn('     - id: whale-persona')
-    warn("       name: '" + PERSONA_PKG + "'")
-    return
-  }
-  log('基座 preset = ' + base.id + '（' + base.why + '）<- ' + src)
-  if (opts.dry) { log('DRY: 建 preset -> ' + dest); return }
-  rmSync(dest, { recursive: true, force: true })
-  mkdirSync(path.dirname(dest), { recursive: true })
-  cpSync(src, dest, { recursive: true })
-  swapPersonaRow(path.join(dest, 'agent.cordis.yml'))
-  writeFileSync(path.join(dest, 'preset.yml'),
-    'name: ' + PRESET_NAME + '\n'
-    + 'description: 基于 ' + base.id + ' 模式 + whale-persona 人设引擎（装完即新任务默认；显示名改这一行）\n'
-    + 'order: 9\n', 'utf8')
-  log('preset 已就绪：' + dest + '   显示名「' + PRESET_NAME + '」')
-}
-
-/** 重装时只补元数据：用户改过的显示名不动 */
-function refreshPresetMeta(dest) {
-  const file = path.join(dest, 'preset.yml')
-  const cur = existsSync(file) ? readFileSync(file, 'utf8') : ''
-  const hasName = /^name:\s*\S/m.test(cur)
-  const hasDesc = /^description:\s*\S/m.test(cur)
-  if (hasName && hasDesc) return
-  const lines = []
-  lines.push(hasName ? /^name:.*$/m.exec(cur)[0] : 'name: ' + PRESET_NAME)
-  if (!hasDesc) lines.push('description: whale-persona 人设引擎（装完即新任务默认；显示名改这一行）')
-  lines.push('order: 9')
-  writeFileSync(file, lines.join('\n') + '\n', 'utf8')
-}
-
-function swapPersonaRow(file) {
-  const lines = readFileSync(file, 'utf8').split(/\r?\n/)
-  const out = []
-  let swapped = false
-  for (let i = 0; i < lines.length; i++) {
-    if (!swapped && /^- id: persona\s*$/.test(lines[i])) {
-      let j = i + 1
-      while (j < lines.length && !/^- /.test(lines[j])) j++
-      out.push('- id: whale-persona')
-      out.push("  name: '" + PERSONA_PKG + "'")
-      if (j < lines.length && lines[j].trim() !== '') out.push('')
-      i = j - 1
-      swapped = true
-      continue
-    }
-    out.push(lines[i])
-  }
-  if (!swapped) {
-    warn('没在 preset 里找到 - id: persona 行，人设行没替换。手工加：')
-    warn("  - id: whale-persona")
-    warn("    name: '" + PERSONA_PKG + "'")
-  }
-  writeFileSync(file, out.join('\n'), 'utf8')
+  const r = installPreset({ home: HOME, base: opts.base, dryRun: opts.dry })
+  for (const m of r.messages) (r.ok ? log : warn)(m)
 }
 
 // ── 设置面板行的归属判定：纯逻辑在 ./ui-row.mjs，这里只做「读 profile + 落盘」────
@@ -469,35 +348,14 @@ function patchProfileRow() {
   log(result.reason + '：' + file)
 }
 
+/** 设「新会话默认」preset —— 同样只有 core/presetInstall.js 一份实现（用户另有默认就不动）。 */
 function setDefaultPreset() {
-  const file = path.join(HOME, 'settings.yaml')
-  const raw = existsSync(file) ? readFileSync(file, 'utf8') : ''
-  const lines = raw.split(/\r?\n/)
-  const idx = lines.findIndex((l) => /^agent-presets:\s*$/.test(l))
-  if (idx >= 0) {
-    let j = idx + 1
-    let found = -1
-    while (j < lines.length && (/^\s+\S/.test(lines[j]) || lines[j].trim() === '')) {
-      if (/^\s+default:\s*\S/.test(lines[j])) { found = j; break }
-      j++
-    }
-    if (found >= 0) {
-      const cur = lines[found].split(':').slice(1).join(':').trim()
-      if (cur && cur !== PRESET_ID) {
-        warn('用户已有默认 preset「' + cur + '」，没动它。想换成本插件：把 settings.yaml 的 agent-presets.default 改成 ' + PRESET_ID)
-        return
-      }
-      lines[found] = '  default: ' + PRESET_ID
-    } else {
-      lines.splice(idx + 1, 0, '  default: ' + PRESET_ID)
-    }
-  } else {
-    while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
-    lines.push('agent-presets:', '  default: ' + PRESET_ID, '')
+  const r = writeDefaultPreset({ home: HOME, dryRun: opts.dry })
+  if (!r.ok) {
+    warn(r.reason + '。想换成本插件：把 settings.yaml 的 agent-presets.default 改成 ' + PRESET_ID)
+    return
   }
-  if (opts.dry) { log('DRY: 设默认 preset'); return }
-  writeFileSync(file, lines.join('\n'), 'utf8')
-  log('默认 preset = ' + PRESET_ID + '（新会话生效）')
+  log(r.reason)
 }
 
 function copySkill() {
@@ -516,9 +374,10 @@ function verify() {
   const r = run(['--profile', opts.profile, '--dump-config'], true)
   const text = String(r.stdout || '')
   const okUi = text.indexOf(UI_PKG) >= 0
-  const okPreset = existsSync(path.join(HOME, '.agent-presets', PRESET_ID, 'agent.cordis.yml'))
+  const st = presetState(HOME)
   log('自检：UI 行在 profile 树里 = ' + (okUi ? 'OK' : '缺失'))
-  log('自检：preset 文件 = ' + (okPreset ? 'OK' : '缺失') + '（人设行在 preset 层，dump-config 看不到它是正常的）')
+  log('自检：preset 文件 = ' + (st.installed ? 'OK' : '缺失') + '（人设行在 preset 层，dump-config 看不到它是正常的）')
+  log('自检：preset 里的人设行 = ' + (st.hasPersonaRow ? 'OK' : '缺失（或指向别的包）'))
   const inbox = path.join(HOME, configDirName(), 'memory-inbox.jsonl')
   if (existsSync(inbox)) {
     log('提示：检测到记忆收件箱 ' + inbox.replace(/\\/g, '/') + ' —— 0.8.0 起「未确认候选」不注入，用 node scripts/memory.mjs status 看待确认条目。')
