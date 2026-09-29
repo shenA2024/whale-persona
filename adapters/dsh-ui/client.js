@@ -385,6 +385,14 @@ window.__ModuleLoader__.load({
         configValid: d && d.configValid !== undefined ? d.configValid !== false : true,
 
         editor: { url: url, port: numOf(ed.port) || portOf(url), running: ed.running === true },
+
+        // Agent 预设（0.17.3）：宿主下发了 ≠ 面板拿得到 —— 这里是显式白名单，漏一个字段就是静默丢字段。
+        // 2026-09-29 真机踩到：这一格漏搬 preset，卡片于是永远读不到真实状态、把空对象当"你没有预设"，
+        // 人设明明在、用户却被红字「✗ 还没有 Agent 预设」吓到（与上面 inboxPending 是同一种坑）。
+        preset: objOf(d && d.preset),
+        // 「宿主答没答这个问题」单独记：旧宿主半身（插件代码改完还没重启）不返回 preset 字段，
+        // 那与"答了、但是空"是两件事 —— 面板必须能分辨，不许拿空对象当"没有"。
+        presetKnown: !!(d && d.preset && typeof d.preset === 'object'),
       };
     }
 
@@ -798,6 +806,10 @@ window.__ModuleLoader__.load({
      */
     function AgentPresetCard(props) {
       var p = props.preset || {};
+      // 三态而不是两态（2026-09-29 真机踩到）：插件代码改完、宿主还没重启时，/summary 里根本没有
+      // preset 字段 —— 面板那时拿空对象当"没有预设"，渲染成红字「✗ 还没有 Agent 预设」，人设明明在、
+      // 用户却被吓到。答了就按答的说；没答就直说"没拿到"，并给一次重新检查，不猜。
+      var known = props.presetKnown === true;
       var stState = useState({ busy: false, err: '', done: '' });
       var st = stState[0] || { busy: false, err: '', done: '' };
       var setSt = stState[1];
@@ -835,33 +847,44 @@ window.__ModuleLoader__.load({
       return h('div', { className: 'wpr-card' },
         h(CardHead, {
           title: 'Agent 预设',
-          badge: badge(okNow, '已就绪', '缺这一步'),
+          badge: known ? badge(okNow, '已就绪', '缺这一步') : h('span', { className: 'wpr-badge wpr-off' }, '状态未取到'),
           sub: '人设的挂载点 · 只有选中它的会话才有人设',
         }),
-        okNow
-          ? h('div', { className: 'wpr-alert wpr-ok' },
-            st.done ? (st.done + ' —— 新会话生效')
-              : ('✓ 已就绪：' + (strOf(p.displayName) || strOf(p.id) || '自定义人设')
-                + (p.isDefault ? ' · 新任务默认' : (p.otherDefault ? ' · 新任务默认是「' + strOf(p.defaultPresetId) + '」' : ' · 新任务默认未设'))))
-          : h('div', { className: 'wpr-alert wpr-bad' },
-            p.installed
-              ? '⚠ 有这个预设目录，但里面没有 whale-persona 那一行（可能指向旧包名，或被人改过）'
-              : '✗ 还没有 Agent 预设 —— 人设本体不会生效（装的是**空壳**：包在、面板在、人设不在）'),
-        okNow ? null : h('div', { className: 'wpr-note' },
-          '插件市场 / dsh plugin add 只把包挂进 profile 平面，不建这个预设；人设本体只认预设平面里那一行。'),
-        okNow ? null : h('div', { className: 'wpr-statusline wpr-mt6' },
-          h('button', {
-            className: 'wpr-btn wpr-primary', type: 'button', disabled: st.busy, onClick: run,
-          }, st.busy ? '正在建…' : (p.installed ? '修正这个预设' : '建人设预设')),
-          h(CheckBox, {
-            checked: asDefault, disabled: st.busy, label: '同时设为新任务默认', onChange: setAsDefault,
-          })),
-        okNow ? null : h('div', { className: 'wpr-note' },
+        !known
+          ? h('div', { className: 'wpr-alert' },
+            '面板没拿到宿主半身的人设状态 —— 这**不代表**你没有预设，也不代表人设没生效。'
+            + '常见原因：宿主半身还是旧版（插件代码改完必须重启宿主才加载），或插件刚启动、路由还没注册完。'
+            + '重启宿主或刷新页面之后，点一次下面的「重新检查」。')
+          : (okNow
+            ? h('div', { className: 'wpr-alert wpr-ok' },
+              st.done ? (st.done + ' —— 新会话生效')
+                : ('✓ 已就绪：' + (strOf(p.displayName) || strOf(p.id) || '自定义人设')
+                  + (p.isDefault ? ' · 新任务默认' : (p.otherDefault ? ' · 新任务默认是「' + strOf(p.defaultPresetId) + '」' : ' · 新任务默认未设'))))
+            : h('div', { className: 'wpr-alert wpr-bad' },
+              p.installed
+                ? '⚠ 有这个预设目录，但里面没有 whale-persona 那一行（可能指向旧包名，或被人改过）'
+                : '✗ 还没有 Agent 预设 —— 人设本体不会生效（装的是**空壳**：包在、面板在、人设不在）')),
+        !known ? null : (okNow ? null : h('div', { className: 'wpr-note' },
+          '插件市场 / dsh plugin add 只把包挂进 profile 平面，不建这个预设；人设本体只认预设平面里那一行。')),
+        !known
+          ? h('div', { className: 'wpr-statusline wpr-mt6' },
+            h('button', {
+              className: 'wpr-btn', type: 'button',
+              onClick: function () { if (typeof props.onRefresh === 'function') props.onRefresh(); },
+            }, '重新检查'))
+          : (okNow ? null : h('div', { className: 'wpr-statusline wpr-mt6' },
+            h('button', {
+              className: 'wpr-btn wpr-primary', type: 'button', disabled: st.busy, onClick: run,
+            }, st.busy ? '正在建…' : (p.installed ? '修正这个预设' : '建人设预设')),
+            h(CheckBox, {
+              checked: asDefault, disabled: st.busy, label: '同时设为新任务默认', onChange: setAsDefault,
+            }))),
+        !known ? null : (okNow ? null : h('div', { className: 'wpr-note' },
           '基座 = ' + (strOf(p.baseId) || 'standard') + '（跟着你当前的默认预设走，不替你换模式）；'
-          + (p.baseAvailable === false ? '⚠ 这台机器上找不到基座目录 —— 只能按宿主 preset 目录手工拷一份。' : '找不到基座时会在这里报出来，不会偷偷写半个。')),
-        h('div', { className: 'wpr-note wpr-mono' }, strOf(p.dir)),
-        h('div', { className: 'wpr-note' },
-          '预设改动**新会话**才挂上：新建任务时在 Agent 预设里选它；设成新任务默认则自动用它。'),
+          + (p.baseAvailable === false ? '⚠ 这台机器上找不到基座目录 —— 只能按宿主 preset 目录手工拷一份。' : '找不到基座时会在这里报出来，不会偷偷写半个。'))),
+        known ? h('div', { className: 'wpr-note wpr-mono' }, strOf(p.dir)) : null,
+        known ? h('div', { className: 'wpr-note' },
+          '预设改动**新会话**才挂上：新建任务时在 Agent 预设里选它；设成新任务默认则自动用它。') : null,
         st.err ? h('div', { className: 'wpr-alert wpr-bad wpr-mt6' }, st.err) : null);
     }
 
@@ -1495,7 +1518,9 @@ window.__ModuleLoader__.load({
 
       // ② Agent 预设（0.17.3）—— 紧跟状态条：它决定"人设在这台机器上到底生效没有"，
       // 比下面任何一条配置都靠前（配置写得再对，预设没建也白搭）。
-      body.push(h(AgentPresetCard, { key: 'agentpreset', preset: d.preset }));
+      body.push(h(AgentPresetCard, {
+        key: 'agentpreset', preset: d.preset, presetKnown: d.presetKnown, onRefresh: cb.onRefresh,
+      }));
 
       // ② 我是谁 —— 自称两档 / 按模型指定自称 / 称呼 / 立场与后缀
       body.push(h(GroupTitle, { key: 'g1', text: '我是谁', hint: '自称 · 称呼 · 立场' }));
@@ -1969,6 +1994,7 @@ window.__ModuleLoader__.load({
           ByModelCard: ByModelCard,
           StyleCard: StyleCard,
           PresetCard: PresetCard,     // 预设卡（0.10.0）：测试要能拿真数据渲染它（桩里 useEffect 不跑）
+          AgentPresetCard: AgentPresetCard,   // Agent 预设卡（0.17.3）：三态文案（就绪 / 缺 / 未取到）要被钉住
           // 静态预览页（data/ui-design/preview-panel.mjs）要用：整页树 + 样式字符串 + 各张卡
           css: CSS,
           panelView: panelView,

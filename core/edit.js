@@ -107,8 +107,10 @@ export function configWarnings(cfg, model) {
       const pending = readPending(resolveInbox(m.inboxPath))
       const proposed = pending.filter((e) => e.status === STATUS.proposed).length
       const legacy = pending.filter((e) => e.status === STATUS.legacy).length
-      if (proposed) out.push('收件箱 ' + all.length + ' 行里有 ' + proposed + ' 条待确认候选：不注入。确认后才生效 —— node scripts/memory.mjs status 看序号，再 confirm <序号>。')
-      if (legacy && m.requireConfirm !== false) out.push('收件箱里有 ' + legacy + ' 条老格式条目（没有 status）：0.8.0 起默认不注入。用 node scripts/memory.mjs adopt 一次性确认，或把 memory.requireConfirm 设为 false 放行。')
+      // 「在仓目录下跑」不是啰嗦：2026-09-29 实测用户在别处跑 node scripts/memory.mjs，
+      // 报的是「找不到脚本」，命令**静默无效**、收件箱一个字节没变，人还以为改成功了。
+      if (proposed) out.push('收件箱 ' + all.length + ' 行里有 ' + proposed + ' 条待确认候选：不注入。确认后才生效 —— 在 whale-persona 仓目录下跑 node scripts/memory.mjs status 看序号，再 confirm <序号>。')
+      if (legacy && m.requireConfirm !== false) out.push('收件箱里有 ' + legacy + ' 条老格式条目（没有 status）：0.8.0 起默认不注入。在仓目录下用 node scripts/memory.mjs adopt 一次性确认，或把 memory.requireConfirm 设为 false 放行。')
     } catch { /* 收件箱读不动就不提示 */ }
   }
   if (m.enabled === true && m.capture === 'always' && m.inbox !== false) {

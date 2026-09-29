@@ -441,6 +441,35 @@ t('PR0b 预设行渲染：标签 / 四颗按钮 / 目录行都在:', presetCardT
 t('PR0b 边界写清楚了:', presetCardText.indexOf('不含长期记忆') >= 0 && presetCardText.indexOf('不会自动启用') >= 0
   && presetCardText.indexOf('不支持 PNG 卡') >= 0)
 
+/* ── 2026-09-29 追加：Agent 预设卡的「三态」与字段透传（真机被红字吓到的那次）──────────
+ * 触发来源：用户在设置里看到「✗ 还没有 Agent 预设」，而宿主半身同一时刻报 installed:true。
+ * 两处根因：① normalize 的显式白名单漏搬 preset —— 面板永远读不到真实状态（与 memory.inboxPending 同一类坑）；
+ *          ② 拿不到时按"缺"渲染，于是把"没拿到"说成了"你没有"。
+ * 判据：字段必须透传；拿不到时页面说的是"没拿到"，不许出现"还没有 Agent 预设"，也不给写盘按钮。
+ */
+const apReady = flatText(H.AgentPresetCard({
+  preset: { id: 'whale-persona', installed: true, hasPersonaRow: true, displayName: '自定义人设', isDefault: true, dir: 'D:/home/.agent-presets/whale-persona' },
+  presetKnown: true,
+}))
+t('AP1 就绪态：说"已就绪 + 新任务默认"，且不出现"还没有"',
+  apReady.indexOf('已就绪：自定义人设') >= 0 && apReady.indexOf('新任务默认') >= 0
+  && apReady.indexOf('还没有 Agent 预设') < 0)
+
+const apMissing = flatText(H.AgentPresetCard({
+  preset: { id: 'whale-persona', installed: false, hasPersonaRow: false }, presetKnown: true,
+}))
+t('AP2 真缺才说缺，并给一键建入口', apMissing.indexOf('还没有 Agent 预设') >= 0 && apMissing.indexOf('建人设预设') >= 0)
+
+const apUnknown = flatText(H.AgentPresetCard({ preset: {}, presetKnown: false }))
+t('AP3 拿不到状态：只敢说"没拿到"，不谎称"没有"，也不给写盘按钮',
+  apUnknown.indexOf('没拿到宿主半身') >= 0 && apUnknown.indexOf('状态未取到') >= 0
+  && apUnknown.indexOf('还没有 Agent 预设') < 0 && apUnknown.indexOf('建人设预设') < 0)
+
+t('AP4 normalize 透传 preset / presetKnown（白名单漏字段就是面板瞎说的根因）',
+  !!wholeData.presetKnown && !!wholeData.preset && wholeData.preset.id === 'whale-persona')
+t('AP4b 此刻确实还没建 preset → 整页那行红字是真话（不是误报）',
+  wholeText.indexOf('还没有 Agent 预设') >= 0)
+
 // 先让配置回到合法状态（前面的坏 JSON 用例可能把它写坏了）
 writeFileSync(CFG, JSON.stringify({
   enabled: true, thinkingLanguage: 'zh-CN',
