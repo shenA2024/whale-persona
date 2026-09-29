@@ -163,17 +163,33 @@ t('DP3 profile 平面已就绪 → kept，且不动宿主组合',
   ip.ok === true && ip.action === 'kept' && read(PATCH).indexOf('preset-whale') > 0)
 const sd = setDefaultPreset({ home: home3 })
 t('DP4 默认已是它 → 幂等不写', sd.ok === true && sd.changed === false)
-// 缺人设行：明说做不到自动落盘，给手工步骤，且一个字节都不改宿主的组合
+// 缺人设行：0.17.7 起不再"只读 + 报路"，而是**真写进去** —— 判据跟着变成
+// 「纯追加 / 写前备份 / 块形状照真机 / 写完读数就绪 / 再点幂等」这五件事。
 // （要连它的 name 行一起删 —— 只删 `- id:` 那行的话，剩下的 name: 'whale-persona' 仍会被认出来）
 writeFileSync(PATCH, read(PATCH).replace("          - id: whale-persona\n            name: 'whale-persona'\n", ''), 'utf8')
 const before = read(PATCH)
-const ip2 = installPreset({ home: home3 })
-t('DP5 缺人设行 → action=manual（不假装能一键建）', ip2.ok === false && ip2.action === 'manual')
-t('DP5b 给的是照抄能用的步骤（含 insert 写法与 selectedDefault）',
-  ip2.messages.some((m) => m.indexOf('- insert:') >= 0) && ip2.messages.some((m) => m.indexOf('selectedDefault') >= 0))
-t('DP5c 一个字节都没写宿主组合', read(PATCH) === before)
 const sd2 = setDefaultPreset({ home: home3 })
-t('DP6 人设没挂上时不改默认（顺序对了才写）', sd2.ok === false && sd2.reason.indexOf('先挂上') >= 0)
+t('DP5 人设没挂上时不改默认（顺序：先挂上再设默认）', sd2.ok === false && sd2.reason.indexOf('先挂上') >= 0)
+const ip2 = installPreset({ home: home3 })
+t('DP5b 缺人设行 → 真写进 profile 组合（action=created，人设行来自基座克隆）',
+  ip2.ok === true && ip2.action === 'created' && ip2.swapped === true)
+const after5 = read(PATCH)
+t('DP5c 纯追加：原有内容逐字保留在文件开头（绝不重排既有行）', after5.indexOf(before) === 0)
+t('DP5d 写前备份了原文（备份文件内容 === 写前的组合）',
+  !!ip2.backup && existsSync(ip2.backup) && readFileSync(ip2.backup, 'utf8') === before)
+t('DP5e 追加的块照真机形状：insert + config.id + 10 格缩进的人设行 + 连工具行一起搬',
+  after5.indexOf('- insert:', before.length) >= 0
+  && after5.indexOf('        id: ' + PRESET_ID, before.length) >= 0
+  && after5.indexOf('          - id: ' + PRESET_ID, before.length) >= 0
+  && after5.slice(before.length).indexOf('@deepseek-ai/dsh-tools') >= 0)
+t('DP5f 写入后读数立刻变就绪（不用刷两次）', presetState(home3).hasPersonaRow === true && presetState(home3).presetIdInPlane === PRESET_ID)
+const ip3 = installPreset({ home: home3 })
+t('DP5g 再点一次幂等：kept，不会再追加第二块',
+  ip3.ok === true && ip3.action === 'kept' && read(PATCH) === after5)
+const sd3 = setDefaultPreset({ home: home3 })
+t('DP5h 组合里已有别的默认（selectedDefault: whale）→ 挂上人设也不抢它',
+  sd3.ok === false && sd3.changed === false && sd3.reason.indexOf('已有默认') >= 0
+  && read(PATCH).indexOf('selectedDefault: whale') > 0)
 process.argv = realArgv
 
 console.log('---- preset-install 读数 ----')

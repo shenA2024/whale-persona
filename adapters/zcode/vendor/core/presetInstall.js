@@ -407,14 +407,132 @@ function manualHints(home, base) {
   ]
 }
 
+/** profile 平面写不进去时的兜底：把照抄能用的步骤原样端出来 */
+function profileManualHints(file) {
+  return [
+    '桌面版不认 .agent-presets 目录，预设写在 profile 组合里。手工做法：',
+    '  1) 打开 ' + file,
+    '  2) 末尾追加一个 insert 块（裸行会报 patch: entry not found，必须走 insert）：',
+    '     - insert:',
+    '         - id: preset-' + PRESET_ID,
+    '           name: "@deepseek-ai/dsh-agent-preset"',
+    '           config:',
+    '             id: ' + PRESET_ID,
+    '             name: ' + PRESET_NAME,
+    '             description: 基于 standard 模式 + whale-persona 人设引擎',
+    '             order: 9',
+    '             plugins:',
+    '               - id: ' + PRESET_ID,
+    "                 name: '" + PERSONA_PKG + "'",
+    '     （plugins 里还要把基座组合的其余插件行一并搬进来 —— 只挂人设行＝这个预设下没有工具）',
+    '  3) 在 agent-preset-registry 段把 selectedDefault 写成这个 preset 的 config.id',
+  ]
+}
+
+/** 把基座 preset 的文本换成本插件的：`- id: persona` 那两行换成人设行（纯文本版，不写盘） */
+function swapPersonaRowsInText(text) {
+  const re = /^(\s*)- id: persona\s*\r?\n(\s*)name:\s*['"]?@deepseek-ai\/dsh-persona['"]?\s*$/m
+  if (!re.test(text)) return { swapped: false, text }
+  return {
+    swapped: true,
+    text: text.replace(re, (_m, i1, i2) => i1 + '- id: ' + PRESET_ID + '\n' + i2 + "name: '" + PERSONA_PKG + "'"),
+  }
+}
+
 /**
- * profile 平面（桌面版）的安装语义：**只读 + 报路，不替用户改宿主组合**。
+ * 造出要追加进 profile 组合的那个 `- insert:` 块。
  *
- * 为什么不自动插块：桌面版把预设写进 profile 组合（`- insert: [...]`），而那份组合里挂的不只是人设行，
- * 还有整个工具面（shell、文件、instructions、子代理模型选择…）。2026-09-25 那次是人工把整套组合搬进去的；
- * 自动搬要保证"搬进来的每一行在这个版本的桌面版里都能解析"，而那需要**能重启桌面版**的验证面 ——
- * 本插件没有，冒然插块的代价是宿主起不来（会话全断）。所以这里明说做不到，并给出可照做的确切步骤，
- * 而不是假装能一键搞定。
+ * 内容是**从基座 preset 克隆**的，不是手写模板：桌面版 presets 里那一串插件行就是"这个预设下加载什么"，
+ * 只挂人设行＝那个预设下没有工具（连 shell、文件都点不动），所以必须连工具面一起搬
+ * —— 2026-09-25 人工搬的那份也是这么来的。
+ * 缩进按目标位置算：`- insert:`(0) → `- id: preset-*`(4) → `config:`(6) → `plugins:`(8) → 插件行(10)。
+ */
+function buildProfileInsertBlock(home) {
+  const b = resolveBase({ home })
+  const src = basePresetDir(home, b.id)
+  const baseFile = src ? path.join(src, 'agent.cordis.yml') : ''
+  if (!baseFile || !existsSync(baseFile)) {
+    return {
+      ok: false,
+      baseId: b.id,
+      baseWhy: b.why,
+      messages: ['找不到基座 preset「' + b.id + '」的 agent.cordis.yml（' + (baseFile || '无候选根）') + '），没动你的 profile 组合。', ...profileManualHints('')],
+    }
+  }
+  let baseText = ''
+  try { baseText = readFileSync(baseFile, 'utf8') } catch { baseText = '' }
+  const sw = swapPersonaRowsInText(baseText)
+  if (!sw.swapped) {
+    return {
+      ok: false,
+      baseId: b.id,
+      baseWhy: b.why,
+      messages: ['基座 preset「' + b.id + '」里没有 `- id: persona` 行，不敢猜该怎么挂人设，没动你的 profile 组合。', ...profileManualHints('')],
+    }
+  }
+  const lines = sw.text.replace(/\r\n/g, '\n').split('\n')
+  const firstItem = lines.findIndex((l) => /^\s*- id: \S/.test(l))
+  if (firstItem < 0) {
+    return { ok: false, baseId: b.id, baseWhy: b.why, messages: ['基座 preset 里解析不出插件行，没动你的 profile 组合。', ...profileManualHints('')] }
+  }
+  const baseIndent = /^(\s*)/.exec(lines[firstItem])[1].length
+  const delta = 10 - baseIndent
+  const shifted = lines.map((l) => {
+    if (l.replace(/\s+$/, '') === '') return ''
+    return (delta > 0 ? ' '.repeat(delta) : '') + (delta < 0 ? l.slice(-delta) : l)
+  })
+  while (shifted.length && shifted[shifted.length - 1] === '') shifted.pop()
+  const head = [
+    '',
+    '# ── ' + PRESET_ID + ' 的 agent preset ──────────────────────────────────────────',
+    '# 桌面版的预设＝这个 profile 组合里的一行，位置必须在文件末尾的 insert 列表里',
+    '# （裸行会被判成 `patch: entry not found`）。这段由 whale-persona 插件写入；',
+    '# 要撤掉：删掉这一段，或把同目录的 cordis.patch.yml.bak-<时间戳> 改名回 cordis.patch.yml。',
+    '- insert:',
+    '    - id: preset-' + PRESET_ID,
+    '      name: "@deepseek-ai/dsh-agent-preset"',
+    '      config:',
+    '        id: ' + PRESET_ID,
+    '        name: ' + PRESET_NAME,
+    '        description: 基于 ' + b.id + ' 模式 + ' + PERSONA_PKG + ' 人设引擎',
+    '        order: 9',
+    '        plugins:',
+  ]
+  return { ok: true, baseId: b.id, baseWhy: b.why, block: head.concat(shifted).join('\n'), baseFile }
+}
+
+/**
+ * 写后自检：能抓到的结构错都在这里。抓不到"某个字段名在这个桌面版版本里不被认"（那要宿主启动才知道），
+ * 所以调用方必须把 .bak 路径一并告诉用户。
+ * @returns {string} 空串＝通过，否则是不过的原因
+ */
+function verifyPatchWrite(next, before) {
+  if (next.indexOf(before) !== 0) return '原有内容被动过（不是纯追加）—— 已回滚'
+  const p = parsePatchPresets(next)
+  if (!p.registryPresent) return 'agent-preset-registry 段不见了 —— 已回滚'
+  const mine = p.presets.find((x) => x.hasPersonaRow)
+  if (!mine) return '写完解析不出挂着人设的 preset 行 —— 已回滚'
+  const added = next.slice(before.length)
+  if (/\t/.test(added)) return '新增部分含制表符（YAML 会解析失败）—— 已回滚'
+  for (const l of added.split('\n')) {
+    if (l.replace(/\s+$/, '') === '') continue
+    const ind = /^(\s*)/.exec(l)[1].length
+    if (ind % 2 !== 0) return '新增部分有 ' + ind + ' 格缩进的行（层级不是 2 的倍数）—— 已回滚：' + JSON.stringify(l.slice(0, 60))
+  }
+  return ''
+}
+
+/**
+ * profile 平面（桌面版）的安装：往 profile 组合末尾**追加**一个 preset 块。
+ *
+ * 0.17.6 及以前这里是"只读 + 报路"。改成真写（2026-09-29 拍板）的原因是：
+ * 桌面版没有任何"插件装好人设就生效"的路径 —— 会话跑的是 registry 的 `default` 预设，
+ * 那里面没有人设行，于是市场用户装完的观感永远是「装了没用」；而"自己照面板抄一段 YAML"
+ * 对绝大多数用户等于没做。桌面版自己就是用 `- insert:` 装东西的，这段写法与真机跑通的形态同构。
+ *
+ * 三道闸：① 只在确无 persona 行时动手、只追加不重排；② 写前整份备份；
+ * ③ 写后自检（原有内容纯追加 / registry 段在 / 人设行能解析出来 / 无 tab / 缩进是 2 的倍数），
+ * 任何一项不过就用备份回滚并把原因原文端出来。
  */
 function installInProfilePlane({ home, plane, dryRun }) {
   const st = profilePlaneState(home, plane)
@@ -427,24 +545,53 @@ function installInProfilePlane({ home, plane, dryRun }) {
       : '默认 preset 目前是「' + st.defaultPresetId + '」')
     return { ok: true, action: 'kept', dir: file, baseId: '', baseWhy: '', swapped: false, messages }
   }
-  if (dryRun) messages.push('DRY: profile 平面下这个动作本来就是只读的，不会改任何文件')
-  messages.push('桌面版不认 .agent-presets 目录，预设写在 profile 组合里。手工做法：')
-  messages.push('  1) 打开 ' + file)
-  messages.push('  2) 末尾追加一个 insert 块（裸行会报 patch: entry not found，必须走 insert）：')
-  messages.push('     - insert:')
-  messages.push('         - id: preset-' + PRESET_ID)
-  messages.push('           name: "@deepseek-ai/dsh-agent-preset"')
-  messages.push('           config:')
-  messages.push('             id: ' + PRESET_ID)
-  messages.push('             name: ' + PRESET_NAME)
-  messages.push('             description: 基于 standard 模式 + whale-persona 人设引擎')
-  messages.push('             order: 9')
-  messages.push('             plugins:')
-  messages.push('               - id: ' + PRESET_ID)
-  messages.push("                 name: '" + PERSONA_PKG + "'")
-  messages.push('     （plugins 里还要把基座组合的其余插件行一并搬进来 —— 只挂人设行＝这个预设下没有工具）')
-  messages.push('  3) 在 agent-preset-registry 段把 selectedDefault 写成这个 preset 的 config.id')
-  return { ok: false, action: 'manual', dir: file, baseId: '', baseWhy: '', swapped: false, messages }
+  if (!file || !existsSync(file)) {
+    messages.push('这个 profile 里没有组合文件（' + (file || '未探测到') + '），没动任何东西。')
+    messages.push(...profileManualHints(file || ''))
+    return { ok: false, action: 'manual', dir: file, baseId: '', baseWhy: '', swapped: false, messages }
+  }
+  let before = ''
+  try { before = readFileSync(file, 'utf8') } catch { before = '' }
+  const built = buildProfileInsertBlock(home)
+  if (!built.ok) return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: false, messages: built.messages }
+  if (/^[ \t]*- insert:/m.test(before)) {
+    // 已经有 insert 块了：追加第二个也是合法的（列表元素），但先报出来，用户知道文件里有两段。
+    messages.push('注意：这份组合里已经有一个 insert 块，下面这段会追加成第二个（同样是列表元素，合法）。')
+  }
+  const sep = before.endsWith('\n') ? '' : '\n'
+  const next = before + sep + built.block + '\n'
+  const bad = verifyPatchWrite(next, before)
+  if (dryRun) {
+    messages.push('DRY: 会在末尾追加一个 preset 块（共 ' + built.block.split('\n').length + ' 行），不会写盘。')
+    messages.push('DRY: 追加后的自检结果：' + (bad ? bad.replace(' —— 已回滚', '') : '通过'))
+    return { ok: !bad, action: bad ? 'manual' : 'dry', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
+  }
+  const bak = file + '.bak-' + new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14)
+  try { writeFileSync(bak, before, 'utf8') } catch {
+    messages.push('备份失败（' + bak + '），没写你的组合。')
+    return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: false, messages }
+  }
+  if (bad) {
+    messages.push('自检没通过：' + bad)
+    messages.push('没写盘（自检是在写之前跑的），你的组合一个字节没变。')
+    messages.push(...profileManualHints(file))
+    return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
+  }
+  try { writeFileSync(file, next, 'utf8') } catch (e) {
+    messages.push('写盘失败：' + String(e && e.message ? e.message : e))
+    return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
+  }
+  const after = verifyPatchWrite(readFileSync(file, 'utf8'), before)
+  if (after) {
+    try { writeFileSync(file, before, 'utf8') } catch { messages.push('⚠ 回滚也失败了，请手工把 ' + bak + ' 改名回 cordis.patch.yml') }
+    messages.push('写盘后自检没通过：' + after)
+    return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
+  }
+  messages.push('preset 「' + PRESET_NAME + '」已写入 profile 组合：' + file)
+  messages.push('它是从基座 preset「' + built.baseId + '」克隆的完整工具面 + 人设行（preset id = ' + PRESET_ID + '）。')
+  messages.push('备份：' + bak + '  —— 万一宿主起不来，把它改名回 ' + path.basename(file) + ' 即可。')
+  messages.push('下一步：点「设为新任务默认」，否则新会话还是走 registry 的默认预设。重启宿主后生效。')
+  return { ok: true, action: 'created', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages, backup: bak }
 }
 
 /**

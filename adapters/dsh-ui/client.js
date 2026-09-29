@@ -836,7 +836,8 @@ window.__ModuleLoader__.load({
             function () { return { ok: false, j: {} }; });
         }).then(function (res) {
           var j = res.j || {};
-          // 桌面版：core 明说做不到自动落盘，回 action='manual' + 手工步骤 —— 这是提示、不是失败
+          // action='manual'：core 没能写进去（缺基座 / 自检不过 / 写盘失败），端出照抄能用的步骤。
+          // 这是"没做成但知道路"，不是静默失败 —— 原样铺开，不伪装成成功。
           if (j.action === 'manual') {
             setSt({ busy: false, err: '', done: '', hint: arrOf(j.messages) });
             return;
@@ -845,11 +846,13 @@ window.__ModuleLoader__.load({
             setSt({ busy: false, err: strOf(j.error) || '建 preset 失败（宿主日志里有原因）', done: '' });
             return;
           }
-          var lines = arrOf(j.messages).slice(-1);
+          // 全部 messages 都摆出来（写入那次含备份路径与"下一步"），别只留最后一句 ——
+          // 用户要拿的正是那个备份文件名：万一宿主起不来，靠它回滚。
+          var lines = arrOf(j.messages).map(function (m) { return strOf(m); });
           var dflt = j.setDefault;
           // 用户已经有别的默认预设时 core 会拒绝（不抢他的选择）—— 拒绝原因原样显示，不当成功说
           if (dflt && dflt.ok === false) lines.push('没改新任务默认：' + strOf(dflt.reason));
-          setSt({ busy: false, err: '', done: lines.join(' · ') });
+          setSt({ busy: false, err: '', done: lines[0] || '已写入', hint: lines });
         }, function (e) {
           setSt({ busy: false, err: messageOf(e), done: '' });
         });
@@ -881,7 +884,8 @@ window.__ModuleLoader__.load({
         !known ? null : (okNow ? null : h('div', { className: 'wpr-note' },
           isProfilePlane
             ? ('这台宿主是桌面版：它不认 .agent-presets 目录，预设写在 profile 组合里（'
-              + (strOf(p.patchFile) || strOf(p.dir)) + '）—— 那一行得手工加，下面是照抄就能用的步骤。')
+              + (strOf(p.patchFile) || strOf(p.dir)) + '）。点下面的按钮会写进去 —— 内容是'
+              + '从基座预设克隆的整份工具面 + 人设行，写前整份备份、写后自检，不过就回滚。')
             : '插件市场 / dsh plugin add 只把包挂进 profile 平面，不建这个预设；人设本体只认预设平面里那一行。')),
         !known
           ? h('div', { className: 'wpr-statusline wpr-mt6' },
@@ -892,7 +896,7 @@ window.__ModuleLoader__.load({
           : (okNow ? null : h('div', { className: 'wpr-statusline wpr-mt6' },
             h('button', {
               className: 'wpr-btn wpr-primary', type: 'button', disabled: st.busy, onClick: run,
-            }, st.busy ? '正在建…' : (isProfilePlane ? '看手工步骤' : (p.installed ? '修正这个预设' : '建人设预设'))),
+            }, st.busy ? '正在写…' : (isProfilePlane ? '写入这个 profile' : (p.installed ? '修正这个预设' : '建人设预设'))),
             h(CheckBox, {
               checked: asDefault, disabled: st.busy, label: '同时设为新任务默认', onChange: setAsDefault,
             }))),

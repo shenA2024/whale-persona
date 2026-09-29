@@ -499,9 +499,9 @@ const apProfileMissing = flatText(H.AgentPresetCard({
   },
   presetKnown: true,
 }))
-t('AP6 profile 平面缺人设行：说清是"这个 profile 里没有"，按钮改成看手工步骤',
+t('AP6 profile 平面缺人设行：说清是"这个 profile 里没有"，按钮改成写进去',
   apProfileMissing.indexOf('这个 profile 里还没有挂着 whale-persona 的预设') >= 0
-  && apProfileMissing.indexOf('看手工步骤') >= 0 && apProfileMissing.indexOf('不认 .agent-presets 目录') >= 0)
+  && apProfileMissing.indexOf('写入这个 profile') >= 0 && apProfileMissing.indexOf('不认 .agent-presets 目录') >= 0)
 
 /* AP7（2026-09-29 真机截图暴露）：手工步骤里的 YAML 缩进必须活到浏览器里 ——
  * 逐行用 div 渲染会被 HTML 折叠成顶格，用户照抄下去就是一份 bad YAML（截图里那个 insert 块全是顶格的）。
