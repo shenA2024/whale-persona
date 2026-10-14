@@ -625,4 +625,16 @@ node scripts/render-preview.mjs --config examples/empty-config.json
 - 只发布**格式**：私人配置、关系口径、具体人设正文 MUST NOT 进入本文件或其示例；
 - 参考实现的对应关系：格式条款 → `core/` 源码位置 → `tests/` 里钉住它的测试。
 
+## 14. 连续性与证据扩展（0.18.0）
+
+事实行、`supersede` 行和手工条目 MAY 携带 `source`（`user` / `assistant` / `document` / `system` / `tool` / `mixed`）、`basis`（`direct` / `reported` / `observed` / `inferred` / `mixed`）、`confidence`（`high` / `medium` / `low`）。可选短文本 `sourceRef`、`condition`、`notApplicable`、`topic` 折叠换行、最多 500 字符。这些是证据数据，MUST NOT 提升确认状态或授予修改人格的权力。来源与依据不随替代自动继承；旧记录缺失值维持缺失。
+
+`scope` MAY 包含 `projects`（非空项目目录名数组）、`contexts`（非空上下文数组）、`validFrom` 与 `validUntil`（带明确时区的 ISO 时间）。未写条件保持原行为；写入未知键、错误类型、空数组或无时区时间时 MUST 返回 `DEFER`，不得放宽为全局。项目名按当前工作目录末段忽略大小写精确匹配；上下文按调用方显式传入值匹配，缺失则延后；时间采用含起点、不含终点的区间。过期或条件不符返回 `REJECT`；条件匹配返回 `ACCEPT`。自然语言条件不作机械语义判定。核心记忆免排名额度，但 MUST 通过条件检查。DSH 未提供上下文时，带上下文条件的条目不会注入。
+
+`status:"proposed"` 的替代针对已确认条目时，MUST 保留旧条目和候选直到候选确认。确认后移走旧条目；否决候选保留旧条目。物理文件仍只追加。候选修改原文 MUST NOT 自动继承旧原文的来源与验证标签；未明确更新的适用范围继续沿用。
+
+`WHALE_PERSONA_CONFIG` 是显式配置路径，其目录同时决定默认收件箱位置；优先于旧 DSH 定位链。Codex MUST 要求绝对配置路径，默认独立于 DSH；读取损坏时返回 `unavailable`，MUST NOT 静默用旧身份。其四个 MCP 工具没有写入或确认权限。旧 DSH 的显式老格式放行不影响 Codex：Codex 收件箱只载入已确认的记忆。
+
+连续性目录 id 为 `manual:` 或 `inbox:` 加规范化条目 JSON 的 SHA-256，原文或元数据变化后旧 id 不再可读。人格、契约、适用手工条目和核心记忆常驻；普通记录默认最多 8 条，目录默认最多 60 条；搜索使用中文双字和英文词面重叠。`reviewGroups` 标出同主题的不同适用记录，MUST NOT 被当作已经证明的矛盾。身份和上下文指纹、自检报告都是当前读取结果，不证明主观体验继承，也不保证宿主或模型每次都会加载。
+
 MIT © 2026 shenA2024

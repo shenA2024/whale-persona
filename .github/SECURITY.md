@@ -27,6 +27,7 @@ https://github.com/shenA2024/whale-persona/security/advisories/new
 
 | 生产文件 | 写什么 | 何时写 |
 |---|---|---|
+| `scripts/install-codex.mjs` | 用户显式选择的 Codex 目录中的 `config.toml`、`AGENTS.md`、`skills/whale-persona/SKILL.md` 和 `runtime.json`；不存在时在独立私有位置创建空配置；修改前的 `.bak-whale-*` 备份 | 仅主动执行 Codex 安装命令；支持 `--dry-run`；失败回滚已改文件 |
 | `core/store.js` | `$DSH_HOME/whale-persona/config.json`（默认；旧布局 `whale-suite/` 存在时沿用）：骨架与保存 | 首次运行、设置面板 / 本地编辑器保存时 |
 | `core/capture.js` | 同目录 `session-flags.json`（会话级 `/memory` 开关） | 你切换会话收口开关时 |
 | `core/lastModel.js` | 同目录 `last-model.json`（宿主真实模型 id；纯本机元数据，不含人设正文） | 段求值时记一次；`DSH_WHALE_LAST_MODEL=off` 可彻底关闭 |

@@ -731,4 +731,16 @@ Stated honestly, not pretended away:
 - correspondence in the reference implementation: a spec clause → the `core/` source location → the
   test in `tests/` that pins it.
 
+## 14. Continuity and evidence extension (0.18.0)
+
+Fact rows, `supersede` rows and manual entries MAY carry `source` (`user` / `assistant` / `document` / `system` / `tool` / `mixed`), `basis` (`direct` / `reported` / `observed` / `inferred` / `mixed`), and `confidence` (`high` / `medium` / `low`). Optional short text fields `sourceRef`, `condition`, `notApplicable`, and `topic` fold newlines and are limited to 500 characters. These are evidence data and MUST NOT change confirmation status or grant persona-editing authority. Replacement rows do not inherit source or basis labels; missing evidence remains missing.
+
+`scope` MAY contain `projects` (a nonempty project-basename array), `contexts` (a nonempty context array), and `validFrom` / `validUntil` (ISO timestamps with an explicit zone). Missing scope preserves old behavior. Unknown keys, wrong types, empty arrays, or timestamps without zones MUST produce `DEFER`, never broaden the record to global scope. Project basenames match the current workspace case-insensitively and exactly; context matches the caller's explicit value, deferring when unavailable; time intervals include the start and exclude the end. Expired or mismatched records produce `REJECT`; a matching scope produces `ACCEPT`. Free-text conditions are not mechanically interpreted. Core records bypass ranking limits but MUST pass applicability checks. DSH excludes context-scoped records when the host does not provide that context.
+
+A `status:"proposed"` replacement of a confirmed row MUST keep the original and candidate until the candidate is confirmed. Approval retires the original; rejection preserves it. The physical file remains append-only. Changed text MUST NOT inherit the original's source or verification labels automatically; applicability scope is retained unless explicitly updated.
+
+`WHALE_PERSONA_CONFIG` specifies the config file and its directory specifies the default inbox; it precedes the older DSH locator chain. Codex MUST require an absolute config path, defaulting to a separate private location. Broken configuration returns `unavailable` and MUST NOT silently reuse a stale identity. Its four MCP tools have no write or confirmation authority. Codex includes only confirmed memory rows regardless of the older DSH legacy opt-in.
+
+Continuity ids consist of `manual:` or `inbox:` followed by the SHA-256 of the normalized entry JSON; changed content or metadata invalidates the old id. Persona, agreements, applicable manual entries and core records remain resident. Ordinary records default to eight selected rows, and the directory to sixty rows. Search uses Chinese bigram and English word overlap. `reviewGroups` flag different applicable records with the same topic and MUST NOT be interpreted as a proven contradiction. Current config/context fingerprints and self-check reports do not establish subjective continuity or guarantee host loading or model compliance.
+
 MIT © 2026 shenA2024

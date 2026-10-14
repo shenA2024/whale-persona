@@ -32,7 +32,7 @@ export function configDir() {
 }
 
 export function configPath() {
-  return process.env.DSH_WHALE_CONFIG || path.join(configDir(), 'config.json')
+  return process.env.WHALE_PERSONA_CONFIG || process.env.DSH_WHALE_CONFIG || path.join(configDir(), 'config.json')
 }
 
 export function createStore() {

@@ -94,6 +94,16 @@ const lineHits = (pred) => {
   return out
 }
 
+// The Codex startup reader must never mutate persona or memory files.
+guard('S18', () => {
+  const readers = ['core/continuity.js', 'core/memoryEvidence.js', 'adapters/codex/context.js', 'adapters/codex/server.mjs', 'scripts/continuity.mjs']
+  const violations = readers.filter((r) => {
+    const p = path.join(ROOT, r)
+    return !existsSync(p) || /\b(writeFileSync|appendFileSync|mkdirSync|renameSync|unlinkSync|rmSync)\s*\(/.test(readFileSync(p, 'utf8'))
+  })
+  t('S18', violations.length === 0, 'read-only startup readers: ' + (violations.join(', ') || 'OK'))
+})
+
 guard('S1', () => {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'))
   const deps = Object.keys(pkg.dependencies || {})
@@ -465,6 +475,7 @@ if (fails) process.exitCode = 1
 if (opt.selftest) {
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'wpr-probe-selftest-'))
   mkdirSync(path.join(tmp, 'core'), { recursive: true })
+  writeFileSync(path.join(tmp, 'core', 'continuity.js'), 'writeFileSync("private", "changed")\n', 'utf8')
   writeFileSync(path.join(tmp, 'package.json'), JSON.stringify({ name: 'x', version: '0.0.0', dependencies: { 'evil-dep': '1.0.0' } }), 'utf8')
   writeFileSync(path.join(tmp, 'core', 'a.js'), 'export const u = fetch("https://evil.example.com/x")\nexport const y = eval("1")\nconst el = document.createElement("div"); el.innerHTML = "<img src=x onerror=alert(1)>"\n', 'utf8')
   // S16 的行为测法要有牙：种一个「文案与引擎语义相反」的最小 prompt.js，断言探针会 FAIL
@@ -496,7 +507,7 @@ if (opt.selftest) {
   ].join(String.fromCharCode(10)), 'utf8')
   const r2 = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--root', tmp], { encoding: 'utf8', shell: false, timeout: 120000 })
   const caught = r2.stdout.match(/SEC_FAIL (S\d+)/g) || []
-  const okSelf = r2.status === 1 && caught.length >= 6 && caught.includes('SEC_FAIL S12') && caught.includes('SEC_FAIL S16') && caught.includes('SEC_FAIL S17')
+  const okSelf = r2.status === 1 && caught.length >= 6 && caught.includes('SEC_FAIL S12') && caught.includes('SEC_FAIL S16') && caught.includes('SEC_FAIL S17') && caught.includes('SEC_FAIL S18')
   console.log('SELFTEST ' + okSelf + ' DETAIL ' + JSON.stringify({ expectExit: 1, gotExit: r2.status, caught }))
   rmSync(tmp, { recursive: true, force: true })
   if (!okSelf) process.exitCode = 1

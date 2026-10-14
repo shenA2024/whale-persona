@@ -9,7 +9,7 @@
 
 把 AI 编码助手的**人设**变成一份可开关、可编辑、可记忆的配置：自称（按模型分档）、对用户的称呼、
 关系立场、性格正文、逐条可勾选的工作契约、思维链语言，以及**带代码级确认闸门**的长期记忆。
-一份 `config.json` + 一个收件箱文件，**DSH 与 ZCode 两个宿主共用同一个人设**。
+一份私有 `config.json` + 一个收件箱文件，可接入 **DeepSeek Harness 与 Codex**；每条记忆线可使用独立配置。ZCode 保留历史适配器。
 0.12.0 起还带一层**条件反射**：自己写规则，命中时由插件在代码层注入一步指令（匹配不花 token），
 可选把这一步的请求瘦身、把工具裁到白名单 —— 规则是个人资产，默认**零规则**。
 > **维护状态（2026-09-19）**：主宿主是 **DeepSeek Harness**；**ZCode 适配器停止开发**（维护者 2026-09-19 拍板：
@@ -20,6 +20,19 @@ MIT · 纯 ESM · 零运行时依赖 · 不联网 · 异常一律降级为空（
 
 **English**: a persona engine for AI coding harnesses — the English guide (what it is, how to install,
 what each feature does, and which documents are authoritative) is [README.en.md](README.en.md).
+
+**0.18.0：Codex 连续性与记忆证据。** 新增开场读取、本地 CLI 兜底、四个只读 MCP 工具、来源标签与适用条件、自检和内容指纹索引。待确认的记忆替代会保留旧条目，确认后才换版。
+
+Codex 用户从这里开始（Node ≥ 20；零依赖；无需 API 密钥）：
+
+```powershell
+git clone https://github.com/shenA2024/whale-persona.git
+cd whale-persona
+node scripts/install-codex.mjs --dry-run
+node scripts/install-codex.mjs
+```
+
+填写安装命令报告的私有配置，然后重启 Codex、新开会话。已有配置加 `--config <绝对路径>`，原文件不会被改写。安装默认空白，不预设任何人的身份或关系。完整安装、故障恢复与限制见 [Codex 接入](docs/CODEX.md)；本次吸收的上游机制见 [灵枢研究记录](docs/LINGSHU_RESEARCH.md)。安装只建立加载链路，不能承诺模型在所有宿主和会话中绝不遗忘。
 
 ---
 

@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { npmCli, npmTar } from './npm-runtime.mjs'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const argv = process.argv.slice(2)
@@ -66,13 +67,6 @@ if (noWords) {
 
 // ── 打真包 ──────────────────────────────────────────────────────────────────
 /** 不经 shell 调 npm（Node ≥ 20 拒绝直接 spawn .cmd；安全探针 S3 禁 shell:true）。与 pack-release.mjs 同一手法。 */
-function npmCli() {
-  if (process.env.npm_execpath && existsSync(process.env.npm_execpath)) return process.env.npm_execpath
-  return [
-    path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-    path.join(path.dirname(process.execPath), 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-  ].find((p) => existsSync(p))
-}
 const TMP = path.join(ROOT, 'data', 'prepublish-tmp')
 rmSync(TMP, { recursive: true, force: true })
 mkdirSync(TMP, { recursive: true }) // npm pack 不会自己建目标目录
@@ -82,7 +76,8 @@ const tgz = readdirSync(TMP).filter((f) => f.endsWith('.tgz')).map((f) => path.j
 if (!tgz) { console.error('npm pack 没产出 tgz'); process.exit(1) }
 const bytes = statSync(tgz).size
 const ex = mkdtempSync(path.join(TMP, 'x-'))
-execFileSync('tar', ['-xzf', tgz, '-C', ex], { encoding: 'utf8' })
+// npm's Unicode-safe archive reader avoids Windows tar's ANSI argv/header decoding.
+npmTar().x({ file: tgz, cwd: ex, sync: true, strict: true })
 const PKG = path.join(ex, 'package')
 
 function walk(dir, base = '') {

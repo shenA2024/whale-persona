@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { npmCli, npmTar } from './npm-runtime.mjs'
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const argv = process.argv.slice(2)
@@ -39,14 +40,7 @@ const npmPack = (dir, dest) => {
   // 所以直接调 npm 自己的 JS 入口，参数走数组，一个 shell 都不经过。
   // （安全探针 S3 禁止 `exec/execSync` 与 `shell:true`；本条就是为它改的。）
   const args = ['pack', '--silent', '--pack-destination', dest]
-  const cli = process.env.npm_execpath && existsSync(process.env.npm_execpath)
-    ? process.env.npm_execpath
-    : [
-        path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-        path.join(path.dirname(process.execPath), 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-      ].find((p) => existsSync(p))
-  if (cli) return execFileSync(process.execPath, [cli, ...args], { cwd: dir, encoding: 'utf8' })
-  return execFileSync('npm', args, { cwd: dir, encoding: 'utf8' })
+  return execFileSync(process.execPath, [npmCli(), ...args], { cwd: dir, encoding: 'utf8' })
 }
 const fail = (msg) => { console.error('✗ ' + msg); process.exit(1) }
 
@@ -64,7 +58,8 @@ try {
   const tgz = path.join(outDir, name)
   if (!existsSync(tgz)) fail('npm pack 没产出文件')
 
-  const listing = sh('tar', ['-tzf', tgz]).split(/\r?\n/).filter(Boolean)
+  const listing = []
+  npmTar().t({ file: tgz, sync: true, strict: true, onentry: (entry) => listing.push(entry.path) })
   const entries = new Set(listing)
   const has = (p) => entries.has(p) || listing.some((l) => l.startsWith(p))
 

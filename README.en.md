@@ -7,6 +7,17 @@
 
 **简体中文** | English
 
+**0.18.0 adds Codex continuity.** Install with Node ≥ 20:
+
+```powershell
+git clone https://github.com/shenA2024/whale-persona.git
+cd whale-persona
+node scripts/install-codex.mjs --dry-run
+node scripts/install-codex.mjs
+```
+
+Fill your own persona in the reported private config, then restart Codex and open a new chat. To reuse an existing private config, add `--config <absolute-path>`; the installer does not rewrite it. It installs a startup pointer, four read-only MCP tools, and a management skill. Confirmed memories support optional evidence and applicability fields, content-bound ids, and an honest self-check. Pending replacements keep the confirmed original until approval. The engine remains blank by default. See [Codex setup and limits](docs/CODEX.md) and [upstream mechanism research](docs/LINGSHU_RESEARCH.md). Host loading and model compliance are not guaranteed.
+
 > **This is the English guide, not a second source of truth.** [README.md](README.md) (Chinese) and
 > [SPEC.md](SPEC.md) (Chinese) are authoritative — they are updated first, and they carry the full
 > detail: every field, the exact bytes of every injected section, every known pitfall. Translating

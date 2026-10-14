@@ -37,9 +37,11 @@
 import { readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { configDir } from './store.js'
+import { evidenceOf } from './memoryEvidence.js'
 
 /** 收件箱默认落点：与配置同目录（见 store.js 的 configDir()） */
 export function inboxFile() {
+  if (process.env.WHALE_PERSONA_CONFIG) return path.join(path.dirname(path.resolve(process.env.WHALE_PERSONA_CONFIG)), 'memory-inbox.jsonl')
   return path.join(configDir(), 'memory-inbox.jsonl')
 }
 
@@ -112,7 +114,7 @@ function parseLine(line) {
       const ref = fold(o.ref)
       const text = fold(o.text)
       if (!ref || !text) return null
-      return { op, ref, text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind), tier: normTier(o.tier) }
+      return { op, ref, text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind), tier: normTier(o.tier), ...evidenceOf(o) }
     }
     if (op === 'drop' || op === 'reject' || op === 'confirm') {
       const ref = fold(o.ref)
@@ -128,7 +130,7 @@ function parseLine(line) {
     if (op) return null // 未知 op：只跳过该行，不牵连整箱
     const text = fold(o.text)
     if (!text) return null
-    return { op: '', text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind), tier: normTier(o.tier) }
+    return { op: '', text, at: typeof o.at === 'string' ? o.at : '', tag: fold(o.tag), status: statusOf(o.status), kind: normKind(o.kind), tier: normTier(o.tier), ...evidenceOf(o) }
   } catch {
     return null // 坏行跳过，不牵连整箱
   }
@@ -142,7 +144,7 @@ export function replayInbox(lines) {
     if (!o) continue
     if (!o.op) {
       // tier 未写 = 空串（**不要**在这里兜 core：兜了就全变免限常驻，老配置的上限会失效）
-      entries.push({ text: o.text, at: o.at, tag: o.tag, status: o.status, kind: o.kind || MEMORY_KIND, tier: o.tier || '' })
+      entries.push({ text: o.text, at: o.at, tag: o.tag, status: o.status, kind: o.kind || MEMORY_KIND, tier: o.tier || '', ...evidenceOf(o) })
       continue
     }
     const i = entries.findIndex((e) => e.text === o.ref)
@@ -151,11 +153,17 @@ export function replayInbox(lines) {
       entries.splice(i, 1) // 删去：人工否决/回收，物理行仍在文件里
     } else if (o.op === 'confirm') {
       entries[i] = { ...entries[i], status: STATUS.confirmed } // 人工确认：候选转正
+      const replaces = entries[i]._replaces
+      if (replaces) {
+        const oldIndex = entries.findIndex((e, j) => j !== i && e.text === replaces && e.status === STATUS.confirmed)
+        if (oldIndex >= 0) entries.splice(oldIndex, 1)
+      }
     } else if (o.op === 'retier') {
       entries[i] = { ...entries[i], tier: o.tier } // 人工改层级：只动 tier，其他字段原样
     } else {
       const old = entries[i]
-      entries.splice(i, 1)
+      const pendingReplacement = o.status === STATUS.proposed && old.status === STATUS.confirmed
+      if (!pendingReplacement) entries.splice(i, 1)
       // 替换后视为新近，移到队尾；没写明 status 的 supersede 沿用旧条目的确认状态（人工改写不丢确认）
       entries.push({
         text: o.text, at: o.at, tag: o.tag || old.tag || '',
@@ -164,6 +172,8 @@ export function replayInbox(lines) {
         kind: o.kind || old.kind || MEMORY_KIND,
         // 没写 tier 的 supersede 沿用旧层级（未指定仍是未指定，不会因为改写就变免限常驻）
         tier: o.tier || old.tier || '',
+        ...(Object.hasOwn(old, 'scope') ? { scope: old.scope } : {}), ...evidenceOf(o),
+        ...((pendingReplacement || old._replaces) ? { _replaces: pendingReplacement ? old.text : old._replaces } : {}),
       })
     }
   }
