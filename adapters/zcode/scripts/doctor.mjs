@@ -28,7 +28,10 @@ function arg(name, fallback = '') {
 }
 
 const home = path.resolve(arg('home', process.env.USERPROFILE || os.homedir()))
-const appDir = path.resolve(arg('app', 'D:/Zcode'))
+// 不猜安装路径：把作者本机的路径写进公开仓既没用、又算环境信息外泄。
+// --app 显式给，或读环境变量 ZCODE_APP_DIR；两个都没有就跳过 ① 那一项并提示怎么给。
+const appArg = arg('app', String(process.env.ZCODE_APP_DIR || '').trim())
+const appDir = appArg ? path.resolve(appArg) : ''
 const today = new Date()
 const day = arg('day', today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0'))
 
@@ -62,10 +65,14 @@ function readJson(file) {
 
 // ── ① 客户端版本 ────────────────────────────────────────────────────────────────
 say('① ZCode 客户端')
-const asar = path.join(appDir, 'resources', 'app.asar')
-const pkg = asarPackage(asar)
-if (pkg) say('   ' + (pkg.name || '(无 name)') + ' ' + pkg.version + '   ← ' + asar)
-else say('   没读到 ' + asar + '（用 --app <ZCode 安装目录> 指定）')
+if (!appDir) {
+  say('   没给安装目录 —— 用 `--app <ZCode 安装目录>`（ZCode.exe 所在那一层）或环境变量 `ZCODE_APP_DIR`；这一项先跳过。')
+} else {
+  const asar = path.join(appDir, 'resources', 'app.asar')
+  const pkg = asarPackage(asar)
+  if (pkg) say('   ' + (pkg.name || '(无 name)') + ' ' + pkg.version + '   ← ' + asar)
+  else say('   没读到 ' + asar + '（换一个 --app 目录再试）')
+}
 
 // ── ② 装没装 ───────────────────────────────────────────────────────────────────
 say('② 插件安装状态')

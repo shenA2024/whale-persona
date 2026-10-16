@@ -146,8 +146,8 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   （命中行**原文照抄**，不替宿主判 fired / failed）。本机实测读数（2026-10-16）：`@zcode/desktop 3.15.3` ·
   **未装**（无 marketplace 指向本仓、缓存里没有 whale-persona）· config 命中 `~/.dsh/whale-persona/config.json`
   且人设段有内容 · 当天日志里运行器通道 1 条、人设 hook 记录 0 条。收尾时又补了第 ⑤ 项**运行环境**检查：
-  hook 用 `type:"process"` ＋ `command:"node"`，靠 PATH 解析 —— 本机实测 `D:\node\node.exe`（机器级 PATH）、
-  Node v24.19.0，解析得到；解析不到时会明确给出两个改法（加 PATH / 把 command 写成绝对路径）。
+  hook 用 `type:"process"` ＋ `command:"node"`，靠 PATH 解析 —— 实测：机器级 PATH 上的 Node v24.x 解析得到；
+  解析不到时会明确给出两个改法（加 PATH / 把 command 写成绝对路径）。
 - 版本：三个包（根 / `adapters/dsh` / `adapters/dsh-ui`）lockstep 升到 **0.18.1**，含本次 issue #3 的修复。
   npm 仍**不发** —— 按维护者 2026-10-16 的决定，等这一侧一起处理。
 - 脚本侧实测（已完成，2026-10-16，本机）：先确认 `DSH_HOME` **只在进程级**存在（用户级/机器级都为空）——

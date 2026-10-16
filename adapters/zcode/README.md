@@ -114,8 +114,8 @@ node <插件目录>/scripts/doctor.mjs
 4. **当天日志**（`~/.zcode/v2/logs/<日期>.log`）里 hook 通道与 hook 记录各有多少条 —— 命中行**原文照抄**，
    不替你判 fired / failed（日志格式是宿主的实现，本脚本不为它背书）。
 
-可选参数：`--home <用户目录>`（默认 `%USERPROFILE%`）、`--app <ZCode 安装目录>`（默认 `D:/Zcode`）、
-`--day YYYY-MM-DD`（默认今天）。
+可选参数：`--home <用户目录>`（默认 `%USERPROFILE%`）、`--app <ZCode 安装目录>`（ZCode.exe 所在的那一层；也可用
+环境变量 `ZCODE_APP_DIR`，两个都不给就跳过客户端版本那一项）、`--day YYYY-MM-DD`（默认今天）。
 
 ## 配置文件定位链
 
