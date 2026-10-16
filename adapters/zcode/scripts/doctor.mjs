@@ -152,9 +152,44 @@ if (!existsSync(logFile)) {
   say('   其它含 hook 的日志行：' + hookish.length + ' 条 · 其中点名本插件的：' + mine.length + ' 条')
   for (const l of (mine.length ? mine : hookish).slice(-5)) say('     · ' + l.slice(0, 200))
   if (!mine.length && !hookish.length) {
-    say('   ⚠ 还没有任何 hook 执行痕迹 —— 装完要**新开一个会话、发一句**，hook 才有机会跑（装之前开着的会话不一定重载）。')
+    say('   ⚠ v2 侧还没有 hook 执行痕迹 —— 装完要**新开一个会话、发一句**，hook 才有机会跑（装之前开着的会话不一定重载）。')
   } else {
     say('   ↑ 原文照抄，fired / failed 以宿主写的字样为准；本脚本不替它判定。')
+  }
+  // hook 阶段真正的执行记录在 **agent 侧**日志里（~/.zcode/cli/log/zcode-<日期>.jsonl）：
+  // turn.phase.* 事件的 context.phase === "user_prompt_hooks"（本机 2026-10-16 实测：
+  // 装插件之前那次是 durationMs:0 —— 当时没有任何 hook 注册，阶段空跑完成）。
+  // 所以判据是**这一层的 durationMs > 0**；v2/logs 那边看不到它。
+  const cliLog = path.join(cliDir, 'log', 'zcode-' + day + '.jsonl')
+  if (!existsSync(cliLog)) {
+    say('   agent 侧日志：没读到 ' + cliLog)
+  } else {
+    let rows = []
+    try { rows = readFileSync(cliLog, 'utf8').split(/\r?\n/).filter(Boolean) } catch { rows = [] }
+    const phases = []
+    for (const r of rows) {
+      if (!r.includes('user_prompt_hooks')) continue
+      try {
+        const o = JSON.parse(r)
+        if (o && o.context && o.context.phase === 'user_prompt_hooks') phases.push(o)
+      } catch { /* 坏行跳过 */ }
+    }
+    const fired = phases.filter((o) => Number(o.durationMs) > 0)
+    say('   agent 侧 ' + path.basename(cliLog) + '：user_prompt_hooks 阶段 ' + phases.length + ' 条'
+      + ' · 耗时 > 0 的 ' + fired.length + ' 条（这一项**不足以**判定 hook 跑没跑，见下）')
+    for (const o of phases.slice(-3)) {
+      say('     · ' + (o.timestamp || '') + ' ' + (o.event || '') + ' status=' + (o.status || '')
+        + ' durationMs=' + (o.durationMs === undefined ? '?' : o.durationMs)
+        + ' turn=' + (o.context && o.context.turnNumber !== undefined ? o.context.turnNumber : '?'))
+    }
+    if (phases.length && !fired.length) say('   ⚠ 这个阶段出现过、但耗时全是 0 —— 当时没有 hook 在注册（多半是装插件之前的会话）。')
+    // 别把 durationMs > 0 当 fired 的判据：本机 2026-10-16 实测，装插件**之前**的会话里也有一条
+    // durationMs=1 的记录（这个阶段本身就有开销），拿它下结论就是假阳性。
+    // 所以这里只摆读数，判定留给"两层里出现点名本插件的记录"或宿主自己写的 fired / failed 字样。
+    if (fired.length) {
+      say('   注：上面 ' + fired.length + ' 条 > 0 的**不能**当作 fired 的证据（本机实测：装插件之前也有 durationMs=1 的阶段）。')
+      say('       真判据是前面两层里出现点名本插件的记录，或宿主写出 fired / failed 字样。')
+    }
   }
 }
 
