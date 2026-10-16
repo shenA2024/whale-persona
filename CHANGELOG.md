@@ -113,6 +113,10 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   修后同一预演的读数：判平面 `profile` · dry 明说会补段且一字节未写 · 真写 `created` ＋ 纯追加 ·
   段回来 `default=standard / selectedDefault=whale` · 没重复挂 · 备份 1 份且内容 === 写前 · 幂等复跑 `kept`。
 
+- **回归验证（真机只读，2026-10-16）**：同一份真机 `~/.dsh` 上，非桌面版身份（web / 普通宿主）判平面**仍是**
+  `agent-presets`（老判据：`registryPresent=false` → 传统平面；`.agent-presets/whale-persona` 读数 `installed=true`），
+  把身份切成桌面版才判 `profile` —— 说明新判据绑的是**宿主身份**而不是 home，web 侧行为零变化。
+
 验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP8、DP8b–DP8m；顺带修了夹具卫生 —— 在 DSH 会话里跑测试时
 进程环境带着真实的 `DSH_PROFILE` / `DSH_PROFILE_NAME`，`currentProfileName()` 会读到它、把"这个 home 没有 profile 名"
 的夹具污染成 profile 平面，现在测试开头 `delete` 掉）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
