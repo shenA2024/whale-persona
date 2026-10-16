@@ -34,7 +34,7 @@ process.env.DSH_AGENT_PRESETS_ROOT = srcRoot
 const {
   PRESET_ID, PRESET_NAME, LEGACY_PERSONA_PKG,
   presetDir, agentFile, presetState, installPreset, setDefaultPreset, shippedPresetsRoot,
-  detectPresetPlane, shippedPatchPreset, basePresetSource,
+  detectPresetPlane, shippedPatchPreset, basePresetSource, isDesktopHost,
 } = await import('../core/presetInstall.js')
 
 const t = (name, ok) => { console.log(name + ':', ok); if (!ok) process.exitCode = 1 }
@@ -247,6 +247,26 @@ t('DP6e 人设行与工具行都从新形态基座搬来（10 格缩进 + tool-p
 t('DP6f 写完读数立刻就绪', presetState(home5).hasPersonaRow === true)
 process.env.DSH_AGENT_PRESETS_ROOT = envBefore
 process.argv = realArgv
+
+// ── 桌面版身份：不把用户引到 .agent-presets（2026-10-16，issue #2 的另一半 / B 方案）────────────
+// 触发来源：桌面版 0.2.0-rc.2 的出厂组合里没有 agent-preset-registry 段，判平面落到传统侧；
+// 而桌面版根本不读 .agent-presets（0.1.7-rc.1 起 asar 全量 js 里就没有这个字样）——
+// 本机实测更糟：那条路会返回 ok:true/dry **报成功**，用户以为建好了、人设却不生效。
+// 这条钉的是"话说对"（不新增写入面、不改判平面）；"判据该不该换成宿主身份"是另一件要拍板的事（A 方案）。
+const home6 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-desktop-'))
+const envDesktopBefore = process.env.WHALE_PERSONA_DESKTOP_HOST
+process.env.WHALE_PERSONA_DESKTOP_HOST = '1'
+t('DP7 认得出桌面版宿主（判据可被夹具覆盖，与 DSH_AGENT_PRESETS_ROOT 同一手法）', isDesktopHost() === true)
+const instDesktop = installPreset({ home: home6, dryRun: true })
+t('DP7b 桌面版 + 传统平面 → 消息点名「不读 .agent-presets / 该走 profile 平面」',
+  instDesktop.messages.some((m) => m.includes('这台宿主是桌面版') && m.includes('.agent-presets'))
+  && instDesktop.messages.some((m) => m.includes('profile 平面')))
+process.env.WHALE_PERSONA_DESKTOP_HOST = '0'
+const instPlain = installPreset({ home: home6, dryRun: true })
+t('DP7c 非桌面版（普通 Node / npm 安装）不出现这条警告',
+  isDesktopHost() === false && instPlain.messages.every((m) => !m.includes('这台宿主是桌面版')))
+if (envDesktopBefore === undefined) delete process.env.WHALE_PERSONA_DESKTOP_HOST
+else process.env.WHALE_PERSONA_DESKTOP_HOST = envDesktopBefore
 
 console.log('---- preset-install 读数 ----')
 console.log('home =', home)

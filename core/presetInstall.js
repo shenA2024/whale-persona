@@ -71,6 +71,41 @@ export function candidateRoots(home) {
   return [...new Set(roots.map((r) => path.resolve(r)))]
 }
 
+/**
+ * 宿主是不是**桌面版**（Electron 打包形态）。
+ * 判据：`<exeDir>/resources/app.asar/dsh/node_modules` 在宿主进程内可读 —— 桌面版把 dsh 放在
+ * `resources/app.asar` 里，而宿主自己的 fs 认 asar 路径（2026-09-29 实测）；反过来跑在普通 Node 上时
+ * execPath 是 node.exe，这条路径根本不存在。
+ *
+ * 为什么要问这个（2026-10-16，issue #2 的另一半）：桌面版**不读** `<DSH_HOME>/.agent-presets`
+ * （0.1.7-rc.1 起 asar 全量 js 里就没有这个字样），而 `detectPresetPlane()` 只在"组合里挂着
+ * `agent-preset-registry` 段"时才判 profile 平面 —— 0.2.0-rc.2 的出厂形态里那段是空的，于是桌面版会被
+ * 判成传统平面，用户照 `.agent-presets` 的手工步骤做下去等于没做。本函数只用来**把话说对**（B 方案），
+ * 不改判平面、不改写入面；"判据该不该换成宿主身份"是另一件要拍板的事（A 方案，见 CHANGELOG 待办）。
+ *
+ * `WHALE_PERSONA_DESKTOP_HOST=1|0` 可强制覆盖：测试要在一台机器上钉住两种宿主分支
+ * （与 `DSH_AGENT_PRESETS_ROOT` 同一个手法）。
+ */
+export function isDesktopHost() {
+  const forced = String(process.env.WHALE_PERSONA_DESKTOP_HOST || '').trim()
+  if (forced === '1') return true
+  if (forced === '0') return false
+  try {
+    return statSync(path.join(path.dirname(process.execPath), 'resources', 'app.asar', 'dsh', 'node_modules')).isDirectory()
+  } catch { return false }
+}
+
+/** 桌面版 + 传统平面：把"这条路走不通"说清楚（只说，不改行为、不新增写入面） */
+function desktopHostWarning(plane) {
+  if (!isDesktopHost()) return []
+  const patchFile = (plane && plane.patchFile) || '(这个 home 里没有 profiles/<name>/cordis.patch.yml)'
+  return [
+    '注意：这台宿主是桌面版（Electron 打包形态），它**不读** <DSH_HOME>/.agent-presets —— 这次建的预设不会生效。',
+    '  桌面版该走 profile 平面：把基座的 insert 块追加进 ' + patchFile + '（0.17.7 起插件会自己写这一步，前提是先判成 profile 平面）。',
+    '  触发来源：issue #2（2026-10-12 kaiye2343 报告）—— 桌面版 0.2.0-rc.2 的出厂组合里没有 agent-preset-registry 段，判平面因此落到这一侧。',
+  ]
+}
+
 /** 宿主自带 preset 的根（`@deepseek-ai/dsh-agent-presets/presets`）；找不到返回空串 */
 export function shippedPresetsRoot(home) {
   const subs = [
@@ -718,7 +753,9 @@ export function installPreset({ home, base = 'auto', dryRun = false } = {}) {
   if (plane.plane === 'profile') return installInProfilePlane({ home, plane, dryRun })
   const dir = presetDir(home)
   const file = agentFile(home)
-  const messages = []
+  // 桌面版不读 .agent-presets：这条路上做的事不会生效，先把话说对（2026-10-16，issue #2 的另一半）。
+  // 判平面本身不动 —— "判据该不该改成宿主身份"是另一件要拍板的事，见 isDesktopHost() 的注释。
+  const messages = desktopHostWarning(plane)
   const exists = existsSync(file)
   let cur = ''
   if (exists) { try { cur = readFileSync(file, 'utf8') } catch { cur = '' } }
@@ -740,7 +777,7 @@ export function installPreset({ home, base = 'auto', dryRun = false } = {}) {
   const b = resolveBase({ home, base })
   const src = basePresetDir(home, b.id)
   if (!src) {
-    return { ok: false, action: 'no-base', dir, baseId: b.id, baseWhy: b.why, swapped: false, messages: manualHints(home, b) }
+    return { ok: false, action: 'no-base', dir, baseId: b.id, baseWhy: b.why, swapped: false, messages: messages.concat(manualHints(home, b)) }
   }
   messages.push('基座 preset = ' + b.id + '（' + b.why + '）<- ' + src)
   if (dryRun) {

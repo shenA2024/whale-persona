@@ -45,7 +45,34 @@ DSH 0.2.0-rc.2 把出厂预设从 `<根>/@deepseek-ai/dsh-agent-presets/presets/
 - 修后实测：目录印 `[78]`／`[79]`／`[80]`／`[81]`／`[82]`／`[83]`，与 `show 78`…`show 83` 逐条对上。
 - 与 SPEC 的关系：SPEC 原文就写着"序号是收件箱重放视图的序号" —— 这次是**实现向规范对齐**，规范未改。
 
-验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP6、DP6b–DP6f 六条；`tests/inbox.mjs` 新增 T28 三条）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
+### 桌面版判平面误判：把话说对（issue #2 的另一半 / B 方案，2026-10-16）
+
+`detectPresetPlane()` 拿"profile 组合里有没有 `agent-preset-registry` 段"当"这台宿主走哪套预设机制"的身份判据 ——
+那是**工程细节**，而 0.2.0-rc.2 的出厂组合里那段是空的，于是桌面版被判成传统 `.agent-presets` 平面，
+而桌面版**根本不读**那个目录。
+
+宿主进程内的复现（临时 home + dryRun，全程只读）：
+
+```
+plane: "agent-presets"                        ← argv 明明给了 <DSH_HOME>/profiles/desktop
+planeWhy: "…没有 agent-preset-registry 段（走 <DSH_HOME>/.agent-presets 目录）"
+baseAvailable: true                           ← 本机探到 %APPDATA%\npm 下那份 0.1.x 残留
+installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-persona   ← 桌面版不认的平面
+```
+
+- 本机（有残留基座）：点「新建人设档案」会**报成功**，但建在桌面版不认的平面 → 人设不生效且不报错（隐性）。
+- 报告者那台（无残留）：同一条路返回 `action: "no-base"`，直接报错（显性）。两个症状同源。
+
+**本次做 B（把话说对）**：新增 `isDesktopHost()`（判据＝`<exeDir>/resources/app.asar/dsh/node_modules` 在宿主进程内可读；
+`WHALE_PERSONA_DESKTOP_HOST=1|0` 可覆盖，供测试在一台机器上钉两种宿主分支），传统平面下的消息里点名
+"这台宿主是桌面版、**不读** `.agent-presets`、该走 profile 平面"。**不改判平面、不新增写入面。**
+
+**A（待拍板，未做）**：把判平面的身份判据换成宿主身份（桌面版 ⇒ profile 平面），并在组合里缺
+`agent-preset-registry` 段时补一个最小段（本机是活证：手写的段被 0.2.0-rc.2 认，`selectedDefault: whale` 生效）。
+代价是新增一处写入面，要同步更新 `.github/SECURITY.md` 的写面清单与备份/回滚；将来桌面版若恢复读
+`.agent-presets`，判据还要加反向检查。
+
+验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP6、DP6b–DP6f 与 DP7、DP7b–DP7c；`tests/inbox.mjs` 新增 T28 三条）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
 `tests/spec-i18n.mjs` 四判据全绿（SPEC.md ↔ SPEC.en.md 的固定文案块仍逐字一致）· `node scripts/sync-core.mjs` 已同步 zcode vendor ·
 行尾无 CRLF（`git diff --numstat` 与 `git diff --ignore-cr-at-eol --numstat` 一致）·
 注入体积读数（同一 cwd 前后对比）：14023 → **14137**（+114），预算 14000 **仍超 137** —— 主因是历史备忘占 88%，
