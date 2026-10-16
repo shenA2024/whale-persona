@@ -62,6 +62,40 @@ Settings → Plugin Management → Discover → **+** → 添加**本地目录**
    - 没有任何记录 → 插件未启用或 hook 未注册，回安装步骤检查；
    - `fired` 但没效果 → 检查 config 是否解析成功（坏 JSON 的症状是「人设消失」）。
 
+## 备选：不装插件，直接用配置 hook（只适合临时验证）
+
+只想先确认"这台 ZCode 跑得动我们的 hook"，而不想走 Discover：可以在**宿主配置**里挂同一条 hook。
+依据（ZCode 官方 `zcode-guide` 的 `diagnosing-hooks`）：配置文件 hook 要显式 `hooks.enabled: true` 才跑，
+而非插件（用户/工作区）hook **没有信任门** —— 打开了就无条件执行。
+
+文件：`~/.zcode/cli/config.json`（工作区级则 `<repo>/.zcode/config.json`），把这段并进去（`args` 换成你的插件目录）：
+
+```json
+{
+  "hooks": {
+    "enabled": true,
+    "events": {
+      "UserPromptSubmit": [
+        {
+          "hooks": [
+            {
+              "type": "process",
+              "command": "node",
+              "args": ["<插件目录>/hooks/render.mjs"],
+              "timeoutMs": 8000
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+**它跟插件通道的差别**（这就是它只适合临时验证的原因）：hook 的源在配置文件里，所以对这台机器上
+**所有**会话生效，也不会随插件启用/停用一起开关；插件通道的 hook 能在 Settings → Plugin Management
+的插件详情里逐条看到，停用插件就立刻消失。两条**同时存在会跑两遍** —— 验证完把这一段删掉。
+
 ## 一条命令自检（0.18.1 起）
 
 装完想分清"到底是插件没装、还是配置没读到"，跑这个（**只读、不写任何文件**）：
