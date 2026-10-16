@@ -124,10 +124,17 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   （原判理由、恢复条件、恢复动作三项），第 5 条加注「ZCode 侧已单独改判，与本条说的别的宿主薄适配层无关」。
 - 版本：三个包（根 / `adapters/dsh` / `adapters/dsh-ui`）lockstep 升到 **0.18.1**，含本次 issue #3 的修复。
   npm 仍**不发** —— 按维护者 2026-10-16 的决定，等这一侧一起处理。
-- 真机验收：**待做** —— 本机在 ZCode 3.15.3 里加一次 marketplace（本地目录或仓库 URL）、装一次、发一轮，
-  再看当天 `~/.zcode/v2/logs/<日期>.log` 里这条 hook 的记录是 fired 还是 failed。上面写的都是
-  **规范层**核对（读官方技能文档 ＋ 本机插件缓存的实际结构），宿主层结论等装完再补 —— 装成功前，
-  这条改动不算验收通过。
+- 脚本侧实测（已完成，2026-10-16，本机）：先确认 `DSH_HOME` **只在进程级**存在（用户级/机器级都为空）——
+  这就是 ZCode 侧的环境。在这个环境里跑 `node adapters/zcode/hooks/render.mjs --preview`：正常渲染出人设全文，
+  说明 hook 的配置定位链在 ZCode 下会回落到默认 `~/.dsh`，与 DSH 侧**共用同一份** `config.json`（不需要为
+  ZCode 单独放一份）。再喂一个 hook 事件 JSON（`{"model":…,"prompt":…,"cwd":…}`）：exit 0，stdout 是
+  `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"…"}}` —— 与 ZCode 官方
+  hooks 文档要求的输出形状一致（`additionalContext` 由宿主注入对话）。
+- 宿主层验收：**待做** —— 在 ZCode 3.15.3 里加一次 marketplace（本地目录或仓库 URL）、装一次、发一轮，
+  再看当天 `~/.zcode/v2/logs/<日期>.log` 里这条 hook 的记录是 fired 还是 failed（同一天的日志里已能看到
+  `[zcode-host] [rpc:register] channel "hooks"`，说明 hook 运行器通道是在的）。上面那些是**规范层**核对
+  （读官方技能文档 ＋ 本机插件缓存的实际结构）＋ **脚本层**实测；宿主层必须真装一次才算数 ——
+  装成功前，这条改动不算验收通过。
 
 ## v0.18.0（2026-10-14）
 
