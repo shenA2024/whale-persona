@@ -24,6 +24,11 @@ whale-persona 的 ZCode 插件形态：**UserPromptSubmit hook 每轮动态注�
 
 > 本仓库根的 `marketplace.json` 就是市场清单（条目 `source` 指向 `adapters/zcode`）——
 > Discover 加仓库 URL 时读的是它，不是插件目录里的 `.zcode-plugin/plugin.json`。
+>
+> 两条从 ZCode 3.15.3 的 `app.asar` 里读出来的约束（2026-10-16）：① 清单只认仓根的 `marketplace.json`
+> 或 `.claude-plugin/marketplace.json` 两个位置；② 清单里的 `name` 要跟市场身份一致 —— 它拿 `name` 和
+> 市场 id 比对，不符会抛 `marketplace source archive id mismatch`。本仓仓名与清单 `name` 都是
+> `whale-persona`，所以「GitHub URL」和「本地目录」两种来源都自洽，别只改其中一个。
 
 插件自带 hook——装上即生效（插件 hook 会自动启用 hook 运行器，无需改 hooks 配置）。
 
