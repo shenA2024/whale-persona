@@ -151,6 +151,25 @@ if (!existsSync(logFile)) {
   if (hookish.length) say('   ↑ 原文照抄，fired / failed 以宿主写的字样为准；本脚本不替它判定。')
 }
 
+// ── ⑤ 运行环境：hook 的 `command: "node"` 找不找得到 ────────────────────────────
+say('⑤ 运行环境（hooks.json 用 type:"process" ＋ command:"node"）')
+const exeDir = path.dirname(process.execPath)
+const pathDirs = String(process.env.PATH || '').split(path.delimiter).filter(Boolean)
+const sameDir = (a, b) => {
+  try { return path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase() } catch { return false }
+}
+const onPath = pathDirs.some((d) => sameDir(d, exeDir))
+const major = Number(String(process.versions.node).split('.')[0])
+say('   node ' + process.version + (major >= 20 ? '（≥ 20 ✓）' : '（**低于 20**，本插件要求 Node ≥ 20）'))
+say('   当前解释器：' + process.execPath)
+if (onPath) {
+  say('   它所在目录在 PATH 里 ✓ —— `command:"node"` 能解析到（ZCode 继承的是**用户/机器级** PATH，')
+  say('   所以这一项要在没被 shell 临时改过 PATH 的环境里看才准）。')
+} else {
+  say('   ⚠ 它所在目录**不在** PATH 里 —— hook 的 `command:"node"` 可能解析不到（症状：日志里这条 hook failed）。')
+  say('     两个改法任选：① 把 node 的目录加进用户级 PATH；② 把 hooks/hooks.json 的 command 改成上面的绝对路径。')
+}
+
 say('')
 say('结论口径：② 已装 ＋ ④ 有 hook 行 = 这一侧可以用；② 未装 → 去 ZCode 设置 → 插件管理 → Discover → + 添加本仓。')
 console.log(out.join('\n'))
