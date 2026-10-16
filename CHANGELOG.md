@@ -148,6 +148,14 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   且人设段有内容 · 当天日志里运行器通道 1 条、人设 hook 记录 0 条。收尾时又补了第 ⑤ 项**运行环境**检查：
   hook 用 `type:"process"` ＋ `command:"node"`，靠 PATH 解析 —— 实测：机器级 PATH 上的 Node v24.x 解析得到；
   解析不到时会明确给出两个改法（加 PATH / 把 command 写成绝对路径）。
+- 新增 `adapters/zcode/scripts/open-ui.mjs`（**配置启动器**，跨平台零依赖）：ZCode 这一侧没有宿主内嵌面板，
+  而"改人设"两边共用同一份 config 与同一个本地编辑页（仓根 `scripts/ui.mjs`）—— 所以这里只需要"把页面开起来"
+  那层壳：探 `8787–8796` → **复用已在跑的实例**（只认 `/api/state` 报的 file 与本份 config 一致，
+  免得对着别人的配置改半天）→ 否则隐藏起一个 → 开浏览器；`--print` 只打印 url。`--engine` 缺省按
+  `$WHALE_PERSONA_ENGINE` → `~/.dsh/plugins/whale-persona` 找。**它只开界面、不注入任何人设**，
+  与 hook 是两条路（hook 往会话注入文本，它只开页面）。配套：`adapters/zcode/README.md` 新增「配置启动器」一节、
+  这一侧的 `whale-persona` 技能新增「想看图形界面」一节（用户在 ZCode 里说"打开人格配置"即走它）。
+  实测（2026-10-16）：8787 上有实例 → 复用（`started=false`）；8791 空端口 → 新起（`started=true`，pid 18560）。
 - 版本：三个包（根 / `adapters/dsh` / `adapters/dsh-ui`）lockstep 升到 **0.18.1**，含本次 issue #3 的修复。
   npm 仍**不发** —— 按维护者 2026-10-16 的决定，等这一侧一起处理。
 - 脚本侧实测（已完成，2026-10-16，本机）：先确认 `DSH_HOME` **只在进程级**存在（用户级/机器级都为空）——

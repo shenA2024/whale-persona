@@ -117,6 +117,25 @@ node <插件目录>/scripts/doctor.mjs
 可选参数：`--home <用户目录>`（默认 `%USERPROFILE%`）、`--app <ZCode 安装目录>`（ZCode.exe 所在的那一层；也可用
 环境变量 `ZCODE_APP_DIR`，两个都不给就跳过客户端版本那一项）、`--day YYYY-MM-DD`（默认今天）。
 
+## 配置启动器（0.18.1 起）
+
+这一侧没有宿主内嵌的设置面板（那是 DSH 宿主专属的 client 半身），但**改人设这件事两边共用同一份
+`config.json` 与同一个本地编辑页**（仓库根的 `scripts/ui.mjs`）。所以这里给的是**启动器**：
+
+```bash
+node <插件目录>/scripts/open-ui.mjs          # 起服务并打开浏览器（起始端口 8787）
+node <插件目录>/scripts/open-ui.mjs --print  # 只打印 url，不开浏览器
+```
+
+它做三件事：探 `8787–8796` → **复用已在跑的实例**（只认 `/api/state` 报的 file 与我们这份 config 一致，
+免得对着别人的配置改半天）→ 没有就隐藏起一个 `scripts/ui.mjs` → 打开浏览器。
+
+- **它不注入任何人设**：只开界面。编哪份配置由 `--config` / `WHALE_PERSONA_CONFIG` / 定位链决定
+  （默认就是两个宿主共用的那一份）——这与 hook 是两件事：hook 往会话里注入文本，它只开页面。
+- `--engine <目录>` 缺省按 `$WHALE_PERSONA_ENGINE` → `~/.dsh/plugins/whale-persona` 找
+  （DSH 插件装好后那份实体副本里就带 `scripts/ui.mjs`）。
+- 在 ZCode 里也可以直接对 AI 说「打开人格配置」——装好的 `whale-persona` 技能会调用它。
+
 ## 配置文件定位链
 
 hook 与 skill 按以下优先级找 config（找到第一个存在的就用）：
