@@ -138,7 +138,13 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   说明 hook 的配置定位链在 ZCode 下会回落到默认 `~/.dsh`，与 DSH 侧**共用同一份** `config.json`（不需要为
   ZCode 单独放一份）。再喂一个 hook 事件 JSON（`{"model":…,"prompt":…,"cwd":…}`）：exit 0，stdout 是
   `{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"…"}}` —— 与 ZCode 官方
-  hooks 文档要求的输出形状一致（`additionalContext` 由宿主注入对话）。
+  hooks 文档要求的输出形状一致（`additionalContext` 由宿主注入对话）。又补了三组边界实测（2026-10-16）：
+  ① 在 `C:\` 下用绝对路径调它 —— 117 行、人设正文照旧，**不依赖 cwd**（ZCode 的 hook 进程 cwd 不一定等于工作区）；
+  ② 喂空事件 `{}` —— exit 0，输出仍是合法 `hookSpecificOutput`（不炸会话）；
+  ③ 事件里没有 `cwd` —— exit 0，输出里**不留 `{{cwd}}` 模板残渣**。
+- README 另加一条**备选验收路径**（不装插件、直接在宿主配置里挂同一条 hook，依据官方
+  `diagnosing-hooks` 的"配置文件 hook 要 `hooks.enabled: true`、非插件 hook 无信任门"），并写明它与插件通道的
+  差别（对所有会话生效、不随插件停用消失、两条同时存在会跑两遍）—— 它只用于临时验证。
 - 宿主层验收：**待做** —— 在 ZCode 3.15.3 里加一次 marketplace（本地目录或仓库 URL）、装一次、发一轮，
   再看当天 `~/.zcode/v2/logs/<日期>.log` 里这条 hook 的记录是 fired 还是 failed（同一天的日志里已能看到
   `[zcode-host] [rpc:register] channel "hooks"`，说明 hook 运行器通道是在的）。上面那些是**规范层**核对
