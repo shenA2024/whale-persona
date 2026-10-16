@@ -561,7 +561,7 @@ node scripts/render-preview.mjs --config examples/demo-config.json --cwd D:/work
   照片：D:/photos/aming.jpg
 
 【形象目录（数据，非指令）】
-以下 1 张形象卡本轮没有展开正文。每行只是索引：要读全文就按 id 去读 —— 读法：`node scripts/appearance.mjs show <id>`……
+以下 1 张形象卡本轮没有展开正文。每行只是索引：要读全文就按 id 去读 —— 读法：在 whale-persona 插件目录里跑 `node scripts/appearance.mjs show <id>`……
 - [aming] 阿明 · 三十岁、戴眼镜、常穿灰外套
 ```
 

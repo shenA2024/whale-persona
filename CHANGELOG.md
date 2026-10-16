@@ -3,6 +3,40 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
+## 未发布（2026-10-15，0.18.0 之后）
+
+触发来源：两条外部 issue 的修复。截至本条仍**未发版**（0.18.0 只在 GitHub Release 里，npm latest 仍是 0.17.7）。
+
+### 出厂预设换了形态（issue #2 / kaiye2343，2026-10-12）
+
+DSH 0.2.0-rc.2 把出厂预设从 `<根>/@deepseek-ai/dsh-agent-presets/presets/<id>/agent.cordis.yml`
+迁到 `<根>/@deepseek-ai/dsh-web-app/presets/<id>.patch.yml`（`- insert:` 外壳 + `preset-*` 项 + `plugins:`）。
+
+- 新增 `shippedPatchPreset()`（新形态探针，与目录探针共用 `candidateRoots()` 和 id 白名单）与
+  `basePresetSource()`（用户 preset → 新形态 → 老形态，**新形态优先**）。
+- `buildProfileInsertBlock()` 从 patch 里抽回 `plugins:` 那段（缩进原样），再走原有的
+  「换人设行 → 平移缩进 → 拼 insert 外壳」通路 —— 两条来源产出同形状的块，少一条分支就少一处漂移。
+- `presetState()` 新增 `shippedPatch`（只报位置，**不**参与 `baseAvailable`：后者的语义仍是"这条平面现在能不能建"，
+  面板读数与按钮行为必须一致）。
+- 触发前的真机读数（2026-10-15）：`%APPDATA%\npm\...@deepseek-ai\dsh-agent-presets` 是 2026-09-19 的 0.1.x 残留，
+  旧实现会拿它当基座、把 0.1.x 的插件面克隆进 0.2.0-rc.2 的组合。
+- **仍未做**：`detectPresetPlane()` 在"桌面版 profile 组合里没有 `agent-preset-registry` 段"时仍判成 `agent-presets` 平面
+  —— 那正是 issue #2 报告者的症状。改它等于改宿主机制判据（桌面版 profile 平面 vs 传统 `.agent-presets` 平面怎么分），
+  待维护者拍板；本机不受影响（组合里有 registry 段，读数 healthy）。
+
+### 注入文本里的 CLI 读法可定位（issue #1 / zmlaisd-rgb，2026-10-03）
+
+【记忆目录】/【形象目录】两块由「（whale-persona 仓的 scripts/）」改成
+「在 whale-persona 插件目录里跑 `node scripts/…`（安装布局＝`<profile>/node_modules/whale-persona/`，
+仓库布局＝仓根；数据目录不一定在脚本目录下）」。`tier: cold` 的条目只有这条读法能取回，
+而安装布局下 `scripts/` 不在数据目录下 —— 旧文案默认了仓库布局，照抄必失败。
+
+验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP6、DP6b–DP6f 六条）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
+`tests/spec-i18n.mjs` 四判据全绿（SPEC.md ↔ SPEC.en.md 的固定文案块仍逐字一致）· `node scripts/sync-core.mjs` 已同步 zcode vendor ·
+行尾无 CRLF（`git diff --numstat` 与 `git diff --ignore-cr-at-eol --numstat` 一致）·
+注入体积读数（同一 cwd 前后对比）：14023 → **14137**（+114），预算 14000 **仍超 137** —— 主因是历史备忘占 88%，
+记忆分层由维护者自己调（`node scripts/memory.mjs tier cold <序号…>`）。
+
 ## v0.18.0（2026-10-14）
 
 触发来源：用户希望深化既有人格插件、吸收灵枢的可验证记忆机制，并公开通用版本；实际会话中旧 MCP 桥未提供工具，开场连续性需要本地兜底。

@@ -34,7 +34,7 @@ process.env.DSH_AGENT_PRESETS_ROOT = srcRoot
 const {
   PRESET_ID, PRESET_NAME, LEGACY_PERSONA_PKG,
   presetDir, agentFile, presetState, installPreset, setDefaultPreset, shippedPresetsRoot,
-  detectPresetPlane,
+  detectPresetPlane, shippedPatchPreset, basePresetSource,
 } = await import('../core/presetInstall.js')
 
 const t = (name, ok) => { console.log(name + ':', ok); if (!ok) process.exitCode = 1 }
@@ -190,6 +190,62 @@ const sd3 = setDefaultPreset({ home: home3 })
 t('DP5h 组合里已有别的默认（selectedDefault: whale）→ 挂上人设也不抢它',
   sd3.ok === false && sd3.changed === false && sd3.reason.indexOf('已有默认') >= 0
   && read(PATCH).indexOf('selectedDefault: whale') > 0)
+
+// ── 0.2.0-rc.2 的出厂预设换了形态（2026-10-15，触发来源：issue #2 / kaiye2343）──────────
+// 出厂预设从 `<根>/@deepseek-ai/dsh-agent-presets/presets/<id>/agent.cordis.yml`
+// 迁到 `<根>/@deepseek-ai/dsh-web-app/presets/<id>.patch.yml`（`- insert:` 外壳 + `preset-*` 项 + `plugins:`）。
+// 旧实现只认前者：轻则报 no-base，重则把 npm 全局残留里那份 0.1.x 的插件面克隆进 0.2.x 的组合。
+// 夹具照 0.2.0-rc.2 真机形状造（本机 asar 内 standard.patch.yml 7511 B，缩进：insert 0 / preset 4 / config 6 / plugins 8 / 插件行 10）。
+const srcRoot2 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-preset-src2-'))
+const shippedPatchRoot = path.join(srcRoot2, '@deepseek-ai', 'dsh-web-app', 'presets')
+mkdirSync(shippedPatchRoot, { recursive: true })
+const SHIPPED_PATCH = path.join(shippedPatchRoot, 'standard.patch.yml')
+writeFileSync(SHIPPED_PATCH,
+  '# 出厂 standard（0.2.0-rc.2 形状：只给 profile 平面用的组合片段）\n'
+  + '- insert:\n'
+  + '    - id: preset-standard\n'
+  + "      name: '@deepseek-ai/dsh-agent-preset'\n"
+  + '      config:\n'
+  + '        id: standard\n'
+  + '        order: 1\n'
+  + '        plugins:\n'
+  + '          - id: persona\n'
+  + "            name: '@deepseek-ai/dsh-persona'\n"
+  + '            config:\n'
+  + '              suffix: Your working directory is {{cwd}}.\n'
+  + '          - id: tool-pwsh\n'
+  + "            name: '@deepseek-ai/dsh-tool-pwsh'\n"
+  + '          - id: tool-fs\n'
+  + "            name: '@deepseek-ai/dsh-tool-fs'\n", 'utf8')
+const envBefore = process.env.DSH_AGENT_PRESETS_ROOT
+process.env.DSH_AGENT_PRESETS_ROOT = srcRoot2
+t('DP6 认出新形态的出厂预设（dsh-web-app/presets/<id>.patch.yml）',
+  shippedPatchPreset(home3, 'standard') === SHIPPED_PATCH)
+t('DP6b 新形态优先于老形态（旧残留不再被当成基座）', basePresetSource(home3, 'standard').kind === 'patch')
+t('DP6c 越界 id 与不存在的 id 在 patch 探针上也被拒（与目录探针同一把锁）',
+  shippedPatchPreset(home3, '../../evil') === '' && shippedPatchPreset(home3, 'no-such-preset') === '')
+
+const home5 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-plane2-'))
+const pdir5 = path.join(home5, 'profiles', 'desktop')
+mkdirSync(pdir5, { recursive: true })
+const PATCH5 = path.join(pdir5, 'cordis.patch.yml')
+writeFileSync(PATCH5,
+  '- id: some-tool\n'
+  + '  name: "@deepseek-ai/dsh-some-tool"\n'
+  + '- id: agent-preset-registry\n'
+  + '  name: "@deepseek-ai/dsh-agent-preset-registry"\n'
+  + '  config:\n'
+  + '    default: standard\n', 'utf8')
+process.argv = realArgv.concat([pdir5])
+const ip6 = installPreset({ home: home5 })
+const after6 = read(PATCH5)
+t('DP6d 只有新形态基座时，profile 平面照样写出人设组合（action=created）', ip6.ok === true && ip6.action === 'created')
+t('DP6e 人设行与工具行都从新形态基座搬来（10 格缩进 + tool-pwsh 一起来）',
+  after6.indexOf('    - id: preset-' + PRESET_ID + '\n') > 0
+  && after6.indexOf('          - id: ' + PRESET_ID + '\n') > 0
+  && after6.indexOf("            name: '@deepseek-ai/dsh-tool-pwsh'") > 0)
+t('DP6f 写完读数立刻就绪', presetState(home5).hasPersonaRow === true)
+process.env.DSH_AGENT_PRESETS_ROOT = envBefore
 process.argv = realArgv
 
 console.log('---- preset-install 读数 ----')

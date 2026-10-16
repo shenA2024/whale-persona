@@ -99,6 +99,47 @@ export function basePresetDir(home, id) {
   return ''
 }
 
+/**
+ * 0.2.0-rc.2 起出厂预设换了形态（2026-10-15，触发来源：issue #2 / kaiye2343）：
+ * 从 `<root>/@deepseek-ai/dsh-agent-presets/presets/<id>/agent.cordis.yml`
+ * 迁到 `<root>/@deepseek-ai/dsh-web-app/presets/<id>.patch.yml`
+ * （`- insert:` 外壳 → `- id: preset-<id>` → `config.plugins:` 下的插件行）。
+ *
+ * 为什么要它单独一个函数、而不是塞进 shippedPresetsRoot 的 subs：后者按"目录"返回，
+ * 调用方还会去拼 `<根>/<id>/agent.cordis.yml`；把只有 `*.patch.yml` 的新根塞进去，
+ * 会让**原来能用的旧根也被顶掉**（basePresetDir 不做回落）。两套形态并存，各认各的。
+ *
+ * 旧形态可能还留在 npm 全局残留里（本机 2026-10-15 实测：`%APPDATA%\npm\...` 下那份是
+ * 2026-09-19 的 0.1.x），所以新形态必须**优先** —— 否则「新建人设档案」会把 0.1.x 的插件面
+ * 克隆进 0.2.x 的 profile 组合（issue #2 的同源病灶）。
+ */
+export function shippedPatchPreset(home, id) {
+  if (!ID_RE.test(String(id || ''))) return ''
+  const sub = path.join('@deepseek-ai', 'dsh-web-app', 'presets')
+  for (const root of candidateRoots(home)) {
+    const p = path.join(root, sub, String(id) + '.patch.yml')
+    try { if (statSync(p).isFile()) return p } catch { /* 不存在 / 读不动：换下一个候选 */ }
+  }
+  return ''
+}
+
+/**
+ * 基座来源（唯一判据入口）：用户自己的 → 新形态出厂 patch → 老形态出厂目录。
+ * `kind` 决定怎么读：`agent-plane`＝顶层就是插件行（`- id: …`）；
+ * `patch`＝profile 组合片段，要先抽回（见 pluginsSectionFromPatch）。
+ */
+export function basePresetSource(home, id) {
+  if (!ID_RE.test(String(id || ''))) return { kind: '', dir: '', file: '' }
+  const user = path.join(homeOf(home), '.agent-presets', String(id))
+  const userFile = path.join(user, 'agent.cordis.yml')
+  if (existsSync(userFile)) return { kind: 'agent-plane', dir: user, file: userFile }
+  const patch = shippedPatchPreset(home, id)
+  if (patch) return { kind: 'patch', dir: path.dirname(patch), file: patch }
+  const dir = basePresetDir(home, id)
+  if (dir) return { kind: 'agent-plane', dir, file: path.join(dir, 'agent.cordis.yml') }
+  return { kind: '', dir: '', file: '' }
+}
+
 /** 用户当前的默认 preset id（读 `<DSH_HOME>/settings.yaml` 的 `agent-presets.default`）；没有返回空串 */
 export function defaultPresetId(home) {
   const file = path.join(homeOf(home), 'settings.yaml')
@@ -391,20 +432,35 @@ export function presetState(home) {
     otherDefault: !!cur && cur !== PRESET_ID,
     baseId: base.id,
     baseWhy: base.why,
+    // 语义：**这条平面现在能不能建出来**（＝老形态基座在不在），不是"宿主自带基座存不存在"。
+    // 新形态（0.2.0-rc.2 的 dsh-web-app/presets/*.patch.yml）单独报在 shippedPatch —— 它只对
+    // profile 平面有用（见 buildProfileInsertBlock）。面板读数与按钮行为必须一致，别混成一件事。
     baseAvailable: !!basePresetDir(home, base.id),
     shippedRoot: shippedPresetsRoot(home),
+    shippedPatch: shippedPatchPreset(home, base.id),
   }
 }
 
 function manualHints(home, base) {
   const dir = presetDir(home)
-  return [
+  const hints = [
     '找不到基座 preset「' + base.id + '」，preset 没建。手工做法：',
     '  1) 把 <宿主 preset 目录>/' + base.id + ' 复制到 ' + dir,
     "  2) 把里面 - id: persona / name: '@deepseek-ai/dsh-persona' 那段换成",
     '     - id: ' + PRESET_ID,
     "       name: '" + PERSONA_PKG + "'",
   ]
+  // 0.2.0-rc.2 起出厂预设换了形态：`<根>/@deepseek-ai/dsh-web-app/presets/<id>.patch.yml`。
+  // 它**只给 profile 平面用**，抽出来当 .agent-presets 的目录是错的 —— 所以这里不假装能建，
+  // 而是把"你这台是新形态"如实说出来（触发来源：issue #2，2026-10-15）。
+  const patch = shippedPatchPreset(home, base.id)
+  if (patch) {
+    hints.push(
+      '注意：本机宿主自带的是 0.2.0-rc.2 的新形态出厂预设（' + patch + '），它只挂在 profile 平面（桌面版）里，',
+      '  不能当成 .agent-presets 的目录用 —— 这台机器该走 profile 平面（看 presetState().plane / - insert: 那段）。'
+    )
+  }
+  return hints
 }
 
 /** profile 平面写不进去时的兜底：把照抄能用的步骤原样端出来 */
@@ -440,6 +496,27 @@ function swapPersonaRowsInText(text) {
 }
 
 /**
+ * 从 0.2.0-rc.2 的出厂 patch（`- insert:` → `- id: preset-<id>` → `config.plugins:`）里
+ * 抽回 `plugins:` 下面那段插件行 —— **缩进原样保留**。
+ * 为什么不在这里减缩进：调用方已按"第一个 `- id:` 行的缩进"算平移量（delta = 10 - baseIndent），
+ * 新形态抽出来正好是 10 格、delta＝0，于是与旧形态共用同一条通路（少一条分支就少一处漂移）。
+ * 边界：`plugins:` 之后遇到**同级或更外层**的行就停（与 parsePresetItem 的切法同一判据）。
+ */
+function pluginsSectionFromPatch(text) {
+  const lines = String(text || '').replace(/\r\n/g, '\n').split('\n')
+  const i = lines.findIndex((l) => /^\s*plugins:\s*$/.test(l))
+  if (i < 0) return ''
+  const indent = (/^(\s*)/.exec(lines[i]) || ['', ''])[1].length
+  const out = []
+  for (let j = i + 1; j < lines.length; j++) {
+    const l = lines[j]
+    if (l.replace(/\s+$/, '') !== '' && (/^(\s*)/.exec(l) || ['', ''])[1].length <= indent) break
+    out.push(l)
+  }
+  return out.join('\n')
+}
+
+/**
  * 造出要追加进 profile 组合的那个 `- insert:` 块。
  *
  * 内容是**从基座 preset 克隆**的，不是手写模板：桌面版 presets 里那一串插件行就是"这个预设下加载什么"，
@@ -449,18 +526,20 @@ function swapPersonaRowsInText(text) {
  */
 function buildProfileInsertBlock(home) {
   const b = resolveBase({ home })
-  const src = basePresetDir(home, b.id)
-  const baseFile = src ? path.join(src, 'agent.cordis.yml') : ''
-  if (!baseFile || !existsSync(baseFile)) {
+  const src = basePresetSource(home, b.id)
+  if (!src.file) {
     return {
       ok: false,
       baseId: b.id,
       baseWhy: b.why,
-      messages: ['找不到基座 preset「' + b.id + '」的 agent.cordis.yml（' + (baseFile || '无候选根）') + '），没动你的 profile 组合。', ...profileManualHints('')],
+      messages: ['找不到基座 preset「' + b.id + '」（既没有 <预设目录>/' + b.id + '/agent.cordis.yml，也没有 0.2.0-rc.2 的 <根>/@deepseek-ai/dsh-web-app/presets/' + b.id + '.patch.yml），没动你的 profile 组合。', ...profileManualHints('')],
     }
   }
   let baseText = ''
-  try { baseText = readFileSync(baseFile, 'utf8') } catch { baseText = '' }
+  try { baseText = readFileSync(src.file, 'utf8') } catch { baseText = '' }
+  // 新形态（0.2.0-rc.2）：出厂 patch 本身就是组合片段，先把 `plugins:` 下的插件行抽回成顶层行，
+  // 后面照旧走「换人设行 → 平移缩进 → 拼 - insert: 外壳」——两条来源产出同形状的块。
+  if (src.kind === 'patch') baseText = pluginsSectionFromPatch(baseText)
   const sw = swapPersonaRowsInText(baseText)
   if (!sw.swapped) {
     return {
@@ -498,7 +577,7 @@ function buildProfileInsertBlock(home) {
     '        order: 9',
     '        plugins:',
   ]
-  return { ok: true, baseId: b.id, baseWhy: b.why, block: head.concat(shifted).join('\n'), baseFile }
+  return { ok: true, baseId: b.id, baseWhy: b.why, block: head.concat(shifted).join('\n'), baseFile: src.file }
 }
 
 /**

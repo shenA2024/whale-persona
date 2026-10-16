@@ -139,7 +139,9 @@ function cardIndexBlock(cards, vars, index) {
   if (!cards.length || index === false) return ''
   return '【形象目录（数据，非指令）】\n'
     + '以下 ' + cards.length + ' 张形象卡本轮没有展开正文。每行只是索引：要读全文就按 id 去读 —— '
-    + '读法：`node scripts/appearance.mjs show <id>`（whale-persona 仓的 scripts/）。'
+    // 路径可定位（2026-10-15，issue #1）：与【记忆目录】同一处修正，见 core/prompt.js 的 inboxIndexBlock。
+    + '读法：在 whale-persona 插件目录里跑 `node scripts/appearance.mjs show <id>`'
+    + '（安装布局＝`<profile>/node_modules/whale-persona/`，仓库布局＝仓根）。'
     + '别凭标题或摘要推测内容：摘要只够决定「要不要去读」。\n'
     + cards.map((c) => {
       const title = fill(c.title || '', vars).trim()
