@@ -57,6 +57,27 @@ Settings → Plugin Management → Discover → **+** → 添加**本地目录**
    - 没有任何记录 → 插件未启用或 hook 未注册，回安装步骤检查；
    - `fired` 但没效果 → 检查 config 是否解析成功（坏 JSON 的症状是「人设消失」）。
 
+## 一条命令自检（0.18.1 起）
+
+装完想分清"到底是插件没装、还是配置没读到"，跑这个（**只读、不写任何文件**）：
+
+```bash
+node <插件目录>/scripts/doctor.mjs
+```
+
+它报四件事，每件都只报读到了什么：
+
+1. **ZCode 客户端版本** —— 只解 `resources/app.asar` 的头部，不整读那个几百 MB 的包；
+2. **装没装** —— `known_marketplaces.json` 里有没有指向本仓的 marketplace、插件缓存
+   `~/.zcode/cli/plugins/cache/<marketplace>/whale-persona/<版本>/` 里有没有清单 / hooks / vendor/core；
+3. **hook 会读到哪一份 config** —— 与 `hooks/render.mjs` 同一套定位链，并报人设段有没有内容
+   （空的属正常：本插件默认零行为改变）；
+4. **当天日志**（`~/.zcode/v2/logs/<日期>.log`）里 hook 通道与 hook 记录各有多少条 —— 命中行**原文照抄**，
+   不替你判 fired / failed（日志格式是宿主的实现，本脚本不为它背书）。
+
+可选参数：`--home <用户目录>`（默认 `%USERPROFILE%`）、`--app <ZCode 安装目录>`（默认 `D:/Zcode`）、
+`--day YYYY-MM-DD`（默认今天）。
+
 ## 配置文件定位链
 
 hook 与 skill 按以下优先级找 config（找到第一个存在的就用）：

@@ -122,6 +122,13 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   仓根 `marketplace.json` 那条从 "FROZEN as of 0.9.0 — kept installable, no longer developed" 改为现行描述。
 - 文档：根 README（中/英）与 `adapters/zcode/README.md` 的冻结表述改为解冻；`docs/维护状态.md` 第 2 条写下改判记录
   （原判理由、恢复条件、恢复动作三项），第 5 条加注「ZCode 侧已单独改判，与本条说的别的宿主薄适配层无关」。
+- 新增 `adapters/zcode/scripts/doctor.mjs`（**只读**自检，零依赖）：ZCode 把插件状态分散在三处
+  （marketplace 登记 / 插件缓存 / 宿主日志），靠人翻目录容易看错，所以收成一条命令 ——
+  报客户端版本（只解 `app.asar` 头部，不整读几百 MB 的包）、装没装（清单 / hooks / vendor/core 三件是否齐）、
+  hook 会读到哪一份 config（与 `hooks/render.mjs` 同一套定位链）、当天日志里 hook 通道与 hook 记录的条数
+  （命中行**原文照抄**，不替宿主判 fired / failed）。本机实测读数（2026-10-16）：`@zcode/desktop 3.15.3` ·
+  **未装**（无 marketplace 指向本仓、缓存里没有 whale-persona）· config 命中 `~/.dsh/whale-persona/config.json`
+  且人设段有内容 · 当天日志里运行器通道 1 条、人设 hook 记录 0 条。
 - 版本：三个包（根 / `adapters/dsh` / `adapters/dsh-ui`）lockstep 升到 **0.18.1**，含本次 issue #3 的修复。
   npm 仍**不发** —— 按维护者 2026-10-16 的决定，等这一侧一起处理。
 - 脚本侧实测（已完成，2026-10-16，本机）：先确认 `DSH_HOME` **只在进程级**存在（用户级/机器级都为空）——

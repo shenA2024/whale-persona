@@ -1,0 +1,156 @@
+#!/usr/bin/env node
+/**
+ * ZCode 侧自检（只读 · 零依赖 · 不写任何文件）—— 0.18.1 新增。
+ *
+ * 为什么有它（触发来源 2026-10-16）：ZCode 适配器解冻后，"装上了但不确定 hook 有没有真的跑"
+ * 需要一条可复核的判据。ZCode 把插件状态分散在三处（marketplace 登记 / 插件缓存 / 宿主日志），
+ * 靠人翻目录容易看错，所以把读数收进一条命令：
+ *
+ *   node <插件目录>/scripts/doctor.mjs
+ *
+ * 它回答四个问题，每问都只报"读到了什么"，不猜：
+ *   ① 这台 ZCode 客户端什么版本（只读 app.asar 头部，不解整个包）
+ *   ② 我们的 marketplace 登记了没有、插件缓存里有没有 whale-persona（装没装）
+ *   ③ hook 会读到哪一份 config（定位链与 DSH 侧同一套），里面有没有填人设
+ *   ④ 当天的宿主日志里，hook 通道与 hook 记录有没有出现（**只报命中行原文**，
+ *      不硬判 fired / failed —— 日志格式属于宿主实现，本脚本不为它背书）
+ *
+ * 纪律：只读；路径不存在就报"没读到"，异常一律降级为空读数，绝不打断或改写任何东西。
+ */
+import { closeSync, existsSync, openSync, readFileSync, readdirSync, readSync, statSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+const argv = process.argv.slice(2)
+function arg(name, fallback = '') {
+  const i = argv.indexOf('--' + name)
+  return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback
+}
+
+const home = path.resolve(arg('home', process.env.USERPROFILE || os.homedir()))
+const appDir = path.resolve(arg('app', 'D:/Zcode'))
+const today = new Date()
+const day = arg('day', today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0'))
+
+const out = []
+const say = (s) => out.push(s)
+
+/** 只读 asar 头部的 package.json —— 不整读（本机 app.asar 324 MB） */
+function asarPackage(asarPath) {
+  if (!existsSync(asarPath)) return null
+  let fd = -1
+  try {
+    fd = openSync(asarPath, 'r')
+    const head = Buffer.alloc(16)
+    readSync(fd, head, 0, 16, 0)
+    const headerSize = head.readUInt32LE(12)
+    if (!headerSize || headerSize > 64 * 1024 * 1024) return null
+    const hb = Buffer.alloc(headerSize)
+    readSync(fd, hb, 0, headerSize, 16)
+    const entry = (JSON.parse(hb.toString('utf8')).files || {})['package.json']
+    if (!entry) return null
+    const data = Buffer.alloc(entry.size)
+    readSync(fd, data, 0, entry.size, 16 + headerSize + parseInt(entry.offset, 10))
+    const pkg = JSON.parse(data.toString('utf8'))
+    return { name: pkg.name || '', version: pkg.version || '' }
+  } catch { return null } finally { if (fd >= 0) { try { closeSync(fd) } catch { /* 已关 */ } } }
+}
+
+function readJson(file) {
+  try { return JSON.parse(readFileSync(file, 'utf8')) } catch { return null }
+}
+
+// ── ① 客户端版本 ────────────────────────────────────────────────────────────────
+say('① ZCode 客户端')
+const asar = path.join(appDir, 'resources', 'app.asar')
+const pkg = asarPackage(asar)
+if (pkg) say('   ' + (pkg.name || '(无 name)') + ' ' + pkg.version + '   ← ' + asar)
+else say('   没读到 ' + asar + '（用 --app <ZCode 安装目录> 指定）')
+
+// ── ② 装没装 ───────────────────────────────────────────────────────────────────
+say('② 插件安装状态')
+const cliDir = path.join(home, '.zcode', 'cli')
+const mpFile = path.join(cliDir, 'plugins', 'known_marketplaces.json')
+const mp = readJson(mpFile)
+if (!mp || !Array.isArray(mp.marketplaces)) {
+  say('   没读到 marketplace 登记：' + mpFile)
+} else {
+  const ours = mp.marketplaces.filter((m) => JSON.stringify(m.source || {}).toLowerCase().includes('whale-persona'))
+  say('   已登记 marketplace：' + mp.marketplaces.map((m) => m.id).join(', '))
+  say(ours.length
+    ? '   其中指向本仓的：' + ours.map((m) => m.id + ' ← ' + JSON.stringify(m.source)).join(' · ')
+    : '   ⚠ 没有任何 marketplace 指向 whale-persona 仓（Discover 里 + 一次，来源填仓目录或仓库 URL）')
+}
+const cacheRoot = path.join(cliDir, 'plugins', 'cache')
+let installed = []
+try {
+  for (const m of readdirSync(cacheRoot, { withFileTypes: true })) {
+    if (!m.isDirectory()) continue
+    const p = path.join(cacheRoot, m.name, 'whale-persona')
+    if (!existsSync(p)) continue
+    for (const v of readdirSync(p, { withFileTypes: true })) {
+      if (!v.isDirectory()) continue
+      const dir = path.join(p, v.name)
+      installed.push({
+        dir,
+        manifest: existsSync(path.join(dir, '.zcode-plugin', 'plugin.json')),
+        hooks: existsSync(path.join(dir, 'hooks', 'hooks.json')),
+        core: existsSync(path.join(dir, 'vendor', 'core', 'render.js')),
+        version: (readJson(path.join(dir, '.zcode-plugin', 'plugin.json')) || {}).version || v.name,
+      })
+    }
+  }
+} catch { /* 没装过：cache 目录可能不存在 */ }
+if (!installed.length) {
+  say('   ⚠ 插件缓存里没有 whale-persona：' + path.join(cacheRoot, '<marketplace>', 'whale-persona', '<版本>'))
+} else {
+  for (const it of installed) {
+    say('   ✓ 已装 ' + it.dir)
+    say('     清单 .zcode-plugin/plugin.json = ' + it.manifest + ' · hooks/hooks.json = ' + it.hooks
+      + ' · vendor/core = ' + it.core + ' · 版本 = ' + it.version)
+  }
+}
+
+// ── ③ hook 会读到哪一份 config（与 hooks/render.mjs 同一套定位链）────────────────
+say('③ hook 读到的配置')
+const dshHome = process.env.DSH_HOME && process.env.DSH_HOME.trim() ? process.env.DSH_HOME.trim() : path.join(home, '.dsh')
+const chain = [
+  ['$WHALE_PERSONA_CONFIG', process.env.WHALE_PERSONA_CONFIG],
+  ['$DSH_WHALE_CONFIG', process.env.DSH_WHALE_CONFIG],
+  ['$DSH_HOME/whale-persona/config.json', path.join(dshHome, 'whale-persona', 'config.json')],
+  ['$DSH_HOME/whale-suite/config.json', path.join(dshHome, 'whale-suite', 'config.json')],
+  ['~/.whale-persona/config.json', path.join(home, '.whale-persona', 'config.json')],
+]
+const hit = chain.find(([, p]) => p && existsSync(p))
+if (!hit) {
+  say('   定位链一个都没命中（纯 ZCode 用户放 ~/.whale-persona/config.json；想与 DSH 共用就放 ' + path.join(dshHome, 'whale-persona', 'config.json') + '）')
+} else {
+  const cfg = readJson(hit[1])
+  const who = [cfg && cfg.persona && cfg.persona.character, cfg && cfg.persona && cfg.persona.selfName, cfg && cfg.user && cfg.user.name]
+    .map((x) => String(x || '').trim())
+    .filter(Boolean)
+  say('   命中 ' + hit[0] + ' → ' + hit[1])
+  say('   人设段' + (cfg && cfg.persona && String(cfg.persona.character || '').trim() ? '**有内容**（长度 ' + String(cfg.persona.character).length + '）' : '为空 —— 装上也不会有可见效果（这是设计：默认零行为改变）')
+    + (who.length ? ' · 自称/称呼等已填 ' + who.length + ' 项' : ''))
+}
+
+// ── ④ 当天日志里的 hook 痕迹（只报命中行，不替宿主判 fired/failed）──────────────
+say('④ 当天日志（' + day + '）')
+const logFile = path.join(home, '.zcode', 'v2', 'logs', day + '.log')
+if (!existsSync(logFile)) {
+  say('   没读到 ' + logFile + '（用 --day YYYY-MM-DD 换一天）')
+} else {
+  let lines = []
+  try { lines = readFileSync(logFile, 'utf8').split(/\r?\n/) } catch { lines = [] }
+  const runner = lines.filter((l) => /channel "hooks"/.test(l))
+  const hookish = lines.filter((l) => /hook/i.test(l) && /(whale-persona|render\.mjs|UserPromptSubmit)/i.test(l))
+  say('   文件 ' + logFile + '（' + Math.round(statSync(logFile).size / 1024) + ' KB，' + lines.length + ' 行）')
+  say('   运行器通道注册（channel "hooks"）：' + runner.length + ' 条' + (runner.length ? '' : ' —— 没见到说明 hook 运行器没起（至少要先装一个带 hook 的插件）'))
+  say('   与人设 hook 相关的行：' + hookish.length + ' 条')
+  for (const l of hookish.slice(-3)) say('     · ' + l.slice(0, 200))
+  if (hookish.length) say('   ↑ 原文照抄，fired / failed 以宿主写的字样为准；本脚本不替它判定。')
+}
+
+say('')
+say('结论口径：② 已装 ＋ ④ 有 hook 行 = 这一侧可以用；② 未装 → 去 ZCode 设置 → 插件管理 → Discover → + 添加本仓。')
+console.log(out.join('\n'))
