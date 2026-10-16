@@ -143,12 +143,19 @@ if (!existsSync(logFile)) {
   let lines = []
   try { lines = readFileSync(logFile, 'utf8').split(/\r?\n/) } catch { lines = [] }
   const runner = lines.filter((l) => /channel "hooks"/.test(l))
-  const hookish = lines.filter((l) => /hook/i.test(l) && /(whale-persona|render\.mjs|UserPromptSubmit)/i.test(l))
+  // 别只按 "whale-persona" 字样找：宿主写执行记录时用的措辞是它的实现细节（可能是插件 id、
+  // 可能是脚本路径、也可能只有 "hook"）。所以分成三层报：注册行 → 其它含 hook 的行 → 其中点名本插件的。
+  const hookish = lines.filter((l) => /hook/i.test(l) && !/channel "hooks"/.test(l))
+  const mine = hookish.filter((l) => /(whale-persona|render\.mjs|UserPromptSubmit)/i.test(l))
   say('   文件 ' + logFile + '（' + Math.round(statSync(logFile).size / 1024) + ' KB，' + lines.length + ' 行）')
   say('   运行器通道注册（channel "hooks"）：' + runner.length + ' 条' + (runner.length ? '' : ' —— 没见到说明 hook 运行器没起（至少要先装一个带 hook 的插件）'))
-  say('   与人设 hook 相关的行：' + hookish.length + ' 条')
-  for (const l of hookish.slice(-3)) say('     · ' + l.slice(0, 200))
-  if (hookish.length) say('   ↑ 原文照抄，fired / failed 以宿主写的字样为准；本脚本不替它判定。')
+  say('   其它含 hook 的日志行：' + hookish.length + ' 条 · 其中点名本插件的：' + mine.length + ' 条')
+  for (const l of (mine.length ? mine : hookish).slice(-5)) say('     · ' + l.slice(0, 200))
+  if (!mine.length && !hookish.length) {
+    say('   ⚠ 还没有任何 hook 执行痕迹 —— 装完要**新开一个会话、发一句**，hook 才有机会跑（装之前开着的会话不一定重载）。')
+  } else {
+    say('   ↑ 原文照抄，fired / failed 以宿主写的字样为准；本脚本不替它判定。')
+  }
 }
 
 // ── ⑤ 运行环境：hook 的 `command: "node"` 找不找得到 ────────────────────────────
