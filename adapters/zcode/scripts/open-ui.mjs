@@ -12,10 +12,10 @@
  * 定位链决定（默认就是 DSH 与 ZCode 共用的那一份）。所以它跟 hook 是两件事：
  * hook 会往会话里注入文本，这个只开界面。
  *
- * 用法：
- *   node scripts/open-ui.mjs                          # 起始端口 8787
- *   node scripts/open-ui.mjs --port 9000 --print      # 只打印 url，不开浏览器
- *   node scripts/open-ui.mjs --engine <目录> --config <config.json>
+ * 用法（`<插件目录>` ＝ 本文件所在的那一级，也就是这个插件的根）：
+ *   node <插件目录>/scripts/open-ui.mjs                        # 起始端口 8787
+ *   node <插件目录>/scripts/open-ui.mjs --port 9000 --print    # 只打印 url，不开浏览器
+ *   node <插件目录>/scripts/open-ui.mjs --engine <目录> --config <config.json>
  *
  * `--engine` 缺省按 `$WHALE_PERSONA_ENGINE` → `~/.dsh/plugins/whale-persona` 找
  * （DSH 插件装好后那份实体副本里就带 `scripts/ui.mjs`）。
@@ -59,7 +59,7 @@ function openBrowser(url) {
   const platform = process.platform
   const cmd = platform === 'win32' ? 'cmd' : platform === 'darwin' ? 'open' : 'xdg-open'
   const args = platform === 'win32' ? ['/c', 'start', '', url] : [url]
-  try { spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref() } catch { /* 打不开就算了，url 已经打印出来 */ }
+  try { spawn(cmd, args, { detached: true, stdio: 'ignore', shell: false }).unref() } catch { /* 打不开就算了，url 已经打印出来 */ }
 }
 
 let uiPort = null
@@ -76,12 +76,8 @@ for (let p = startPort; p < startPort + 10; p++) {
 if (uiPort === null) {
   for (let p = startPort; p < startPort + 10; p++) {
     if (await probe(p)) continue
-    const child = spawn(process.execPath, [uiScript, '--port', String(p)], {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: true,
-      env: config ? { ...process.env, WHALE_PERSONA_CONFIG: config } : process.env,
-    })
+    const childOptions = { detached: true, stdio: 'ignore', windowsHide: true, env: config ? { ...process.env, WHALE_PERSONA_CONFIG: config } : process.env }
+    const child = spawn(process.execPath, [uiScript, '--port', String(p)], { ...childOptions, shell: false })
     child.unref()
     let ready = false
     for (let i = 0; i < 40; i++) {
