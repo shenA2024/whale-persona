@@ -5,7 +5,7 @@
  * 人设怎么排布、记忆怎么防注入、思维链语言怎么写指令，全在这一层。
  */
 import { renderPersona, tierOf } from './render.js'
-import { indexBrief, readInjected, resolveInbox, splitByTier } from './memoryInbox.js'
+import { indexBrief, readInjectedWithSeq, resolveInbox, splitByTier } from './memoryInbox.js'
 import { sinkRoutes } from './sinks.js'
 import { applicability, evidenceText } from './memoryEvidence.js'
 
@@ -36,10 +36,12 @@ function withInbox(cfg, cwd, opts = {}) {
     if (!m || m.enabled === false || m.inbox === false) return cfg
     const max = Number(m.maxEntries) > 0 ? Number(m.maxEntries) : 30
     // 只收人工确认过的条目：proposed 候选永不注入（memory.requireConfirm=false 时放行老格式 legacy）
-    const inbox = readInjected(resolveInbox(m.inboxPath), { allowLegacy: m.requireConfirm !== true })
-      .filter((entry) => applicability(entry, { cwd, ...opts }).state === 'ACCEPT')
+    // 序号表取**全量重放**那份（readInjectedWithSeq）：注入视图剔掉了待确认条目，用它的下标当序号
+    // 会让【记忆目录】印的编号与 `memory.mjs show <序号>` 错位（2026-10-16 修正）。
+    const { entries: injected, seqOf } = readInjectedWithSeq(resolveInbox(m.inboxPath), { allowLegacy: m.requireConfirm !== true })
+    const inbox = injected.filter((entry) => applicability(entry, { cwd, ...opts }).state === 'ACCEPT')
     if (!inbox.length) return cfg
-    const { inject, index } = splitByTier(inbox, max, cwd)
+    const { inject, index } = splitByTier(inbox, max, cwd, seqOf)
     if (m.index === false) return { ...cfg, __whaleInbox: inject }
     return { ...cfg, __whaleInbox: inject, __whaleIndex: index }
   } catch {

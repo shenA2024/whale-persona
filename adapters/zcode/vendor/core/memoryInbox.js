@@ -231,9 +231,16 @@ export function pickRelevant(entries, max, cwd) {
  * 返回 { inject: [条目...], index: [{seq, entry, why}...] } —— seq 是**重放视图序号**
  * （与 memory.mjs status 一致），why ∈ 'cold' | 'over'（超出额度未展开）；两半都保持时间序（旧→新）。
  */
-export function splitByTier(entries, max, cwd) {
+export function splitByTier(entries, max, cwd, seqOfIn) {
   const list = Array.isArray(entries) ? entries : []
-  const seqOf = new Map(list.map((e, i) => [e, i]))
+  // seq 必须是**重放视图序号**（＝ CLI `memory.mjs show/tier/search` 的口径），不是本数组下标。
+  // 为什么：注入视图剔掉了待确认条目与非 memory 类（沉降类）条目，下标会整体左移 ——
+  // 而【记忆目录】把这个 seq 印给读者、读者再拿它去跑 CLI，两边只有指同一条，那行读法才可用。
+  // 触发来源：2026-10-16 实测 —— 目录印 `[73] cold · BLE 那条`，`show 73` 返回的是一条待确认候选
+  // （它真身是 79），偏差 = 序号 79 之前的待确认条数。传 seqOf（见 readInjectedWithSeq）即修好；
+  // 不传时退回"本数组下标"的老行为（单测与老调用点逐字节不变）。
+  const seqOf = seqOfIn instanceof Map ? seqOfIn : new Map(list.map((e, i) => [e, i]))
+  const seqAt = (e) => { const v = seqOf.get(e); return Number.isFinite(v) ? v : 0 }
   const pinned = []
   const contend = []
   const cold = []
@@ -250,13 +257,13 @@ export function splitByTier(entries, max, cwd) {
   const room = Math.max(0, n)
   const picked = room > 0 ? pickRelevant(contend, room, cwd) : []
   const pickedSet = new Set(picked)
-  const byTime = (a, b) => (seqOf.get(a) || 0) - (seqOf.get(b) || 0)
+  const byTime = (a, b) => seqAt(a) - seqAt(b)
   return {
     inject: pinned.concat(picked).sort(byTime),
     index: contend
       .filter((e) => !pickedSet.has(e))
-      .map((e) => ({ seq: seqOf.get(e) || 0, entry: e, why: 'over' }))
-      .concat(cold.map((e) => ({ seq: seqOf.get(e) || 0, entry: e, why: TIER.cold })))
+      .map((e) => ({ seq: seqAt(e), entry: e, why: 'over' }))
+      .concat(cold.map((e) => ({ seq: seqAt(e), entry: e, why: TIER.cold })))
       .sort((a, b) => a.seq - b.seq),
   }
 }
@@ -294,6 +301,26 @@ export function readInjected(file, opts) {
   // 只注入 memory 类：沉降类条目（kind 非 memory）即使已确认也不进提示词 —— 它们的去处是文件，不是每轮提示词
   return readInbox(file).filter((e) => kindOf(e) === MEMORY_KIND)
     .filter((e) => e.status === STATUS.confirmed || (allowLegacy && e.status === STATUS.legacy))
+}
+
+/**
+ * 注入视图 + **重放视图序号表**（2026-10-16 修正）。
+ * 为什么单列一个函数、而不是给每条挂个 `__seq`：条目对象会被渲染层与 sinks 复用，
+ * 往里塞私货会跟着序列化跑到别处；序号只该在"渲染目录行"这一条通路上流动。
+ * 返回的 seqOf 是 `readInbox` **全量**重放的下标（＝ CLI 口径），注入视图只是它的子集 ——
+ * 于是 `splitByTier(entries, max, cwd, seqOf)` 印出来的序号与 `memory.mjs show <序号>` 指同一条。
+ */
+export function readInjectedWithSeq(file, opts) {
+  const allowLegacy = !!(opts && opts.allowLegacy)
+  const all = readInbox(file)
+  const seqOf = new Map()
+  const entries = []
+  all.forEach((e, i) => {
+    seqOf.set(e, i)
+    if (kindOf(e) !== MEMORY_KIND) return
+    if (e.status === STATUS.confirmed || (allowLegacy && e.status === STATUS.legacy)) entries.push(e)
+  })
+  return { entries, seqOf }
 }
 
 /** 待人工处理的条目（proposed 候选 + legacy 老格式），带重放视图序号，供 CLI / 面板确认或否决 */

@@ -327,3 +327,29 @@ t('T21 纪律写明 proposed 与确认权:', out.includes('"status":"proposed"')
   t('T27 必须写明缺省走竞争池:', disc.includes('缺省 = hot'))
   t('T27 必须要求显式写 core:', disc.includes('显式写 "core"'))
 }
+
+// T28 目录序号必须与 CLI 同口径（2026-10-16 修正）
+// 触发来源：实测【记忆目录】印 `[73] cold · 判 Windows 的 BLE…`，而 `memory.mjs show 73`
+// 返回的是一条**待确认**候选（BLE 那条真身是 79）；偏差 = 序号 79 之前的待确认条数。
+// 根因：注入视图剔掉待确认与非 memory 类条目后拿数组下标当序号 —— 而序号是印给读者去跑 CLI 的，
+// 两边指不上同一条，那行读法就是坏的（比"路径写不清"更糟：会读到别的条目）。
+{
+  const seqFile = path.join(tmp, 'whale-persona', 'seq-inbox.jsonl')
+  writeFileSync(seqFile, [
+    JSON.stringify({ text: '候选：还没确认的那条', at: '2026-10-16T01:00:00Z', status: 'proposed' }),
+    JSON.stringify({ text: '确认过的冷条目', at: '2026-10-16T02:00:00Z', status: 'confirmed', tier: 'cold' }),
+    JSON.stringify({ text: '确认过的常驻条目', at: '2026-10-16T03:00:00Z', status: 'confirmed' }),
+    '',
+  ].join('\n'), 'utf8')
+  const { readInbox, readInjectedWithSeq, splitByTier } = await import('../core/memoryInbox.js')
+  const withSeq = readInjectedWithSeq(seqFile, { allowLegacy: false })
+  const full = readInbox(seqFile)
+  const pick = (rows) => rows.index.find((r) => r.entry.text === '确认过的冷条目')
+  t('T28 注入视图带全量序号表（待确认条目也占位）:',
+    withSeq.entries.length === 2 && withSeq.seqOf.get(withSeq.entries[0]) === 1)
+  const row = pick(splitByTier(withSeq.entries, 44, '', withSeq.seqOf))
+  t('T28 目录印的序号 = 全量重放序号（与 CLI 指同一条）:',
+    !!row && row.seq === full.findIndex((e) => e.text === '确认过的冷条目') && full[row.seq].text === '确认过的冷条目')
+  const old = pick(splitByTier(withSeq.entries, 44, ''))
+  t('T28 不传 seqOf 时保持老行为（注入视图下标，老调用点不受影响）:', !!old && old.seq === 0)
+}

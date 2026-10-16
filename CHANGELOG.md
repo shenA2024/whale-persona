@@ -31,7 +31,21 @@ DSH 0.2.0-rc.2 把出厂预设从 `<根>/@deepseek-ai/dsh-agent-presets/presets/
 仓库布局＝仓根；数据目录不一定在脚本目录下）」。`tier: cold` 的条目只有这条读法能取回，
 而安装布局下 `scripts/` 不在数据目录下 —— 旧文案默认了仓库布局，照抄必失败。
 
-验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP6、DP6b–DP6f 六条）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
+### 【记忆目录】的序号与 CLI 同口径（2026-10-16，自查发现）
+
+【记忆目录】印的序号原本取"注入视图"的下标 —— 而注入视图剔掉了待确认条目与非 memory 类（沉降类）条目，
+于是它与 `memory.mjs show/tier/search`（＝ `readInbox` 全量重放口径）错位，偏差 = 该序号之前的待确认条数。
+
+- 实测（2026-10-16）：目录印 `[73] cold · 判 Windows 的 BLE…`，而 `show 73` 返回的是一条**待确认**候选
+  （BLE 那条真身是 79）；维护者降 tier 后目录印 `[72]`／`[75]`，真身是 `78`／`81`，偏差恒为 6。
+- 后果比"路径写不清"更糟：照目录给的读法去读 cold 条目，会**读到别的条目**（最坏是待确认候选被当成已确认用）。
+- 修法：新增 `readInjectedWithSeq()` 返回 `{ entries, seqOf }`（seqOf 是 `readInbox` 全量下标），
+  `splitByTier(entries, max, cwd, seqOf)` 用它编号；不传 seqOf 时退回老行为（老调用点逐字节不变）。
+  `core/prompt.js` 的 `withInbox()` 改走这条通路 —— 那层 applicability 过滤也不再让序号左移。
+- 修后实测：目录印 `[78]`／`[79]`／`[80]`／`[81]`／`[82]`／`[83]`，与 `show 78`…`show 83` 逐条对上。
+- 与 SPEC 的关系：SPEC 原文就写着"序号是收件箱重放视图的序号" —— 这次是**实现向规范对齐**，规范未改。
+
+验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP6、DP6b–DP6f 六条；`tests/inbox.mjs` 新增 T28 三条）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
 `tests/spec-i18n.mjs` 四判据全绿（SPEC.md ↔ SPEC.en.md 的固定文案块仍逐字一致）· `node scripts/sync-core.mjs` 已同步 zcode vendor ·
 行尾无 CRLF（`git diff --numstat` 与 `git diff --ignore-cr-at-eol --numstat` 一致）·
 注入体积读数（同一 cwd 前后对比）：14023 → **14137**（+114），预算 14000 **仍超 137** —— 主因是历史备忘占 88%，
