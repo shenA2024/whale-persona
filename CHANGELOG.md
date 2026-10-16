@@ -3,7 +3,7 @@
 > 版本号口径：根包与两个 sub 包（`adapters/dsh`、`adapters/dsh-ui`）**lockstep**，一起动。
 > 每条改动都写**触发来源**与**验证方式** —— 与本仓 CONTRIBUTING 的纪律一致。
 
-## 未发布（2026-10-15，0.18.0 之后）
+## 未发布（2026-10-15 起，0.18.0 之后 → 0.18.1）
 
 触发来源：两条外部 issue 的修复。截至本条仍**未发版**（0.18.0 只在 GitHub Release 里，npm latest 仍是 0.17.7）。
 
@@ -105,6 +105,29 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
 的夹具污染成 profile 平面，现在测试开头 `delete` 掉）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
 `tests/spec-i18n.mjs` 四判据全绿（SPEC 未涉及判平面，未改）· `node scripts/sync-core.mjs` 已同步 zcode vendor ·
 行尾无 CRLF（`git diff --numstat` 与 `--ignore-cr-at-eol` 两组逐字一致）· 本次改的是安装面，注入文本一字未动。
+
+### ZCode 适配器解冻 + 清单对齐 ZCode 3.15.3（2026-10-16）
+
+触发来源：维护者要求把 ZCode 这一侧接上并在本机用起来（这一侧自 2026-09-19 冻结，原判理由见
+[docs/维护状态.md](docs/维护状态.md) 第 2 条）。
+
+- 核对结论（先读规范、再动手）：ZCode 3.15.3（`@zcode/desktop`）的插件规范与 0.9.0 那代**同构** ——
+  清单仍是 `.zcode-plugin/plugin.json`（回落顺序 `.claude-plugin/` → `.codex-plugin/`），hook 仍是
+  `hooks/hooks.json`，七个受支持事件里仍有 `UserPromptSubmit`，`type: "process"` 用 `command` ＋ `args[]`、
+  超时字段是毫秒的 `timeoutMs`；`marketplace.json` 的 `plugins[].source` 允许**相对路径字符串**，
+  也允许 `directory` / `github` / `git` / `url` / `git-subdir` 对象（`npm`、`pip` 不支持）。
+  依据：官方 `zcode-guide` 插件的 `diagnosing-hooks` / `diagnosing-plugins` 技能文档（本机插件缓存里那份），
+  以及本机已装的 11 个官方插件的实际目录结构与 `known_marketplaces.json`。
+- 清单改动：`adapters/zcode/.zcode-plugin/plugin.json` 补 `skills: "skills"` 与 `author`，版本进 lockstep；
+  仓根 `marketplace.json` 那条从 "FROZEN as of 0.9.0 — kept installable, no longer developed" 改为现行描述。
+- 文档：根 README（中/英）与 `adapters/zcode/README.md` 的冻结表述改为解冻；`docs/维护状态.md` 第 2 条写下改判记录
+  （原判理由、恢复条件、恢复动作三项），第 5 条加注「ZCode 侧已单独改判，与本条说的别的宿主薄适配层无关」。
+- 版本：三个包（根 / `adapters/dsh` / `adapters/dsh-ui`）lockstep 升到 **0.18.1**，含本次 issue #3 的修复。
+  npm 仍**不发** —— 按维护者 2026-10-16 的决定，等这一侧一起处理。
+- 真机验收：**待做** —— 本机在 ZCode 3.15.3 里加一次 marketplace（本地目录或仓库 URL）、装一次、发一轮，
+  再看当天 `~/.zcode/v2/logs/<日期>.log` 里这条 hook 的记录是 fired 还是 failed。上面写的都是
+  **规范层**核对（读官方技能文档 ＋ 本机插件缓存的实际结构），宿主层结论等装完再补 —— 装成功前，
+  这条改动不算验收通过。
 
 ## v0.18.0（2026-10-14）
 

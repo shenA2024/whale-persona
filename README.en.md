@@ -33,10 +33,12 @@ can toggle, the language it thinks in, self-image and reply tone (both opt-in, b
 model), and a long-term memory inbox whose entries only take effect after an explicit human `confirm`
 line — enforced in code, not merely asked for in the prompt.
 
-One `config.json` plus one append-only inbox file, shared by two hosts. **DeepSeek Harness** is the
-primary host; the **ZCode adapter is retired** (2026-09-19) and kept for history only — no further
-development, no real-machine regression runs, not first in line for fixes. Persona presets, SillyTavern
-card import and the `dsh.bundle` patch all target the harness and are unrelated to ZCode.
+One `config.json` plus one append-only inbox file, shared by three hosts. **DeepSeek Harness** is the
+primary host; the **ZCode adapter was un-frozen on 2026-10-16** (it had been retired on 2026-09-19 because
+ZCode snapshotted user workspaces) — its manifest was aligned with ZCode 3.15.3, and a real-machine
+regression there is **still pending** (one install inside ZCode). That side only does `UserPromptSubmit`
+hook injection plus one management skill; persona presets, SillyTavern card import and the `dsh.bundle`
+patch all target the harness and are unrelated to ZCode.
 
 MIT · pure ESM · zero runtime dependencies · never touches the network · any error degrades to an
 empty section (worst case: no persona — never a broken session).
@@ -231,7 +233,7 @@ SPEC.en.md       the same spec in English, machine-checked against SPEC.md by te
 examples/        runnable examples: demo config, demo inbox, empty config
 adapters/dsh/    the harness half: persona sections, thinking-language section, reflex layer
 adapters/dsh-ui/ harness settings panel (host routes + browser half)
-adapters/zcode/  retired ZCode plugin (history only)
+adapters/zcode/  ZCode plugin (un-frozen 2026-10-16): UserPromptSubmit hook + management skill
 scripts/         installer, render preview, local editor, memory console, appearance cards,
                  injection size, doctor, reflex rules, core→vendor sync
 tests/           20 test files, run with npm test

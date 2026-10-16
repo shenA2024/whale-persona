@@ -1,8 +1,11 @@
 # whale-persona —— ZCode 适配器
 
-> **维护状态（2026-09-19 起）：ZCode 适配器已冻结。** 作者已不再使用 ZCode —— 这里不再单独开发、不做真机回归，
-> 出问题不优先修。它仍可用：渲染核心仍在仓库根 `core/`，发布前跑一次 `node scripts/sync-core.mjs` 就把新能力同步进 `vendor/`。
-> 冻结的是**为 ZCode 单独投的精力**，不是这个目录的存在。
+> **维护状态（2026-10-16 起：已解冻）**。2026-09-19 曾因 ZCode 快照用户工作区而冻结这一侧；2026-10-16 维护者
+> 决定恢复 —— 先核对过 ZCode 3.15.3 的插件规范（清单仍是 `.zcode-plugin/plugin.json` ＋ `hooks/hooks.json`，
+> 触发事件仍是 `UserPromptSubmit`，与官方 `zcode-guide` 的 hooks 文档逐条对上）；真机回归**待做**
+> （本机装一次、发一轮、看 `~/.zcode/v2/logs/<日期>.log` 里 hook 是否 fired）。
+> 渲染核心仍在仓库根 `core/`，发布前跑一次 `node scripts/sync-core.mjs` 就把新能力同步进 `vendor/`（自包含副本）。
+> 边界：冻结期（0.10.0–0.18.0）DSH 侧新增的预设库 / 酒馆卡 / 设置面板**不**属于这一侧。
 
 whale-persona 的 ZCode 插件形态：**UserPromptSubmit hook 每轮动态注入**人设、工作契约
 与长期记忆（对齐 DSH 版「改配置下一步生效」的体验），外加一个 `whale-persona` 技能

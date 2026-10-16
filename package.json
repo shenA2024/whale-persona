@@ -1,7 +1,7 @@
 {
   "name": "whale-persona",
-  "version": "0.18.0",
-  "description": "Blank-by-default local persona engine for DeepSeek Harness and Codex: identity, user address, agreements, scoped memory evidence, human-confirmed revisions, shareable presets and read-only continuity tools. Zero runtime dependencies; no network access. ZCode adapter retained for history.",
+  "version": "0.18.1",
+  "description": "Blank-by-default local persona engine for DeepSeek Harness, Codex and ZCode: identity, user address, agreements, scoped memory evidence, human-confirmed revisions, shareable presets and read-only continuity tools. Zero runtime dependencies; no network access.",
   "type": "module",
   "main": "./adapters/dsh/index.js",
   "dsh": {
