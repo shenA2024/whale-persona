@@ -8,9 +8,10 @@
  * 所以这一侧给一个启动器就够了：探端口 → 复用已在跑的实例（只认 `/api/state` 报的 file
  * 与我们这份 config 一致）→ 没有就隐藏起一个 → 打开浏览器。
  *
- * **它不注入任何人设**：只把编辑页打开；编哪份配置由 `--config` / `WHALE_PERSONA_CONFIG` /
- * 定位链决定（默认就是 DSH 与 ZCode 共用的那一份）。所以它跟 hook 是两件事：
- * hook 会往会话里注入文本，这个只开界面。
+ * **它不注入任何人设**：只把编辑页打开。默认编的是 **ZCode 自己那份**
+ * （`~/.whale-persona/config.json`，与 hook 定位链第 ③ 档同一个位置）—— 这样 ZCode 的人格与
+ * DSH 那份互不干扰；要编别的（比如 DSH 那份）用 `--config <路径>` 或设 `WHALE_PERSONA_CONFIG`。
+ * 它跟 hook 是两件事：hook 往会话里注入文本，它只开界面。
  *
  * 用法（`<插件目录>` ＝ 本文件所在的那一级，也就是这个插件的根）：
  *   node <插件目录>/scripts/open-ui.mjs                        # 起始端口 8787
@@ -35,7 +36,9 @@ const startPort = Number(argOf('port', '8787')) || 8787
 const home = process.env.USERPROFILE || os.homedir()
 const engine = path.resolve(argOf('engine', process.env.WHALE_PERSONA_ENGINE || path.join(home, '.dsh', 'plugins', 'whale-persona')))
 const uiScript = path.join(engine, 'scripts', 'ui.mjs')
-const config = argOf('config', process.env.WHALE_PERSONA_CONFIG || '')
+// 默认编 **ZCode 自己那份**（与 hooks/render.mjs 定位链第 ③ 档同一个位置）：
+// ZCode 的人格与 DSH 那份互不干扰；要编别的就 --config 或 WHALE_PERSONA_CONFIG。
+const config = argOf('config', process.env.WHALE_PERSONA_CONFIG || path.join(home, '.whale-persona', 'config.json'))
 
 if (!existsSync(uiScript)) {
   console.error('找不到本地编辑页：' + uiScript)

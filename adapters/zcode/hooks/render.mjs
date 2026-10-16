@@ -24,18 +24,23 @@ import { buildPersonaPrompt, buildSuffix, buildThinkingLanguage } from '../vendo
 
 /**
  * config 定位链（优先级从高到低）：
- *   ① WHALE_PERSONA_CONFIG（ZCode 用户显式指定）
- *   ② DSH_WHALE_CONFIG（DSH 用户显式指定 —— 双宿主共用一份配置）
- *   ③ $DSH_HOME/whale-persona/config.json（默认位置；旧布局 whale-suite 存在时自动沿用）
- *   ④ ~/.whale-persona/config.json（纯 ZCode 用户的默认位置）
+ *   ① WHALE_PERSONA_CONFIG（显式指定）
+ *   ② DSH_WHALE_CONFIG（显式指定）
+ *   ③ ~/.whale-persona/config.json（**ZCode 自己的那份**）
+ *   ④ $DSH_HOME/whale-persona/config.json（DSH 那份；旧布局 whale-suite 存在时自动沿用）
  *   ⑤ 都没有：纯默认值（渲染为空 = 装上不改行为）
+ *
+ * 为什么 ③ 在 ④ 前面（0.18.1，2026-10-16）：ZCode 是**另一个宿主**，两个人格不该互相串。
+ * 之前这里先吃 DSH 那份，于是"给 DSH 配的人设"会被注入进 ZCode 的会话（真机踩过：
+ * ZCode 那边是另一条 AI 线，被灌了不属于它的人设）。现在：**本机建了 ZCode 自己那份就用它**；
+ * 没建才回落 DSH 那份（老行为，双宿主共用一份配置的人不受影响）。要指到别处就设 WHALE_PERSONA_CONFIG。
  */
 function locateConfig() {
   const cands = []
   if (process.env.WHALE_PERSONA_CONFIG) cands.push(process.env.WHALE_PERSONA_CONFIG)
   if (process.env.DSH_WHALE_CONFIG) cands.push(process.env.DSH_WHALE_CONFIG)
-  cands.push(path.join(configDir(), 'config.json'))
   cands.push(path.join(os.homedir(), '.whale-persona', 'config.json'))
+  cands.push(path.join(configDir(), 'config.json'))
   for (const f of cands) {
     try { if (existsSync(f)) return f } catch { /* 读不了就跳过 */ }
   }

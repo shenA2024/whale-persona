@@ -156,6 +156,13 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   与 hook 是两条路（hook 往会话注入文本，它只开页面）。配套：`adapters/zcode/README.md` 新增「配置启动器」一节、
   这一侧的 `whale-persona` 技能新增「想看图形界面」一节（用户在 ZCode 里说"打开人格配置"即走它）。
   实测（2026-10-16）：8787 上有实例 → 复用（`started=false`）；8791 空端口 → 新起（`started=true`，pid 18560）。
+- **配置归属划开了（2026-10-16）**：`adapters/zcode/hooks/render.mjs` 的定位链把
+  `~/.whale-persona/config.json`（**ZCode 自己那份**）提到 `$DSH_HOME/whale-persona/config.json`
+  （DSH 那份）之前。触发来源是真机事故：ZCode 那边跑的是**另一条 AI 线**，而它默认吃 DSH 那份配置 ——
+  "给 DSH 配的人设"被注入进了 ZCode 的会话（实测那次 `user_prompt_hooks` 阶段 `durationMs=430` 就是它）。
+  新语义：**建了 ZCode 自己那份就用它，没建才回落 DSH 那份**（双宿主共用一份配置的老行为不变）；
+  显式 `WHALE_PERSONA_CONFIG` / `DSH_WHALE_CONFIG` 仍在最前。`scripts/open-ui.mjs` 的默认编辑目标
+  同步指向这一档 —— 于是"打开面板 → 填 → 保存"落到的正是 ZCode 自己那份，与 DSH 那份互不干扰。
 - 版本：三个包（根 / `adapters/dsh` / `adapters/dsh-ui`）lockstep 升到 **0.18.1**，含本次 issue #3 的修复。
   npm 仍**不发** —— 按维护者 2026-10-16 的决定，等这一侧一起处理。
 - 脚本侧实测（已完成，2026-10-16，本机）：先确认 `DSH_HOME` **只在进程级**存在（用户级/机器级都为空）——

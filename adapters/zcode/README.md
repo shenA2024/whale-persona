@@ -130,8 +130,9 @@ node <插件目录>/scripts/open-ui.mjs --print  # 只打印 url，不开浏览�
 它做三件事：探 `8787–8796` → **复用已在跑的实例**（只认 `/api/state` 报的 file 与我们这份 config 一致，
 免得对着别人的配置改半天）→ 没有就隐藏起一个 `scripts/ui.mjs` → 打开浏览器。
 
-- **它不注入任何人设**：只开界面。编哪份配置由 `--config` / `WHALE_PERSONA_CONFIG` / 定位链决定
-  （默认就是两个宿主共用的那一份）——这与 hook 是两件事：hook 往会话里注入文本，它只开页面。
+- **它不注入任何人设**：只开界面，默认编的是 **ZCode 自己那份**（`~/.whale-persona/config.json`，
+  与 hook 定位链第 ③ 档同一个位置）—— ZCode 的人格与 DSH 那份互不干扰；要编别的（例如 DSH 那份）
+  用 `--config <路径>` 或设 `WHALE_PERSONA_CONFIG`。这与 hook 是两件事：hook 往会话注入文本，它只开页面。
 - `--engine <目录>` 缺省按 `$WHALE_PERSONA_ENGINE` → `~/.dsh/plugins/whale-persona` 找
   （DSH 插件装好后那份实体副本里就带 `scripts/ui.mjs`）。
 - 在 ZCode 里也可以直接对 AI 说「打开人格配置」——装好的 `whale-persona` 技能会调用它。
@@ -142,12 +143,18 @@ hook 与 skill 按以下优先级找 config（找到第一个存在的就用）�
 
 1. `$WHALE_PERSONA_CONFIG`
 2. `$DSH_WHALE_CONFIG`
-3. `$DSH_HOME/whale-persona/config.json`（**默认位置**；`DSH_HOME` 未设时为 `~/.dsh`）
-4. `$DSH_HOME/whale-suite/config.json`（**旧布局**，该目录里已有 config.json 时自动沿用——老用户零迁移）
-5. `~/.whale-persona/config.json`（纯 ZCode 用户的默认位置）
+3. **`~/.whale-persona/config.json`（ZCode 自己那份）**
+4. `$DSH_HOME/whale-persona/config.json`（DSH 那份；`DSH_HOME` 未设时为 `~/.dsh`）
+5. `$DSH_HOME/whale-suite/config.json`（**旧布局**，该目录里已有 config.json 时自动沿用——老用户零迁移）
+
+> **为什么第 3 档在第 4 档前面（0.18.1，2026-10-16）**：ZCode 是**另一个宿主**，两个人格不该互相串。
+> 之前这里是 `$DSH_HOME/...` 在前，于是"给 DSH 配的人设"会被注入进 ZCode 的会话 —— 真机踩过：
+> ZCode 那边跑的是另一条 AI 线，被灌了不属于它的人设。现在的语义是：**本机建了 ZCode 自己那份就用它；
+> 没建才回落 DSH 那份**（双宿主共用一份配置的老行为不变）。配合 `scripts/open-ui.mjs`：
+> 它默认编辑的就是第 3 档那一份，所以"打开面板 → 填 → 保存"落到的正是 ZCode 自己那份。
 
 配置 schema、契约写法、记忆流说明见 [`adapters/dsh/README.md`](../dsh/README.md)
-（两宿主完全一致）。一个差别：纯 ZCode 用户建议显式设置 `memory.inboxPath`，
+（两宿主完全一致）。一个差别：ZCode 用户建议显式设置 `memory.inboxPath`，
 否则收件箱默认落在配置同目录（`$DSH_HOME/whale-persona/memory-inbox.jsonl`，旧布局则为 `whale-suite/` 下同名文件）。
 
 日常改人设：直接对 AI 说「更新人设 / 加条契约 / 看看当前人设」，

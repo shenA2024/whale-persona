@@ -85,8 +85,9 @@ node <插件目录>/scripts/open-ui.mjs
 ```
 
 它会探端口、复用已在跑的实例（只认服务的是同一份 config）、没有就起一个、然后打开浏览器；
-把返回的 `url` 也给用户。**它只开界面、不注入任何人设** —— 编哪份配置由 `--config` /
-`WHALE_PERSONA_CONFIG` / 定位链决定。带 `--print` 就只打印 url 不开浏览器。
+把返回的 `url` 也给用户。**它只开界面、不注入任何人设**：默认编辑的是 **ZCode 自己那份**
+（`~/.whale-persona/config.json`，与定位链第 ③ 档一致）；要编 DSH 那份得显式 `--config`。
+带 `--print` 就只打印 url 不开浏览器。
 
 ## 用户会怎么说 → 我该改哪个字段
 
