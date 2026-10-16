@@ -6,12 +6,17 @@
 // "面板说建好了、宿主不认"。所以判据钉在这份实现上（面板路由侧的判据在 tests/ui-panel.mjs）。
 //
 // 断言强制：任一 false 即非零退出（与 smoke.mjs 同一约定）。
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
 const home = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-preset-'))
 process.env.DSH_HOME = home
+// 夹具卫生（2026-10-16）：DSH_* 是**继承环境**——在 DSH 会话里跑测试时，进程环境里带着真实的
+// DSH_PROFILE / DSH_PROFILE_NAME，`currentProfileName()` 会读到它，于是"这个 home 没有 profile 名"
+// 的夹具被污染（DP7b 因此以为自己是 profile 平面、DP8 的判平面也跟着漂）。清掉，夹具才自己说了算。
+delete process.env.DSH_PROFILE
+delete process.env.DSH_PROFILE_NAME
 
 // 造一个"宿主自带 preset"的根：<root>/@deepseek-ai/dsh-agent-presets/presets/standard/
 // 为什么用 DSH_AGENT_PRESETS_ROOT：candidateRoots() 把它排在第一位，于是这份夹具
@@ -34,7 +39,7 @@ process.env.DSH_AGENT_PRESETS_ROOT = srcRoot
 const {
   PRESET_ID, PRESET_NAME, LEGACY_PERSONA_PKG,
   presetDir, agentFile, presetState, installPreset, setDefaultPreset, shippedPresetsRoot,
-  detectPresetPlane, shippedPatchPreset, basePresetSource, isDesktopHost,
+  detectPresetPlane, shippedPatchPreset, basePresetSource, isDesktopHost, parsePatchPresets,
 } = await import('../core/presetInstall.js')
 
 const t = (name, ok) => { console.log(name + ':', ok); if (!ok) process.exitCode = 1 }
@@ -267,6 +272,85 @@ t('DP7c 非桌面版（普通 Node / npm 安装）不出现这条警告',
   isDesktopHost() === false && instPlain.messages.every((m) => !m.includes('这台宿主是桌面版')))
 if (envDesktopBefore === undefined) delete process.env.WHALE_PERSONA_DESKTOP_HOST
 else process.env.WHALE_PERSONA_DESKTOP_HOST = envDesktopBefore
+
+// ── 判平面改认宿主身份 + 缺 registry 段时补段（0.18.1，issue #3 / 2026-10-16 拍板）──────────
+// 触发来源：桌面版 0.2.0-rc.2 的出厂组合里**没有** agent-preset-registry 段（本机实测出现 0 次），
+// 旧判据（只看那一段在不在）会把桌面版判到传统平面 —— 用户点一下"报成功"、人设却不生效（issue #2/#3）。
+// 新判据：桌面版身份 ⇒ profile 平面；缺的那一段由安装器在**同一次写盘**里补上
+// （写前整份备份、写前写后各一次自检、任何一项不过就回滚）。
+const envRoot8 = process.env.DSH_AGENT_PRESETS_ROOT
+process.env.DSH_AGENT_PRESETS_ROOT = srcRoot2
+const envD8 = process.env.WHALE_PERSONA_DESKTOP_HOST
+
+const home7 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-plane3-'))
+const pdir7 = path.join(home7, 'profiles', 'desktop')
+mkdirSync(pdir7, { recursive: true })
+const PATCH7 = path.join(pdir7, 'cordis.patch.yml')
+writeFileSync(PATCH7,
+  '# 桌面版 0.2.0-rc.2 出厂组合：没有 agent-preset-registry 段\n'
+  + '- id: some-tool\n'
+  + '  name: "@deepseek-ai/dsh-some-tool"\n', 'utf8')
+process.argv = realArgv.concat([pdir7])
+process.env.WHALE_PERSONA_DESKTOP_HOST = '1'
+const plane7 = detectPresetPlane(home7)
+t('DP8 桌面版 + 组合缺 registry 段 → 判成 profile 平面（不再被引去 .agent-presets）',
+  plane7.plane === 'profile' && plane7.registryPresent === false && plane7.desktopHost === true)
+const before7 = read(PATCH7)
+const dry7 = installPreset({ home: home7, dryRun: true })
+t('DP8b dry-run 就说清会补段，且一个字节都没写',
+  dry7.messages.some((m) => m.includes('agent-preset-registry 段') && m.includes('selectedDefault'))
+  && read(PATCH7) === before7)
+const ip7 = installPreset({ home: home7 })
+const after7 = read(PATCH7)
+const p7 = parsePatchPresets(after7)
+t('DP8c 补段 + 挂 preset 一次写完（纯追加 + action=created）',
+  ip7.ok === true && ip7.action === 'created' && after7.indexOf(before7) === 0)
+t('DP8d 补出的段形状照真机（- id 顶格 / name·config 2 格 / 键 4 格，值＝基座与人设预设）',
+  /^- id: agent-preset-registry\n  name: "@deepseek-ai\/dsh-agent-preset-registry"\n  config:\n    default: standard\n    selectedDefault: whale-persona\n/m.test(after7)
+  && p7.registryPresent === true)
+t('DP8e 写完读数：人设在、且已算新任务默认',
+  presetState(home7).hasPersonaRow === true && presetState(home7).isDefault === true)
+t('DP8f 备份内容 === 写前（回滚点是真的）',
+  readdirSync(pdir7).some((f) => f.startsWith('cordis.patch.yml.bak-') && read(path.join(pdir7, f)) === before7))
+const ip7b = installPreset({ home: home7 })
+t('DP8g 幂等复跑 kept：不追加第二段 registry、不追加第二个人设块',
+  ip7b.action === 'kept' && read(PATCH7) === after7)
+
+// 已有 registry 段的组合（本机两份真机组合都是这种）：不再多补一段
+const home9 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-plane4-'))
+const pdir9 = path.join(home9, 'profiles', 'desktop')
+mkdirSync(pdir9, { recursive: true })
+const PATCH9 = path.join(pdir9, 'cordis.patch.yml')
+writeFileSync(PATCH9,
+  '- id: agent-preset-registry\n'
+  + '  name: "@deepseek-ai/dsh-agent-preset-registry"\n'
+  + '  config:\n'
+  + '    default: standard\n'
+  + '    selectedDefault: whale\n', 'utf8')
+process.argv = realArgv.concat([pdir9])
+const before9 = read(PATCH9)
+installPreset({ home: home9 })
+const added9 = read(PATCH9).slice(before9.length)
+t('DP8h 已有 registry 段时只挂 preset，不多补一段',
+  (added9.match(/^- id: agent-preset-registry$/gm) || []).length === 0
+  && parsePatchPresets(read(PATCH9)).presets.some((x) => x.hasPersonaRow))
+
+// 非桌面版：同样的"缺段组合"仍按传统平面 —— 补段是桌面版身份下的行为，不外溢
+const home8 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-plane5-'))
+const pdir8 = path.join(home8, 'profiles', 'desktop')
+mkdirSync(pdir8, { recursive: true })
+const PATCH8 = path.join(pdir8, 'cordis.patch.yml')
+writeFileSync(PATCH8, '- id: some-tool\n  name: "@deepseek-ai/dsh-some-tool"\n', 'utf8')
+process.argv = realArgv.concat([pdir8])
+process.env.WHALE_PERSONA_DESKTOP_HOST = '0'
+t('DP8i 非桌面版 + 缺段组合 → 仍判传统平面，且一个字节没动',
+  detectPresetPlane(home8).plane === 'agent-presets' && read(PATCH8).indexOf('agent-preset-registry') < 0)
+
+if (envD8 === undefined) delete process.env.WHALE_PERSONA_DESKTOP_HOST
+else process.env.WHALE_PERSONA_DESKTOP_HOST = envD8
+if (envRoot8 === undefined) delete process.env.DSH_AGENT_PRESETS_ROOT
+else process.env.DSH_AGENT_PRESETS_ROOT = envRoot8
+process.argv = realArgv
 
 console.log('---- preset-install 读数 ----')
 console.log('home =', home)

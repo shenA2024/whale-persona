@@ -78,6 +78,34 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
 注入体积读数（同一 cwd 前后对比）：14023 → **14137**（+114），预算 14000 **仍超 137** —— 主因是历史备忘占 88%，
 记忆分层由维护者自己调（`node scripts/memory.mjs tier cold <序号…>`）。
 
+### 判平面改认宿主身份 + 组合缺 registry 段时由插件补（issue #3 / B 方案，2026-10-16）
+
+触发来源：issue #2 报告者（kaiye2343）那台机器的症状，维护者拆成 #3 单独跟踪。
+桌面版 0.2.0-rc.2 的出厂组合里**没有** `agent-preset-registry` 段（本机实测出现 0 次），而
+`detectPresetPlane()` 原本拿这一段当"这台宿主走哪套预设机制"的身份判据 —— 于是桌面版被判成传统
+`.agent-presets` 平面，而桌面版**不读**那个目录。两个症状同源：有旧残留的机器点「新建人设档案」
+**报成功**、人设却不生效；没残留的机器直接报 `no-base`。`807cbef` 先做了「把话说对」（B），
+本次按维护者拍板走 A（＝ B ＋ 补段）：
+
+- `detectPresetPlane()`：判据换成**宿主身份优先** —— `isDesktopHost()` 为真且能定位到 profile 名
+  ⇒ profile 平面，与"组合里此刻有没有 registry 段"无关；`WHALE_PERSONA_DESKTOP_HOST=0` 是逃生门
+  （宿主将来若恢复读 `.agent-presets` 就退回旧判据，不必改代码）。探不到 profile 名时仍按传统平面处理，
+  并把原因明说（桌面版 + 无 profile 名 + 传统平面，三个条件同时出现才走那条路）。
+- `installInProfilePlane()`：组合里缺 `agent-preset-registry` 段时，在**同一次写盘**里补一个最小段
+  （`default` = 基座 id、`selectedDefault` = `whale-persona`）—— 一次备份、一次自检，不留下"段补了、
+  preset 没挂上"的半个状态。段形状与缩进照真机（`- id` 顶格 / `name`·`config` 2 格 / 键 4 格）。
+- `verifyPatchWrite()` 加两向判据：**补了**段 → 新增部分里必须恰好一段、且带 `default:`；
+  **没补** → 新增部分里不许再冒出 registry 段（重复＝宿主会读到两个默认）。两向都不过就回滚。
+- `setDefaultInProfilePlane()` 缺段时的文案改成"先点「建人设预设」，那一步会连这一段一起补"，
+  不再只回一句"没动它"。
+- 写面登记：`.github/SECURITY.md` 的写面清单里，`core/presetInstall.js` 那行补上 profile 组合的两项写入。
+
+验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP8、DP8b–DP8i；顺带修了夹具卫生 —— 在 DSH 会话里跑测试时
+进程环境带着真实的 `DSH_PROFILE` / `DSH_PROFILE_NAME`，`currentProfileName()` 会读到它、把"这个 home 没有 profile 名"
+的夹具污染成 profile 平面，现在测试开头 `delete` 掉）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
+`tests/spec-i18n.mjs` 四判据全绿（SPEC 未涉及判平面，未改）· `node scripts/sync-core.mjs` 已同步 zcode vendor ·
+行尾无 CRLF（`git diff --numstat` 与 `--ignore-cr-at-eol` 两组逐字一致）· 本次改的是安装面，注入文本一字未动。
+
 ## v0.18.0（2026-10-14）
 
 触发来源：用户希望深化既有人格插件、吸收灵枢的可验证记忆机制，并公开通用版本；实际会话中旧 MCP 桥未提供工具，开场连续性需要本地兜底。

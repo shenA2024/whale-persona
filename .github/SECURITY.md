@@ -40,7 +40,7 @@ https://github.com/shenA2024/whale-persona/security/advisories/new
 | `adapters/dsh/reflex/log.js` | `reflex.log.jsonl`（命中台账，只追加） | 规则命中时（可关） |
 | `adapters/dsh/reflex/rules.js` | 首次建一份空的 `reflex.json` | 规则文件不存在时 |
 | `scripts/install-dsh.mjs` | profile 的 `package.json` / `cordis.patch.yml`（preset 部分 0.17.3 起委托给 `core/presetInstall.js`） | **只在用户主动运行安装脚本时** |
-| `core/presetInstall.js` | agent preset 目录 `$DSH_HOME/.agent-presets/whale-persona/`（整目录复制基座 ＋ `agent.cordis.yml` 的人设行 ＋ `preset.yml`）＋ `$DSH_HOME/settings.yaml` 的 `agent-presets.default` | **只在安装脚本运行、或你在设置面板点「建人设预设」时**（幂等：已有 preset 只补显示名/描述；用户另有默认 preset 时不改） |
+| `core/presetInstall.js` | agent preset 目录 `$DSH_HOME/.agent-presets/whale-persona/`（整目录复制基座 ＋ `agent.cordis.yml` 的人设行 ＋ `preset.yml`）＋ `$DSH_HOME/settings.yaml` 的 `agent-presets.default` ＋ **profile 平面（桌面版）**：`$DSH_HOME/profiles/<name>/cordis.patch.yml` 末尾追加的人设 preset `- insert:` 块，以及组合里缺 `agent-preset-registry` 段时补的最小段（0.18.1 起，issue #3） | **只在安装脚本运行、或你在设置面板点「建人设预设」时**（幂等：已有 preset 只补显示名/描述；用户另有默认 preset 时不改；profile 平面写前整份备份成 `.bak-<时间戳>`、写前写后各一次自检，任何一项不过就回滚；只追加不重排） |
 | `scripts/sync-core.mjs` | 重建 `adapters/zcode/vendor/core/` 副本（rm + cp） | **只在维护者跑 `npm run sync-core` 时**（开发工具，不随包分发执行） |
 | `scripts/pack-release.mjs` | `data/backup/release/*.tgz`（Release 附件）＋ `data/backup/pack-<tag>/`（git worktree 检出） | **只在维护者打 Release 附件时**（开发工具，不随包分发执行；退出码非 0 = 包不合格别发） |
 | `scripts/prepublish-check.mjs` | `data/prepublish-tmp/`（临时 tgz ＋ 解出来的包树，跑完即删） | **只在维护者发布前跑 `npm run prepublish-check` 时**（只读仓内文件；词表从 `data/` 或 `$DSH_HOME` 读，两者都不会被提交、也不会进包） |

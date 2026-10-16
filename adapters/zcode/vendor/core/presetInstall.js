@@ -14,7 +14,11 @@
  * 写入面（已登记在 .github/SECURITY.md 的写面清单里）：
  *   - `<DSH_HOME>/.agent-presets/<id>/agent.cordis.yml` 与 `preset.yml`
  *   - 可选 `<DSH_HOME>/settings.yaml`（只改 `agent-presets.default` 一行，且只在它为空/已等于本插件时改）
- * 全部幂等、支持 dry-run；**不覆盖**用户改过的显示名与预设内容。
+ *   - profile 平面（桌面版）：`<DSH_HOME>/profiles/<name>/cordis.patch.yml` 末尾**追加**
+ *     ① 人设 preset 的 `- insert:` 块（0.17.7 起）；② 组合里缺 `agent-preset-registry` 段时补的最小段
+ *     （0.18.1 起，issue #3）。写前整份备份成 `cordis.patch.yml.bak-<时间戳>`，写前写后各跑一次自检，
+ *     任何一项不过就回滚。
+ * 全部幂等、支持 dry-run；**只追加不重排**，**不覆盖**用户改过的显示名与预设内容。
  */
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -80,8 +84,10 @@ export function candidateRoots(home) {
  * 为什么要问这个（2026-10-16，issue #2 的另一半）：桌面版**不读** `<DSH_HOME>/.agent-presets`
  * （0.1.7-rc.1 起 asar 全量 js 里就没有这个字样），而 `detectPresetPlane()` 只在"组合里挂着
  * `agent-preset-registry` 段"时才判 profile 平面 —— 0.2.0-rc.2 的出厂形态里那段是空的，于是桌面版会被
- * 判成传统平面，用户照 `.agent-presets` 的手工步骤做下去等于没做。本函数只用来**把话说对**（B 方案），
- * 不改判平面、不改写入面；"判据该不该换成宿主身份"是另一件要拍板的事（A 方案，见 CHANGELOG 待办）。
+ * 判成传统平面，用户照 `.agent-presets` 的手工步骤做下去等于没做。
+ * 本函数起初只用来**把话说对**（B 方案，807cbef）；2026-10-16 维护者拍板走 A（issue #3）之后，
+ * 它升成 `detectPresetPlane()` 的**首选判据**（桌面版 ＋ 有 profile 名 ⇒ profile 平面），
+ * 组合里缺 `agent-preset-registry` 段时由 `installInProfilePlane` 补一个最小段。
  *
  * `WHALE_PERSONA_DESKTOP_HOST=1|0` 可强制覆盖：测试要在一台机器上钉住两种宿主分支
  * （与 `DSH_AGENT_PRESETS_ROOT` 同一个手法）。
@@ -95,14 +101,15 @@ export function isDesktopHost() {
   } catch { return false }
 }
 
-/** 桌面版 + 传统平面：把"这条路走不通"说清楚（只说，不改行为、不新增写入面） */
+/** 桌面版却落到传统平面（0.18.1 起只可能是"连 profile 名都探不到"）：把"这条路走不通"说清楚 */
 function desktopHostWarning(plane) {
   if (!isDesktopHost()) return []
   const patchFile = (plane && plane.patchFile) || '(这个 home 里没有 profiles/<name>/cordis.patch.yml)'
   return [
     '注意：这台宿主是桌面版（Electron 打包形态），它**不读** <DSH_HOME>/.agent-presets —— 这次建的预设不会生效。',
-    '  桌面版该走 profile 平面：把基座的 insert 块追加进 ' + patchFile + '（0.17.7 起插件会自己写这一步，前提是先判成 profile 平面）。',
-    '  触发来源：issue #2（2026-10-12 kaiye2343 报告）—— 桌面版 0.2.0-rc.2 的出厂组合里没有 agent-preset-registry 段，判平面因此落到这一侧。',
+    '  0.18.1 起判平面优先认宿主身份，但这次连 profile 名都没探到（argv / DSH_PROFILE 里都没有），定位不到 profile 组合；',
+    '  能定位到时就直接走 profile 平面，把 preset 块写进 ' + patchFile + '。',
+    '  触发来源：issue #2 / #3（桌面版 0.2.0-rc.2 的出厂组合里没有 agent-preset-registry 段）。',
   ]
 }
 
@@ -283,8 +290,12 @@ export function refreshPresetMeta(dir) {
  *  ① profile 名：宿主进程 argv 里带 `<DSH_HOME>/profiles/<name>`
  *     （2026-09-29 实测桌面版命令行：`… dsh-desktop-host/lib/index.js … <DSH_HOME>\profiles\desktop …`）；
  *     退回环境变量 `DSH_PROFILE` / `DSH_PROFILE_NAME`。
- *  ② 该 profile 的 `cordis.patch.yml` 里有没有 `- id: agent-preset-registry` 段：有＝profile 平面。
- *     对照实测：desktop 有、web 没有。
+ *  ② `cordis.patch.yml` 里有没有 `- id: agent-preset-registry` 段：有＝profile 平面。
+ *     对照实测（2026-09-29）：desktop 有、web 没有。
+ *  ③ **宿主身份（0.18.1 起优先于 ②）**：桌面版 ⇒ profile 平面（见 isDesktopHost()）——
+ *     0.2.0-rc.2 的出厂组合里没有 registry 段，只看 ② 会把桌面版判到传统侧，用户照做等于没做
+ *     （issue #2 / #3）。逃生门：`WHALE_PERSONA_DESKTOP_HOST=0` 强制按非桌面版判
+ *     （将来宿主若恢复读 .agent-presets，用它退回旧判据，不必改代码）。
  */
 export function currentProfileName(home) {
   const root = path.join(homeOf(home), 'profiles')
@@ -314,13 +325,27 @@ export function detectPresetPlane(home) {
   if (patchFile && existsSync(patchFile)) {
     try { registryPresent = parsePatchPresets(readFileSync(patchFile, 'utf8')).registryPresent } catch { registryPresent = false }
   }
-  const plane = registryPresent ? 'profile' : 'agent-presets'
-  const why = registryPresent
-    ? 'profile「' + profileName + '」的 cordis.patch.yml 挂了 agent-preset-registry（桌面版机制：预设＝组合里的一行）'
-    : (profileName
-      ? 'profile「' + profileName + '」没有 agent-preset-registry 段（走 <DSH_HOME>/.agent-presets 目录）'
-      : '宿主 argv 里没有 profile 路径，按传统 .agent-presets 平面处理')
-  return { plane, profileName, profileDir, patchFile, registryPresent, why }
+  const desktopHost = isDesktopHost()
+  // 判据（0.18.1 起，issue #3 / B 方案，2026-10-16 拍板）：**宿主身份优先**。
+  // 桌面版不读 <DSH_HOME>/.agent-presets（0.1.7-rc.1 起 asar 全量 js 里没有这个字样），
+  // 所以只要认得出它是桌面版、又能定位到 profile 组合，就是 profile 平面 —— 与"组合里此刻有没有
+  // registry 段"无关：0.2.0-rc.2 的出厂组合里那段本来就是空的，缺的那一段由 installInProfilePlane 补。
+  // 旧判据（只看 registry 段）在报告者那台机器上把桌面版判成传统平面，用户照着做等于没做（issue #2 / #3）。
+  const plane = registryPresent || (desktopHost && !!profileName) ? 'profile' : 'agent-presets'
+  let why
+  if (registryPresent) {
+    why = 'profile「' + profileName + '」的 cordis.patch.yml 挂了 agent-preset-registry（桌面版机制：预设＝组合里的一行）'
+  } else if (plane === 'profile') {
+    why = '这台宿主是桌面版（Electron 打包形态），它不读 <DSH_HOME>/.agent-presets —— 预设只能走 profile 组合；'
+      + '组合「' + profileName + '」里现在没有 agent-preset-registry 段（0.2.0-rc.2 出厂形态），建预设时由插件补一个最小段'
+  } else if (desktopHost) {
+    why = '这台宿主是桌面版，但 argv / DSH_PROFILE 里没有 profile 名 —— 定位不到 profile 组合，只能先按传统 .agent-presets 平面处理'
+  } else if (profileName) {
+    why = 'profile「' + profileName + '」没有 agent-preset-registry 段（走 <DSH_HOME>/.agent-presets 目录）'
+  } else {
+    why = '宿主 argv 里没有 profile 路径，按传统 .agent-presets 平面处理'
+  }
+  return { plane, profileName, profileDir, patchFile, registryPresent, desktopHost, why }
 }
 
 /**
@@ -429,8 +454,11 @@ function profilePlaneState(home, plane) {
     isDefault: !!planeId && cur === planeId,
     otherDefault: !!cur && cur !== planeId,
     baseId: p.defaultId || 'standard',
-    baseWhy: 'profile 机制下基座由宿主的 agent-preset-registry 决定',
+    baseWhy: p.registryPresent
+      ? 'profile 机制下基座由宿主的 agent-preset-registry 决定'
+      : '这个组合里没有 agent-preset-registry 段（桌面版 0.2.0-rc.2 出厂形态）—— 建预设时插件会补最小一段，default 取基座 id',
     baseAvailable: true,
+    registryPresent: p.registryPresent,
     shippedRoot: '',
   }
 }
@@ -616,17 +644,57 @@ function buildProfileInsertBlock(home) {
 }
 
 /**
+ * 补一个最小的 `agent-preset-registry` 段（0.18.1，issue #3 / B 方案，2026-10-16 维护者拍板）。
+ *
+ * 为什么需要：桌面版的 preset 机制全靠这一段 —— `default` 指定基座、`selectedDefault` 指定
+ * "新任务走哪个预设"。而 0.2.0-rc.2 的**出厂组合里没有这一段**（本机 2026-10-16 实测：
+ * `profiles/desktop/cordis.patch.yml` 里 `agent-preset-registry` 出现 0 次），于是"装完点一下"的
+ * 默认路径上，插件既挂不上 preset、也没有默认可设。
+ *
+ * 形态与缩进逐字照真机那段（本机实测 78–82 行：`- id` 顶格 / `name`·`config` 2 格 / `default` 4 格）；
+ * 手写这段被 0.2.0-rc.2 正常识别（本机那份就是这么来的、`selectedDefault` 生效）。
+ *
+ * @param {string} baseId 基座预设 id（写进 `default`）—— 调用方须先过 ID_RE
+ * @param {boolean} withSelectedDefault 是否顺手把新任务默认指向人设预设（＝"无默认"语义下与
+ *   setDefaultPreset 同一条规矩：只在本来没有默认时写；用户另有默认就不会走到这里）
+ */
+function buildRegistryBlock(baseId, withSelectedDefault) {
+  const out = [
+    '',
+    '# ── agent-preset-registry（whale-persona 补）─────────────────────────────────',
+    '# 桌面版 0.2.0-rc.2 的出厂组合里没有这一段，缺它 preset 挂不上去（issue #3）。',
+    '# 要撤掉：删掉这一段，或把同目录的 cordis.patch.yml.bak-<时间戳> 改名回 cordis.patch.yml。',
+    '- id: agent-preset-registry',
+    '  name: "@deepseek-ai/dsh-agent-preset-registry"',
+    '  config:',
+    '    default: ' + baseId,
+  ]
+  if (withSelectedDefault) out.push('    selectedDefault: ' + PRESET_ID)
+  return out.join('\n')
+}
+
+/**
  * 写后自检：能抓到的结构错都在这里。抓不到"某个字段名在这个桌面版版本里不被认"（那要宿主启动才知道），
  * 所以调用方必须把 .bak 路径一并告诉用户。
+ * @param {{expectRegistry?: boolean}} [opts] 本次是否**补**了 registry 段（0.18.1 起，issue #3）：
+ *   补了 → 新增部分里必须恰好一段、且带 default（段重复＝宿主会读到两个默认）；
+ *   没补 → 新增部分里不许再冒出 registry 段（那会与原有的冲突）。
  * @returns {string} 空串＝通过，否则是不过的原因
  */
-function verifyPatchWrite(next, before) {
+function verifyPatchWrite(next, before, { expectRegistry = false } = {}) {
   if (next.indexOf(before) !== 0) return '原有内容被动过（不是纯追加）—— 已回滚'
   const p = parsePatchPresets(next)
   if (!p.registryPresent) return 'agent-preset-registry 段不见了 —— 已回滚'
   const mine = p.presets.find((x) => x.hasPersonaRow)
   if (!mine) return '写完解析不出挂着人设的 preset 行 —— 已回滚'
   const added = next.slice(before.length)
+  const regRows = added.split(/\r?\n/).filter((l) => /^- id:\s*agent-preset-registry\s*$/.test(l)).length
+  if (expectRegistry) {
+    if (regRows !== 1) return '补的 agent-preset-registry 段不是恰好一段（数到 ' + regRows + ' 段）—— 已回滚'
+    if (!/^ {4}default:\s*\S+\s*$/m.test(added)) return '补的 agent-preset-registry 段缺 `default:`（宿主会没有基座）—— 已回滚'
+  } else if (regRows > 0) {
+    return '组合里本来就有 agent-preset-registry 段，却又追加了 ' + regRows + ' 段 —— 已回滚'
+  }
   if (/\t/.test(added)) return '新增部分含制表符（YAML 会解析失败）—— 已回滚'
   for (const l of added.split('\n')) {
     if (l.replace(/\s+$/, '') === '') continue
@@ -645,8 +713,11 @@ function verifyPatchWrite(next, before) {
  * 对绝大多数用户等于没做。桌面版自己就是用 `- insert:` 装东西的，这段写法与真机跑通的形态同构。
  *
  * 三道闸：① 只在确无 persona 行时动手、只追加不重排；② 写前整份备份；
- * ③ 写后自检（原有内容纯追加 / registry 段在 / 人设行能解析出来 / 无 tab / 缩进是 2 的倍数），
+ * ③ 写前写后各一次自检（原有内容纯追加 / registry 段在 / 人设行能解析出来 / 无 tab / 缩进是 2 的倍数），
  * 任何一项不过就用备份回滚并把原因原文端出来。
+ * 0.18.1 起多一件事（issue #3，2026-10-16 拍板）：组合里缺 `agent-preset-registry` 段时，
+ * 在**同一次写盘**里补一个最小段（见 buildRegistryBlock）—— 一次备份、一次自检，
+ * 用户不会卡在"段补上了、preset 没挂上"的半个状态里。
  */
 function installInProfilePlane({ home, plane, dryRun }) {
   const st = profilePlaneState(home, plane)
@@ -668,14 +739,22 @@ function installInProfilePlane({ home, plane, dryRun }) {
   try { before = readFileSync(file, 'utf8') } catch { before = '' }
   const built = buildProfileInsertBlock(home)
   if (!built.ok) return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: false, messages: built.messages }
+  // 缺 registry 段（0.2.0-rc.2 出厂形态）→ 连这一段一起补，与 preset 块**同一次写盘**：
+  // 一次备份、一次自检、没有中间态（不会卡在"段补了、preset 没挂上"）。
+  const needRegistry = !parsePatchPresets(before).registryPresent
+  const regBaseId = ID_RE.test(String(built.baseId || '')) ? String(built.baseId) : 'standard'
+  const regBlock = needRegistry ? buildRegistryBlock(regBaseId, true) : ''
   if (/^[ \t]*- insert:/m.test(before)) {
     // 已经有 insert 块了：追加第二个也是合法的（列表元素），但先报出来，用户知道文件里有两段。
     messages.push('注意：这份组合里已经有一个 insert 块，下面这段会追加成第二个（同样是列表元素，合法）。')
   }
   const sep = before.endsWith('\n') ? '' : '\n'
-  const next = before + sep + built.block + '\n'
-  const bad = verifyPatchWrite(next, before)
+  const next = before + sep + (regBlock ? regBlock + '\n' : '') + built.block + '\n'
+  const bad = verifyPatchWrite(next, before, { expectRegistry: needRegistry })
   if (dryRun) {
+    if (needRegistry) {
+      messages.push('DRY: 会先补一个 agent-preset-registry 段（default = ' + regBaseId + '、selectedDefault = ' + PRESET_ID + '）—— 这个组合里原本没有它。')
+    }
     messages.push('DRY: 会在末尾追加一个 preset 块（共 ' + built.block.split('\n').length + ' 行），不会写盘。')
     messages.push('DRY: 追加后的自检结果：' + (bad ? bad.replace(' —— 已回滚', '') : '通过'))
     return { ok: !bad, action: bad ? 'manual' : 'dry', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
@@ -695,7 +774,7 @@ function installInProfilePlane({ home, plane, dryRun }) {
     messages.push('写盘失败：' + String(e && e.message ? e.message : e))
     return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
   }
-  const after = verifyPatchWrite(readFileSync(file, 'utf8'), before)
+  const after = verifyPatchWrite(readFileSync(file, 'utf8'), before, { expectRegistry: needRegistry })
   if (after) {
     try { writeFileSync(file, before, 'utf8') } catch { messages.push('⚠ 回滚也失败了，请手工把 ' + bak + ' 改名回 cordis.patch.yml') }
     messages.push('写盘后自检没通过：' + after)
@@ -703,8 +782,14 @@ function installInProfilePlane({ home, plane, dryRun }) {
   }
   messages.push('preset 「' + PRESET_NAME + '」已写入 profile 组合：' + file)
   messages.push('它是从基座 preset「' + built.baseId + '」克隆的完整工具面 + 人设行（preset id = ' + PRESET_ID + '）。')
+  if (needRegistry) {
+    messages.push('这个组合里原来没有 agent-preset-registry 段（桌面版 0.2.0-rc.2 的出厂形态就是这样），'
+      + '已补最小一段：default = ' + regBaseId + '、selectedDefault = ' + PRESET_ID + '（触发来源：issue #3）。')
+  }
   messages.push('备份：' + bak + '  —— 万一宿主起不来，把它改名回 ' + path.basename(file) + ' 即可。')
-  messages.push('下一步：点「设为新任务默认」，否则新会话还是走 registry 的默认预设。重启宿主后生效。')
+  messages.push(needRegistry
+    ? '新任务默认已指向它（selectedDefault = ' + PRESET_ID + '）。重启宿主后生效。'
+    : '下一步：点「设为新任务默认」，否则新会话还是走 registry 的默认预设。重启宿主后生效。')
   return { ok: true, action: 'created', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages, backup: bak }
 }
 
@@ -720,7 +805,13 @@ function setDefaultInProfilePlane({ plane, dryRun }) {
   const mine = p.presets.find((x) => x.hasPersonaRow) || null
   const planeId = mine ? mine.id : PRESET_ID
   const cur = p.selectedDefault
-  if (!p.registryPresent || p.registryLine < 0) return { ok: false, changed: false, reason: '这个 profile 没有 agent-preset-registry 段，没动它', file }
+  if (!p.registryPresent || p.registryLine < 0) {
+    return {
+      ok: false, changed: false, file,
+      reason: '这个 profile 还没有 agent-preset-registry 段（桌面版 0.2.0-rc.2 的出厂形态）—— 先点「建人设预设」，'
+        + '那一步会连这一段一起补上（issue #3）。没动你的组合。',
+    }
+  }
   if (!mine) return { ok: false, changed: false, reason: '人设还没挂进 profile 组合，先挂上再设默认', file }
   if (cur === planeId) return { ok: true, changed: false, reason: '已经是默认 preset（selectedDefault = ' + cur + '）', file }
   if (cur) return { ok: false, changed: false, reason: '用户已有默认 preset「' + cur + '」，没动它', file }
