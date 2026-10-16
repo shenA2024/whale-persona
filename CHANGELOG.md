@@ -100,7 +100,20 @@ installPreset(dryRun): ok=true, action="dry"  → <home>\.agent-presets\whale-pe
   不再只回一句"没动它"。
 - 写面登记：`.github/SECURITY.md` 的写面清单里，`core/presetInstall.js` 那行补上 profile 组合的两项写入。
 
-验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP8、DP8b–DP8i；顺带修了夹具卫生 —— 在 DSH 会话里跑测试时
+- **真机形态预演（2026-10-16）**：拿本机桌面版（`@deepseek-ai/dsh-desktop 0.2.0-rc.2`）**真实的** desktop 组合
+  （16451 字符，含人工加的那段 registry）**剥掉 registry 段**复现出厂形态，基座用从真机 `app.asar` 里
+  **取出的字节副本**（7511 字节的 `standard.patch.yml` —— 普通 node 读不了 asar 虚拟路径，所以手工解包），
+  全程只写临时 home、不碰真机 profile。这一跑当场抓到两处**只有真数据才暴露**的漏洞，都已修并补测试（DP8j–DP8m）：
+  ① 组合里**人设行已在、但缺 registry 段**时（＝用户照 issue #2 回复里的绕法只加了 insert 块），旧实现到
+     `hasPersonaRow` 那行就 `kept` 早退、面板报「已就绪」，而预设其实挂上了却**选不了** —— 症状正是
+     "面板说好了、人设没生效"。现在这种情形**只补那一段**，绝不重复追加第二个 preset 块（两个同 `config.id`
+     的预设＝宿主读到重复项）。
+  ② 补段时的 `selectedDefault` 不能写常量：真机那份人工搬过去的人设 preset，其 `config.id` 是 `whale`
+     而不是 `whale-persona`，照常量写等于指向一个**不存在的预设**。现在写组合里那个人设 preset 自己的 id。
+  修后同一预演的读数：判平面 `profile` · dry 明说会补段且一字节未写 · 真写 `created` ＋ 纯追加 ·
+  段回来 `default=standard / selectedDefault=whale` · 没重复挂 · 备份 1 份且内容 === 写前 · 幂等复跑 `kept`。
+
+验证：`npm test` exit 0（`tests/preset-install.mjs` 新增 DP8、DP8b–DP8m；顺带修了夹具卫生 —— 在 DSH 会话里跑测试时
 进程环境带着真实的 `DSH_PROFILE` / `DSH_PROFILE_NAME`，`currentProfileName()` 会读到它、把"这个 home 没有 profile 名"
 的夹具污染成 profile 平面，现在测试开头 `delete` 掉）· `npm run sec` PASS（fail=0，4 项 manual 跳过）·
 `tests/spec-i18n.mjs` 四判据全绿（SPEC 未涉及判平面，未改）· `node scripts/sync-core.mjs` 已同步 zcode vendor ·

@@ -37,7 +37,7 @@ writeFileSync(path.join(shipped, 'standard', 'preset.yml'), 'name: 标准模式\
 process.env.DSH_AGENT_PRESETS_ROOT = srcRoot
 
 const {
-  PRESET_ID, PRESET_NAME, LEGACY_PERSONA_PKG,
+  PRESET_ID, PRESET_NAME, PERSONA_PKG, LEGACY_PERSONA_PKG,
   presetDir, agentFile, presetState, installPreset, setDefaultPreset, shippedPresetsRoot,
   detectPresetPlane, shippedPatchPreset, basePresetSource, isDesktopHost, parsePatchPresets,
 } = await import('../core/presetInstall.js')
@@ -345,6 +345,66 @@ process.argv = realArgv.concat([pdir8])
 process.env.WHALE_PERSONA_DESKTOP_HOST = '0'
 t('DP8i 非桌面版 + 缺段组合 → 仍判传统平面，且一个字节没动',
   detectPresetPlane(home8).plane === 'agent-presets' && read(PATCH8).indexOf('agent-preset-registry') < 0)
+
+// 人设行已挂、但组合里没有 registry 段（用户照 issue #2 的绕法只加了 insert 块）：
+// 预设挂上了却选不了 —— 旧实现到 hasPersonaRow 那行就 kept 早退、面板报「已就绪」。
+// 0.18.1 改成「只补那一段」，绝不重复追加第二个 preset 块。触发来源：真机形态预演（2026-10-16）。
+const home10 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-plane6-'))
+const pdir10 = path.join(home10, 'profiles', 'desktop')
+mkdirSync(pdir10, { recursive: true })
+const PATCH10 = path.join(pdir10, 'cordis.patch.yml')
+writeFileSync(PATCH10,
+  '- id: some-tool\n'
+  + '  name: "@deepseek-ai/dsh-some-tool"\n'
+  + '- insert:\n'
+  + '    - id: preset-' + PRESET_ID + '\n'
+  + '      name: "@deepseek-ai/dsh-agent-preset"\n'
+  + '      config:\n'
+  + '        id: ' + PRESET_ID + '\n'
+  + '        name: 自定义人设\n'
+  + '        plugins:\n'
+  + '          - id: ' + PRESET_ID + '\n'
+  + "            name: '" + PERSONA_PKG + "'\n", 'utf8')
+process.argv = realArgv.concat([pdir10])
+process.env.WHALE_PERSONA_DESKTOP_HOST = '1'
+const before10 = read(PATCH10)
+const dry10 = installPreset({ home: home10, dryRun: true })
+t('DP8j 人设已挂但缺 registry 段 → dry 说只补段、不追加 preset 块，且一字节未写',
+  dry10.ok === true && dry10.messages.some((m) => m.includes('只补 registry 段')) && read(PATCH10) === before10)
+const ip10 = installPreset({ home: home10 })
+const after10 = read(PATCH10)
+const p10 = parsePatchPresets(after10)
+t('DP8k 只补段：registry 回来 + selectedDefault 指向人设 + 没有第二个 preset 块 + 纯追加',
+  ip10.ok === true && ip10.action === 'created'
+  && p10.registryPresent === true && p10.selectedDefault === PRESET_ID
+  && (after10.match(/^\s*- id: preset-/gm) || []).length === 1
+  && after10.indexOf(before10) === 0)
+t('DP8l 补完即就绪，再点一次幂等（kept，文件不变）',
+  presetState(home10).hasPersonaRow === true
+  && installPreset({ home: home10 }).action === 'kept' && read(PATCH10) === after10)
+
+// 人设 preset 的 config.id 不一定是 PRESET_ID（真机那份人工搬过去的就叫 `whale`）：
+// 补段的 selectedDefault 必须写**它自己的 id** —— 照常量写等于指向一个不存在的预设。
+const home11 = mkdtempSync(path.join(os.tmpdir(), 'whale-persona-plane7-'))
+const pdir11 = path.join(home11, 'profiles', 'desktop')
+mkdirSync(pdir11, { recursive: true })
+const PATCH11 = path.join(pdir11, 'cordis.patch.yml')
+writeFileSync(PATCH11,
+  '- insert:\n'
+  + '    - id: preset-whale\n'
+  + '      name: "@deepseek-ai/dsh-agent-preset"\n'
+  + '      config:\n'
+  + '        id: whale\n'
+  + '        name: 自定义人设\n'
+  + '        plugins:\n'
+  + '          - id: ' + PRESET_ID + '\n'
+  + "            name: '" + PERSONA_PKG + "'\n", 'utf8')
+process.argv = realArgv.concat([pdir11])
+const ip11 = installPreset({ home: home11 })
+const p11 = parsePatchPresets(read(PATCH11))
+t('DP8m 补段的 selectedDefault 写组合里那个人设 preset 自己的 id（不是常量）',
+  ip11.ok === true && p11.registryPresent === true && p11.selectedDefault === 'whale'
+  && p11.presets.some((x) => x.id === 'whale' && x.hasPersonaRow))
 
 if (envD8 === undefined) delete process.env.WHALE_PERSONA_DESKTOP_HOST
 else process.env.WHALE_PERSONA_DESKTOP_HOST = envD8

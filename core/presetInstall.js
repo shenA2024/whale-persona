@@ -655,10 +655,11 @@ function buildProfileInsertBlock(home) {
  * 手写这段被 0.2.0-rc.2 正常识别（本机那份就是这么来的、`selectedDefault` 生效）。
  *
  * @param {string} baseId 基座预设 id（写进 `default`）—— 调用方须先过 ID_RE
- * @param {boolean} withSelectedDefault 是否顺手把新任务默认指向人设预设（＝"无默认"语义下与
- *   setDefaultPreset 同一条规矩：只在本来没有默认时写；用户另有默认就不会走到这里）
+ * @param {string} selectedId 新任务默认指向的 preset id：**必须是组合里那个人设 preset 的 `config.id`**，
+ *   不是常量 —— 真机预演（2026-10-16）实测：本机组合里那份人工搬的人设 preset，其 `config.id` 是 `whale`
+ *   而不是 `whale-persona`，照常量写会指向一个不存在的预设。传空串就不写这一行（＝只补 default）。
  */
-function buildRegistryBlock(baseId, withSelectedDefault) {
+function buildRegistryBlock(baseId, selectedId) {
   const out = [
     '',
     '# ── agent-preset-registry（whale-persona 补）─────────────────────────────────',
@@ -669,7 +670,7 @@ function buildRegistryBlock(baseId, withSelectedDefault) {
     '  config:',
     '    default: ' + baseId,
   ]
-  if (withSelectedDefault) out.push('    selectedDefault: ' + PRESET_ID)
+  if (selectedId) out.push('    selectedDefault: ' + selectedId)
   return out.join('\n')
 }
 
@@ -728,7 +729,16 @@ function installInProfilePlane({ home, plane, dryRun }) {
     messages.push(st.isDefault
       ? '它已经是新任务默认（selectedDefault = ' + st.presetIdInPlane + '）'
       : '默认 preset 目前是「' + st.defaultPresetId + '」')
-    return { ok: true, action: 'kept', dir: file, baseId: '', baseWhy: '', swapped: false, messages }
+    // 0.18.1 自查（真机形态预演时抓到，2026-10-16）：**人设行在 ≠ 这条平面能用**。
+    // 组合里没有 `agent-preset-registry` 段时（0.2.0-rc.2 出厂形态；或用户照 issue #2 的绕法
+    // 只加了 insert 块、没补那一段），预设挂上了却**选不了/不生效** —— 而旧实现到这一行就
+    // `kept` 早退、面板报"已就绪"，于是症状是"面板说好了、人设没生效"。
+    // 这种情形**只补那一段**，绝不重复追加第二个 preset 块（两个同 config.id 的预设 = 宿主读到重复项）。
+    if (!st.registryPresent) {
+      messages.push('但这份组合里没有 agent-preset-registry 段 —— 预设挂上了却选不了（0.2.0-rc.2 出厂形态）。本次只补这一段，不动你已有的 preset 块。')
+    } else {
+      return { ok: true, action: 'kept', dir: file, baseId: '', baseWhy: '', swapped: false, messages }
+    }
   }
   if (!file || !existsSync(file)) {
     messages.push('这个 profile 里没有组合文件（' + (file || '未探测到') + '），没动任何东西。')
@@ -737,25 +747,35 @@ function installInProfilePlane({ home, plane, dryRun }) {
   }
   let before = ''
   try { before = readFileSync(file, 'utf8') } catch { before = '' }
-  const built = buildProfileInsertBlock(home)
-  if (!built.ok) return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: false, messages: built.messages }
-  // 缺 registry 段（0.2.0-rc.2 出厂形态）→ 连这一段一起补，与 preset 块**同一次写盘**：
+  let built = { ok: true, baseId: st.baseId || 'standard', baseWhy: '组合里已有 preset 块，本次只补 registry 段' }
+  let block = ''
+  if (!st.hasPersonaRow) {
+    built = buildProfileInsertBlock(home)
+    if (!built.ok) return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: false, messages: built.messages }
+    block = built.block
+    if (/^[ \t]*- insert:/m.test(before)) {
+      // 已经有 insert 块了：追加第二个也是合法的（列表元素），但先报出来，用户知道文件里有两段。
+      messages.push('注意：这份组合里已经有一个 insert 块，下面这段会追加成第二个（同样是列表元素，合法）。')
+    }
+  }
+  // 缺 registry 段（0.2.0-rc.2 出厂形态）→ 连这一段一起补，与 preset 块（若有）**同一次写盘**：
   // 一次备份、一次自检、没有中间态（不会卡在"段补了、preset 没挂上"）。
   const needRegistry = !parsePatchPresets(before).registryPresent
   const regBaseId = ID_RE.test(String(built.baseId || '')) ? String(built.baseId) : 'standard'
-  const regBlock = needRegistry ? buildRegistryBlock(regBaseId, true) : ''
-  if (/^[ \t]*- insert:/m.test(before)) {
-    // 已经有 insert 块了：追加第二个也是合法的（列表元素），但先报出来，用户知道文件里有两段。
-    messages.push('注意：这份组合里已经有一个 insert 块，下面这段会追加成第二个（同样是列表元素，合法）。')
-  }
+  // 新任务默认指向**组合里那个人设 preset 的 config.id**：人设行是本次挂的 → 就是 PRESET_ID；
+  // 人设行本来就在 → 读它自己的 id（真机预演实测：人工搬的那份是 `whale`，照常量写会指向不存在的预设）。
+  const selectedId = st.hasPersonaRow && st.presetIdInPlane ? st.presetIdInPlane : PRESET_ID
+  const regBlock = needRegistry ? buildRegistryBlock(regBaseId, selectedId) : ''
   const sep = before.endsWith('\n') ? '' : '\n'
-  const next = before + sep + (regBlock ? regBlock + '\n' : '') + built.block + '\n'
+  const next = before + sep + (regBlock ? regBlock + '\n' : '') + (block ? block + '\n' : '')
   const bad = verifyPatchWrite(next, before, { expectRegistry: needRegistry })
   if (dryRun) {
     if (needRegistry) {
-      messages.push('DRY: 会先补一个 agent-preset-registry 段（default = ' + regBaseId + '、selectedDefault = ' + PRESET_ID + '）—— 这个组合里原本没有它。')
+      messages.push('DRY: 会' + (block ? '先' : '') + '补一个 agent-preset-registry 段（default = ' + regBaseId + '、selectedDefault = ' + selectedId + '）—— 这个组合里原本没有它。')
     }
-    messages.push('DRY: 会在末尾追加一个 preset 块（共 ' + built.block.split('\n').length + ' 行），不会写盘。')
+    messages.push(block
+      ? 'DRY: 会在末尾追加一个 preset 块（共 ' + block.split('\n').length + ' 行），不会写盘。'
+      : 'DRY: 不会追加 preset 块（人设已经挂着），只补 registry 段，不会写盘。')
     messages.push('DRY: 追加后的自检结果：' + (bad ? bad.replace(' —— 已回滚', '') : '通过'))
     return { ok: !bad, action: bad ? 'manual' : 'dry', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
   }
@@ -780,15 +800,19 @@ function installInProfilePlane({ home, plane, dryRun }) {
     messages.push('写盘后自检没通过：' + after)
     return { ok: false, action: 'manual', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages }
   }
-  messages.push('preset 「' + PRESET_NAME + '」已写入 profile 组合：' + file)
-  messages.push('它是从基座 preset「' + built.baseId + '」克隆的完整工具面 + 人设行（preset id = ' + PRESET_ID + '）。')
+  if (block) {
+    messages.push('preset 「' + PRESET_NAME + '」已写入 profile 组合：' + file)
+    messages.push('它是从基座 preset「' + built.baseId + '」克隆的完整工具面 + 人设行（preset id = ' + PRESET_ID + '）。')
+  } else {
+    messages.push('这份组合里已经有挂着人设的 preset 块，没重复挂；本次只补上 agent-preset-registry 段：' + file)
+  }
   if (needRegistry) {
     messages.push('这个组合里原来没有 agent-preset-registry 段（桌面版 0.2.0-rc.2 的出厂形态就是这样），'
-      + '已补最小一段：default = ' + regBaseId + '、selectedDefault = ' + PRESET_ID + '（触发来源：issue #3）。')
+      + '已补最小一段：default = ' + regBaseId + '、selectedDefault = ' + selectedId + '（触发来源：issue #3）。')
   }
   messages.push('备份：' + bak + '  —— 万一宿主起不来，把它改名回 ' + path.basename(file) + ' 即可。')
   messages.push(needRegistry
-    ? '新任务默认已指向它（selectedDefault = ' + PRESET_ID + '）。重启宿主后生效。'
+    ? '新任务默认已指向它（selectedDefault = ' + selectedId + '）。重启宿主后生效。'
     : '下一步：点「设为新任务默认」，否则新会话还是走 registry 的默认预设。重启宿主后生效。')
   return { ok: true, action: 'created', dir: file, baseId: built.baseId, baseWhy: built.baseWhy, swapped: true, messages, backup: bak }
 }
